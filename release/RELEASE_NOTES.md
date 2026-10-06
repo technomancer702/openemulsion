@@ -1,16 +1,19 @@
-# OpenEmulsion v0.23
+# OpenEmulsion v0.24
 
-Experimental Windows x64 update with an expanded Film Gauge dropdown. The plugin identifier and original gauge recipes are unchanged.
+Experimental Windows x64 update with a top-level look-preset library. The plugin identifier and renderer are unchanged.
 
-## Changes in v0.23
+## Changes in v0.24
 
-- Added Super 8, Super 16, Super 35, and 70 mm (15-perf) creative texture presets.
-- Retained Custom, 8 mm, 16 mm, 35 mm, and 65 mm rendering recipes, with all formats in size order.
-- Expanded CPU/OpenCL coverage and the optional texture preview to all nine choices. No extra rendering passes or buffers are added.
-- Existing development nodes store numeric gauge indices: reselect your gauge after updating if it was 16, 35, or 65 mm. Other settings are not reset.
+- Added Preset directly below Film Gauge with twelve stock-inspired/creative looks and Custom.
+- Named presets load Full mode, gauge, module switches, and complete editable recipes. All print controls start in Custom style.
+- Preserved input/output color spaces, camera exposure/temperature/tint, and grain seed. Selecting a preset replaces creative tuning and its keyframes, including print exposure/balance.
+- Editing a recipe marks it Custom without resetting settings. Selecting Custom alone retains the current look; undo/reload/time notifications do not reapply presets.
+- Added recipe ownership/range/edit-policy tests and CPU/OpenCL checks across every supported input/output space. Presets add no renderer passes or buffers; their chosen effects use the existing pipeline.
+- See `docs/LOOK_PRESETS.md` for the library and selection behavior. New/existing instances default to Custom without automatic look changes.
 
 ## Included
 
+- Twelve editable stock-inspired and creative looks in a top-level Preset dropdown.
 - Six original creative negative families, including monochrome finishing.
 - Independent Film Color, Film Development, Print, Halation, Aura, Bloom, and Grain modules, with mode-driven toggles and disabled-control greying.
 - Film Color's continuous gamut-compression amount, with the near-zero jump fixed.

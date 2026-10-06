@@ -18,6 +18,7 @@
 #include "GrainConfig.h"
 #include "ColorSpaceConfig.h"
 #include "FilmResponseConfig.h"
+#include "LookPresetConfig.h"
 
 extern bool RunOpenEmulsionOpenCL(void*, int, int, double, const float*, const float*, float*);
 
@@ -1247,6 +1248,59 @@ public:
         std::puts("; bands lights/grain).");
     }
 
+    void writeLookPreview(const char* path)
+    {
+        const int panel=320, columns=4, width=panel*columns, height=panel*3, rowBytes=width*3;
+        std::vector<float> input(panel*panel*4,1);
+        const std::array<ColorRgb,8> chips {{{.65f,.44f,.33f},{.45f,.28f,.20f},
+            {.7f,.05f,.02f},{.02f,.7f,.07f},{.03f,.12f,.75f},
+            {.7f,.03f,.5f},{.8f,.65f,.08f},{.02f,.65f,.65f}}};
+        for (int y=0; y<panel; ++y) for (int x=0; x<panel; ++x) {
+            ColorRgb rgb {};
+            if (y < 80) {
+                const float gray=static_cast<float>(x)/(panel-1);
+                rgb={gray,gray,gray};
+            } else if (y < 160) rgb=chips[x/40];
+            else if (y < 240) {
+                const bool light=(x-80)*(x-80)+(y-200)*(y-200)<36 ||
+                                 (x-240)*(x-240)+(y-200)*(y-200)<36;
+                rgb=light ? (x < 160 ? ColorRgb{1.8f,1.8f,1.8f} : ColorRgb{1.8f,.05f,.02f}) : ColorRgb{.015f,.015f,.015f};
+            } else rgb={.35f,.35f,.35f};
+            const size_t i=(static_cast<size_t>(y)*panel+x)*4;
+            input[i]=rgb.r; input[i+1]=rgb.g; input[i+2]=rgb.b;
+        }
+        std::array<std::vector<float>,look::Count-1> rendered;
+        for (int preset=1; preset<look::Count; ++preset) {
+            auto s=filmSettings();
+            const auto recipe=look::recipe(preset);
+            for (const auto& control : look::Controls) s[control.setting]=static_cast<float>(recipe[control.setting]);
+            s[film::ModuleIndex]=static_cast<float>(recipe[film::ModuleIndex]);
+            s[26]=color::Rec709Gamma24; s[27]=4;
+            rendered[preset-1]=render(input,panel,panel,s);
+        }
+        std::array<unsigned char,54> header {};
+        header[0]='B'; header[1]='M'; header[10]=54; header[14]=40; header[26]=1; header[28]=24;
+        auto putInt=[&](int offset, unsigned value) {
+            for (int byte=0; byte<4; ++byte) header[offset+byte]=static_cast<unsigned char>(value>>(8*byte));
+        };
+        putInt(2,54+rowBytes*height); putInt(18,width); putInt(22,height);
+        std::ofstream file(path,std::ios::binary); require(file.good(),"Cannot write look preview");
+        file.write(reinterpret_cast<const char*>(header.data()),header.size());
+        std::vector<unsigned char> row(rowBytes);
+        for (int y=height-1; y>=0; --y) {
+            for (int x=0; x<width; ++x) {
+                const auto& image=rendered[(y/panel)*columns+x/panel];
+                const size_t i=(static_cast<size_t>(y%panel)*panel+x%panel)*4;
+                for (int channel=0; channel<3; ++channel)
+                    row[x*3+channel]=static_cast<unsigned char>(std::clamp(image[i+2-channel],0.0f,1.0f)*255+.5f);
+                if (x%panel<2 || y%panel<2) row[x*3]=row[x*3+1]=row[x*3+2]=32;
+            }
+            file.write(reinterpret_cast<const char*>(row.data()),row.size());
+        }
+        require(file.good(),"Look preview write failed");
+        std::printf("Look preview: %s (row-major, twelve recipes in dropdown order).\n",path);
+    }
+
     void benchmark()
     {
         const int width = 3840, height = 2160;
@@ -2048,9 +2102,32 @@ int main(int argc, char** argv)
         gpu.testUpgradeControls();
         gpu.testDevelopmentControls();
         gpu.testBloomControls();
+        for (int preset = 1; preset < look::Count; ++preset) {
+            const auto recipe = look::recipe(preset);
+            auto s = filmSettings();
+            for (const auto& control : look::Controls)
+                s[control.setting] = static_cast<float>(recipe[control.setting]);
+            s[film::ModuleIndex] = static_cast<float>(recipe[film::ModuleIndex]);
+            s[25] = 1327;
+            for (int source = 0; source < color::SpaceCount; ++source) {
+                s[26] = static_cast<float>(source);
+                for (int output = 0; output < static_cast<int>(color::OutputSpaces.size()); ++output) {
+                    s[27] = static_cast<float>(output);
+                    gpu.test(33,31,s,false,37.0);
+                }
+            }
+            for (int mode : {1,2,3,4,5,6}) {
+                s[0]=static_cast<float>(mode);
+                gpu.test(65,63,s,false,-12.25);
+            }
+            s[0]=0; s[film::ModuleIndex]=0;
+            gpu.test(17,19,s,false);
+        }
+        std::puts("OpenCL: all twelve look recipes match CPU across input/output spaces, mode overrides, alpha, and all-disabled bypass.");
         if (argc > 3) gpu.writeTexturePreview(argv[3]);
         if (argc > 4) gpu.writeTexturePreview(argv[4],true);
         if (argc > 6) gpu.writeBloomPreview(argv[6]);
+        if (argc > 7) gpu.writeLookPreview(argv[7]);
         gpu.benchmark();
         return 0;
     } catch (const std::exception& error) {

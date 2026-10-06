@@ -18,13 +18,14 @@
 #include "ColorSpaceConfig.h"
 #include "FilmResponseConfig.h"
 #include "ModuleControlState.h"
+#include "LookPresetConfig.h"
 
 #define kPluginName "OpenEmulsion"
 #define kPluginGrouping "OpenEmulsion"
 #define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, halation, aura, and linear-light bloom, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 23
+#define kPluginVersionMinor 24
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -484,6 +485,12 @@ public:
         printColorStrength_ = fetchDoubleParam("printColorStrength");
         printToneStrength_ = fetchDoubleParam("printToneStrength");
         filmGauge_ = fetchChoiceParam("filmGauge");
+        lookPreset_ = fetchChoiceParam("lookPreset");
+        for (size_t i = 0; i < std::size(look::Controls); ++i) {
+            const auto& control = look::Controls[i];
+            if (control.kind == look::Choice) lookControls_[i].choice = fetchChoiceParam(control.name);
+            else lookControls_[i].number = fetchDoubleParam(control.name);
+        }
         halationThreshold_ = fetchDoubleParam("halationThreshold");
         halationSoftness_ = fetchDoubleParam("halationSoftness");
         halationColor_ = fetchDoubleParam("halationColor");
@@ -518,7 +525,18 @@ public:
 
     void changedParam(const OFX::InstanceChangedArgs& args, const std::string& name) override
     {
-        if (applyingMode_) return;
+        if (applyingControls_) return;
+        int selected = look::Custom;
+        lookPreset_->getValue(selected);
+        const auto action = look::editAction(name, args.reason == OFX::eChangeUserEdit, applyingControls_, selected);
+        if (action == look::Apply) {
+            applyLookPreset(selected);
+            return;
+        }
+        if (action == look::MarkCustom) {
+            // Only the label changes; the edited recipe remains in the ordinary OFX controls.
+            lookPreset_->setValue(look::Custom);
+        }
         const bool affectsControls = name == "mode" || name == "printStyle" || args.reason == OFX::eChangeTime ||
             std::any_of(moduleui::Toggles.begin(), moduleui::Toggles.end(), [&](const auto& toggle) { return name == toggle.name; });
         if (!affectsControls) return;
@@ -526,7 +544,7 @@ public:
             int mode = 0;
             mode_->getValueAtTime(args.time, mode);
             beginEditBlock("Apply processing mode");
-            applyingMode_ = true;
+            applyingControls_ = true;
             try {
                 moduleui::applyMode(mode, [&](size_t i, bool enabled) {
                     auto* toggle = moduleToggles_[i];
@@ -535,11 +553,11 @@ public:
                     else toggle->setValue(enabled);
                 });
             } catch (...) {
-                applyingMode_ = false;
+                applyingControls_ = false;
                 endEditBlock();
                 throw;
             }
-            applyingMode_ = false;
+            applyingControls_ = false;
             endEditBlock();
         }
         updateControlState();
@@ -553,6 +571,7 @@ public:
         const int recipeStyle = printstyle::isCustom(style) ? previousStyle : style;
         if (printstyle::isCustom(recipeStyle)) return;
         beginEditBlock("Apply print style");
+        applyingControls_ = true;
         try {
             printstyle::applyPreset(recipeStyle, [&](int control, double value) {
                 // A fixed recipe replaces Custom tuning, including its animation.
@@ -560,9 +579,11 @@ public:
                 printRecipeControls_[control]->setValue(value);
             });
         } catch (...) {
+            applyingControls_ = false;
             endEditBlock();
             throw;
         }
+        applyingControls_ = false;
         endEditBlock();
     }
 
@@ -603,6 +624,35 @@ public:
     }
 
 private:
+    void applyLookPreset(int selected)
+    {
+        beginEditBlock("Apply look preset");
+        applyingControls_ = true;
+        try {
+            look::applyPreset(selected, [&](size_t i, double value) {
+                auto& control = lookControls_[i];
+                if (control.choice) {
+                    control.choice->deleteAllKeys();
+                    control.choice->setValue(static_cast<int>(value));
+                } else {
+                    control.number->deleteAllKeys();
+                    control.number->setValue(value);
+                }
+            }, [&](size_t i, bool enabled) {
+                moduleToggles_[i]->deleteAllKeys();
+                moduleToggles_[i]->setValue(enabled);
+            });
+            printStyle_->getValue(printStyleForUI_);
+        } catch (...) {
+            applyingControls_ = false;
+            endEditBlock();
+            throw;
+        }
+        applyingControls_ = false;
+        endEditBlock();
+        updateControlState();
+    }
+
     void updateControlState()
     {
         int mode = 0, style = printstyle::Standard, enabled = 0;
@@ -715,7 +765,13 @@ private:
     int printStyleForUI_ = printstyle::Standard;
     std::array<OFX::BooleanParam*, moduleui::Toggles.size()> moduleToggles_ {};
     std::array<OFX::Param*, std::size(moduleui::Controls)> moduleControls_ {};
-    bool applyingMode_ = false;
+    struct LookControl {
+        OFX::ChoiceParam* choice = nullptr;
+        OFX::DoubleParam* number = nullptr;
+    };
+    OFX::ChoiceParam* lookPreset_ = nullptr;
+    std::array<LookControl, std::size(look::Controls)> lookControls_ {};
+    bool applyingControls_ = false;
     OFX::ChoiceParam* grainStyle_ = nullptr;
     OFX::BooleanParam* enableNegative_ = nullptr;
     OFX::BooleanParam* enableDevelopment_ = nullptr;
@@ -861,6 +917,14 @@ public:
         for (const auto& profile : gauge::Profiles) choice->appendOption(profile.label);
         choice->setDefault(0);
         choice->setHint("Creative format presets scale grain size/strength and halation/aura spread together. 70 mm represents a 15-perf large-frame look. No crop or image resize; sliders remain independent and zero strength stays zero.");
+        page->addChild(*choice);
+
+        choice = desc.defineChoiceParam("lookPreset");
+        choice->setLabels("Preset", "Preset", "Preset");
+        for (const auto* label : look::Labels) choice->appendOption(label);
+        choice->setDefault(look::Custom);
+        choice->setAnimates(false);
+        choice->setHint("Original stock-inspired and creative looks. Loads Full mode, gauge, module switches, and editable settings; replaces their keyframes. Preserves input/output spaces, camera exposure/temperature/tint, and grain seed. Custom retains your current settings.");
         page->addChild(*choice);
 
         GroupParamDescriptor* negative = addGroup(desc, page, "negativeControls", "Film Color", false);

@@ -1,6 +1,6 @@
 # Upgrade Roadmap
 
-## Completed Through v0.23
+## Completed Through v0.24
 
 - Independent film/print color and tone strengths and in-module Enable toggles.
 - Disabled-module control greying, mode-driven Enable toggles, and mode-aware print-preset locks.
@@ -13,6 +13,7 @@
 - Monochrome finishing that includes print and texture.
 - Independently enabled Film Development: Push/Pull with grain-strength coupling and stable grain geometry, Color Richness, and Split Tone.
 - Advanced grain: horizontal desqueeze and independent RGB intensity.
+- Top-level Preset dropdown with twelve complete, editable stock-inspired/creative recipes, Custom inheritance, preserved camera balance/encoding/seed, and recipe/edit-policy plus CPU/OpenCL checks.
 
 ## Bloom Added in v0.18
 
@@ -22,6 +23,7 @@ Synthetic checks cover bounded extraction, colored/white sources, continuous con
 
 ## Further Work
 
+- Real-footage refinement of the look library and user preset save/load for community sharing. Current built-in recipes live in `ofx/src/LookPresetConfig.h`; there is no preset file import/export yet.
 - Investigate negative-response-driven, pre-print grain rather than the current additive post-print grain. Preserve independent texture-only operation and predictable print interaction.
 - Reference-based profiles using properly licensed original scans and measured charts. Current film families remain original creative approximations; do not claim measured stock calibration without measurements.
 - Clean-machine Resolve installation checks, other-GPU/host testing, and signed release binaries. Current ZIP checks validate extracted payloads and native OFX loading, not a second-machine Resolve session.
