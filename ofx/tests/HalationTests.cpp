@@ -686,6 +686,21 @@ static void testGrain()
     auto soft = grainStatistics(grain::prepare(s.data(), 1080, 37.0));
     require(soft.correlation > hard.correlation + 0.05, "Softness does not suppress fine detail");
     require(soft.rms / hard.rms > 0.8 && soft.rms / hard.rms < 1.2, "Softness is merely an amplitude control");
+    s[17] = 0.45f; s[20] = 1;
+    const auto originalSoft = grainStatistics(grain::prepare(s.data(),1080,37));
+    double previousCorrelation = originalSoft.correlation;
+    for (float softness : {1.25f,1.5f,1.75f,2.0f}) {
+        s[20] = softness;
+        const auto p = grain::prepare(s.data(),1080,37);
+        const auto result = grainStatistics(p);
+        require(result.correlation > previousCorrelation + 0.005,"Extended Softness loses useful upper-range response");
+        require(result.rms/originalSoft.rms > 0.9 && result.rms/originalSoft.rms < 1.1,"Primary smoothing changes grain strength excessively");
+        require(std::abs(result.mean) < 0.003,"Primary smoothing biases brightness");
+        previousCorrelation = result.correlation;
+        std::printf("Grain Softness %.2f: RMS %.5f, correlation %.4f.\n",softness,result.rms,result.correlation);
+    }
+    require(previousCorrelation > originalSoft.correlation + 0.12,"Primary grain smoothing endpoint remains too subtle");
+    s[20] = 1;
     s[17] = 0.45f;
     const auto mono = grain::prepare(s.data(), 1080, -12.25);
     const auto repeated = grain::prepare(s.data(), 1080, -12.25);
@@ -937,9 +952,9 @@ static void testBloom()
     std::puts("Bloom: bounded RGB extraction, source/neutral hue, exact zero/protection, conserved continuous symmetric spread, odd edges, and resolution/mode isolation pass.");
 }
 
-static void writePreview(const char* path)
+static void writePreview(const char* path, bool softness = false)
 {
-    const int width = 960, height = 540, rowBytes = width * 3;
+    const int width = softness ? 1280 : 960, height = 540, rowBytes = width * 3;
     std::array<unsigned char, 54> header {};
     header[0] = 'B'; header[1] = 'M'; header[10] = 54; header[14] = 40; header[26] = 1; header[28] = 24;
     auto putInt = [&](int offset, unsigned value) {
@@ -953,19 +968,21 @@ static void writePreview(const char* path)
     for (int y = height - 1; y >= 0; --y) {
         for (int x = 0; x < width; ++x) {
             auto s = settings(0.0f, 0.0f, 0.0f, 3);
-            s[3] = static_cast<float>(x / 320);
+            s[3] = softness ? 1.0f : static_cast<float>(x / 320);
+            if (softness) s[20] = std::array<float,4>{0,.25f,1,2}[x/320];
             s[16] = 0.65f;
             s[17] = y < 270 ? 0.20f : 0.75f;
             s[18] = 0.32f;
             const float base = 0.15f + (y % 270) / 269.0f * 0.60f;
-            const auto delta = grain_delta(x, y, base, grain::prepare(s.data(), 1080, 37.0));
+            const auto delta = grain_delta(softness ? x%320 : x, y, base, grain::prepare(s.data(), 1080, 37.0));
             const std::array<float, 3> rgb {base + delta.b, base + delta.g, base + delta.r};
             for (int channel = 0; channel < 3; ++channel)
                 row[x * 3 + channel] = static_cast<unsigned char>(std::clamp(rgb[channel], 0.0f, 1.0f) * 255.0f + 0.5f);
         }
         file.write(reinterpret_cast<const char*>(row.data()), row.size());
     }
-    std::printf("Preview written: %s (columns Fine/Classic/Rough; rows small/large grain).\n", path);
+    std::printf("Preview written: %s (columns %s; rows small/large grain).\n", path,
+                softness ? "Softness 0/0.25/1/2" : "Fine/Classic/Rough");
 }
 
 static void writeResponsePreview(const char* path, bool development = false)
@@ -1353,6 +1370,12 @@ public:
                 cases.push_back(s);
             }
         }
+        for (int mode : {0,3}) for (float softness : {.25f,1.0f,2.0f}) {
+            auto s = filmSettings(); s[0] = static_cast<float>(mode);
+            s[26] = color::AlexaLogC3; s[27] = 1;
+            s[20] = softness;
+            cases.push_back(s);
+        }
         for (auto s : cases) {
             s[16] = 0.16f;
             s[17] = 0.45f;
@@ -1364,7 +1387,7 @@ public:
                 require(RunOpenEmulsionOpenCL(queue, width, height, static_cast<float>(frame), s.data(), reinterpret_cast<const float*>(src), reinterpret_cast<float*>(dst)), "Benchmark render failed");
             require(finish(queue) == 0, "Benchmark execution failed");
             const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() / 12.0;
-            std::printf("4K %s, mode %.0f, film %.0f, gauge %s, radius %.1f, aura %.1f/radius %.1f, development %.1f/%.1f/%.1f, bloom %.1f/radius %.1f: %.2f ms/frame (GPU resident, excludes Resolve/transfers).\n", color::spaces()[static_cast<int>(s[26])].label, s[0], s[1], gauge::prepare(s.data()).label, s[14], s[15], s[film::AuraRadius], s[film::PushPull],s[film::ColorRichness],s[film::SplitTone],s[film::BloomAmount],s[film::BloomRadius],ms);
+            std::printf("4K %s, mode %.0f, film %.0f, gauge %s, radius %.1f, aura %.1f/radius %.1f, development %.1f/%.1f/%.1f, bloom %.1f/radius %.1f, grain softness %.2f: %.2f ms/frame (GPU resident, excludes Resolve/transfers).\n", color::spaces()[static_cast<int>(s[26])].label, s[0], s[1], gauge::prepare(s.data()).label, s[14], s[15], s[film::AuraRadius], s[film::PushPull],s[film::ColorRichness],s[film::SplitTone],s[film::BloomAmount],s[film::BloomRadius],s[20],ms);
         }
         releaseMem(src);
         releaseMem(dst);
@@ -2043,6 +2066,7 @@ int main(int argc, char** argv)
         if (argc > 1) writePreview(argv[1]);
         if (argc > 2) writeResponsePreview(argv[2]);
         if (argc > 5) writeResponsePreview(argv[5],true);
+        if (argc > 8) writePreview(argv[8],true);
         Gpu gpu;
         if (!gpu.queue) {
             std::puts("OpenCL tests skipped: no GPU device available.");
@@ -2102,6 +2126,32 @@ int main(int argc, char** argv)
         gpu.testUpgradeControls();
         gpu.testDevelopmentControls();
         gpu.testBloomControls();
+        for (int source = 0; source < color::SpaceCount; ++source) for (int system = 0; system < 6; ++system) {
+            for (float direction : {-1.0f,1.0f}) {
+                auto s = filmSettings();
+                s[0] = 0; s[1] = static_cast<float>(system); s[26] = static_cast<float>(source);
+                s[2] = printstyle::Custom; s[27] = 1;
+                s[7] = direction < 0 ? -1.2f : 1.5f; s[29] = 3; s[31] = direction*3;
+                s[film::SplitTone] = 3; s[film::SplitHue] = 205;
+                s[16] = .6f; s[17] = .55f; s[20] = 2; s[21] = .5f;
+                const auto balance = color::cameraBalance(.4,direction*3,-direction*3);
+                s[4]=balance.r; s[5]=balance.g; s[6]=balance.b;
+                gpu.test(65,63,s,false,37);
+                s[0] = 4;
+                gpu.test(17,19,s,false);
+                s[0] = 0; s[19] = 0;
+                gpu.test(17,19,s,false);
+            }
+        }
+        for (int style = 0; style < 4; ++style) for (float softness : {1.001f,1.25f,1.5f,1.75f,2.0f})
+            for (int height : {63,130,271}) {
+                auto s = settings(1,0,0,3);
+                s[3] = static_cast<float>(style); s[16] = .6f; s[17] = .65f; s[20] = softness;
+                s[21] = .8f; s[25] = 123457; s[film::GrainStretch] = 2;
+                gpu.test(129,height,s,false,-12.25);
+                if (gpu.unordered) gpu.test(129,height,s,true,37);
+            }
+        std::puts("OpenCL: expanded color endpoints and primary grain smoothing match CPU in every input/system; bypass, alpha, styles, resizing, and stretched RGB grain pass.");
         for (int preset = 1; preset < look::Count; ++preset) {
             const auto recipe = look::recipe(preset);
             auto s = filmSettings();

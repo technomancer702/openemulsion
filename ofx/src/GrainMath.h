@@ -34,6 +34,7 @@ typedef struct GrainParameters {
     int debug;
     float inverseStretch;
     float red, green, blue;
+    float primarySoftness;
 } GrainParameters;
 
 static inline GrainUInt grain_hash(GrainUInt value)
@@ -90,6 +91,35 @@ static inline float grain_smooth(float low, float high, float value)
     return t * t * (3.0f - 2.0f * t);
 }
 
+// Blend lattice weights into a quadratic B-spline: smoother edges, same pitch and variance.
+static inline GrainVector grain_soft_field(float x, float y, GrainUInt seed, float softness)
+{
+    int ix = (int)GRAIN_FLOOR(x + 0.5f), iy = (int)GRAIN_FLOOR(y + 0.5f);
+    float tx = x - (float)ix, ty = y - (float)iy;
+    float sx = tx < 0.0f ? tx + 1.0f : tx, sy = ty < 0.0f ? ty + 1.0f : ty;
+    sx = sx * sx * (3.0f - 2.0f * sx);
+    sy = sy * sy * (3.0f - 2.0f * sy);
+    float wx[3] = {tx < 0.0f ? 1.0f - sx : 0.0f, tx < 0.0f ? sx : 1.0f - sx, tx < 0.0f ? 0.0f : sx};
+    float wy[3] = {ty < 0.0f ? 1.0f - sy : 0.0f, ty < 0.0f ? sy : 1.0f - sy, ty < 0.0f ? 0.0f : sy};
+    float bx[3] = {0.5f * (0.5f - tx) * (0.5f - tx), 0.75f - tx * tx, 0.5f * (0.5f + tx) * (0.5f + tx)};
+    float by[3] = {0.5f * (0.5f - ty) * (0.5f - ty), 0.75f - ty * ty, 0.5f * (0.5f + ty) * (0.5f + ty)};
+    float vx = 0.0f, vy = 0.0f;
+    for (int i = 0; i < 3; ++i) {
+        wx[i] += (bx[i] - wx[i]) * softness;
+        wy[i] += (by[i] - wy[i]) * softness;
+        vx += wx[i] * wx[i]; vy += wy[i] * wy[i];
+    }
+    GrainVector result = {0,0,0};
+    for (int j = 0; j < 3; ++j) for (int i = 0; i < 3; ++i) {
+        GrainVector corner = grain_corner(ix + i - 1, iy + j - 1, seed);
+        float weight = wx[i] * wy[j];
+        result.r += corner.r * weight; result.g += corner.g * weight; result.b += corner.b * weight;
+    }
+    float normalization = 1.0f / GRAIN_SQRT(vx * vy);
+    result.r *= normalization; result.g *= normalization; result.b *= normalization;
+    return result;
+}
+
 static inline float grain_shape(float value, float roughness)
 {
     return value * (1.0f + roughness * (GRAIN_ABS(value) * 1.5f - 0.25f));
@@ -102,8 +132,10 @@ static inline GrainVector grain_delta(int x, int y, float luminance, GrainParame
     // Rotated, independently seeded layers avoid axis-aligned grain cells.
     float u = px * 0.8f + py * 0.6f + grain_random(p.seed + 11u) * 8.0f;
     float v = py * 0.8f - px * 0.6f + grain_random(p.seed + 29u) * 8.0f;
-    GrainVector primary = grain_field(u, v, p.seed);
-    GrainVector detail = grain_field(px * 2.1f - py * 0.7f, px * 0.7f + py * 2.1f, p.seed ^ 0xa511e9b3u);
+    GrainVector primary = p.primarySoftness > 0.0f ? grain_soft_field(u, v, p.seed, p.primarySoftness) : grain_field(u, v, p.seed);
+    GrainVector detail = {0,0,0};
+    if (p.detailMix > 0.0f)
+        detail = grain_field(px * 2.1f - py * 0.7f, px * 0.7f + py * 2.1f, p.seed ^ 0xa511e9b3u);
     float normalization = 1.0f / GRAIN_SQRT(1.0f + p.detailMix * p.detailMix);
     GrainVector n = {(primary.r + detail.r * p.detailMix) * normalization,
                      (primary.g + detail.g * p.detailMix) * normalization,

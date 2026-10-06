@@ -73,6 +73,20 @@ int main()
         require(moduleui::controlEnabled(0,film::Development,film::Development),"Neutral Development cannot be edited");
         require(!moduleui::controlEnabled(3,film::All,film::Negative | film::Development | film::Print),"Texture-only output selector remains enabled");
         require(!moduleui::controlEnabled(6,film::All,film::Halation | film::Aura | film::Grain),"Bloom-only enables Film Gauge");
+        for (int mode = 0; mode < 7; ++mode) for (int mask = 0; mask <= film::All; ++mask)
+            for (int system = 0; system < 6; ++system) for (double strength : {0.0,0.5,0.999,1.0}) {
+                const bool mono = system == 4 && (mode == 0 || mode == 1) && (mask & film::Negative);
+                for (const char* name : {"saturation","density","gamutCompression","grainColor"})
+                    require(moduleui::semanticControlEnabled(name,mode,mask,system,strength) == !(mono && strength >= 1),
+                            "Mono semantic greying ignores mode/module/system/partial strength");
+                for (const char* name : {"negativeCrosstalk","skinHue"})
+                    require(moduleui::semanticControlEnabled(name,mode,mask,system,strength) == !mono,
+                            "Mono leaves unused palette/skin controls editable at partial strength");
+                for (const char* name : {"system","negativeColorStrength","negativeToneStrength","contrast",
+                                         "temperature","printColor","splitTone","halationColor","grainSize"})
+                    require(moduleui::semanticControlEnabled(name,mode,mask,system,strength),
+                            "Mono semantic greying disables an effective or recovery control");
+            }
         std::puts("Module UI: every mode/mask, all control bindings, toggle synchronization, manual-disable policy, print locks, neutral Development, globals, and mode transitions pass.");
         return 0;
     } catch (const std::exception& error) {

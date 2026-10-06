@@ -3,6 +3,7 @@
 #pragma once
 
 #include <array>
+#include <string_view>
 
 #include "FilmModules.h"
 #include "PrintStyleConfig.h"
@@ -62,6 +63,15 @@ inline bool controlEnabled(int mode, int enabled, int modules)
 inline bool printRecipeEnabled(int mode, int enabled, int style)
 {
     return controlEnabled(mode, enabled, film::Print) && printstyle::isCustom(style);
+}
+
+inline bool semanticControlEnabled(std::string_view name, int mode, int enabled, int system, double colorStrength)
+{
+    const bool mono = system == 4 && controlEnabled(mode, enabled, film::Negative);
+    if (!mono) return true;
+    if (name == "negativeCrosstalk" || name == "skinHue") return false;
+    if (colorStrength < 1.0) return true;
+    return name != "saturation" && name != "density" && name != "gamutCompression" && name != "grainColor";
 }
 
 template<class Writer>

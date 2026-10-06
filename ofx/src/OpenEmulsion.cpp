@@ -25,7 +25,7 @@
 #define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, halation, aura, and linear-light bloom, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 24
+#define kPluginVersionMinor 25
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -537,7 +537,8 @@ public:
             // Only the label changes; the edited recipe remains in the ordinary OFX controls.
             lookPreset_->setValue(look::Custom);
         }
-        const bool affectsControls = name == "mode" || name == "printStyle" || args.reason == OFX::eChangeTime ||
+        const bool affectsControls = name == "mode" || name == "printStyle" || name == "system" ||
+            name == "negativeColorStrength" || args.reason == OFX::eChangeTime ||
             std::any_of(moduleui::Toggles.begin(), moduleui::Toggles.end(), [&](const auto& toggle) { return name == toggle.name; });
         if (!affectsControls) return;
         if (name == "mode" && args.reason == OFX::eChangeUserEdit) {
@@ -655,15 +656,19 @@ private:
 
     void updateControlState()
     {
-        int mode = 0, style = printstyle::Standard, enabled = 0;
+        int mode = 0, style = printstyle::Standard, enabled = 0, system = 0;
+        double colorStrength = 1;
         mode_->getValue(mode);
         printStyle_->getValue(style);
+        system_->getValue(system);
+        negativeColorStrength_->getValue(colorStrength);
         for (size_t i = 0; i < moduleToggles_.size(); ++i) {
             if (moduleToggles_[i]->getValue()) enabled |= moduleui::Toggles[i].module;
             moduleToggles_[i]->setEnabled(moduleui::controlEnabled(mode, film::All, moduleui::Toggles[i].module));
         }
         for (size_t i = 0; i < moduleControls_.size(); ++i)
-            moduleControls_[i]->setEnabled(moduleui::controlEnabled(mode, enabled, moduleui::Controls[i].modules));
+            moduleControls_[i]->setEnabled(moduleui::controlEnabled(mode, enabled, moduleui::Controls[i].modules) &&
+                moduleui::semanticControlEnabled(moduleui::Controls[i].name, mode, enabled, system, colorStrength));
         for (auto* parameter : printRecipeControls_)
             parameter->setEnabled(moduleui::printRecipeEnabled(mode, enabled, style));
     }
@@ -745,12 +750,8 @@ private:
         s.bloomSoftness = bloomSoftness_->getValueAtTime(time);
         s.bloomColor = bloomColor_->getValueAtTime(time);
         s.bloomProtection = bloomProtection_->getValueAtTime(time);
-        const float gain = std::pow(2.0f, static_cast<float>(s.exposure));
-        const float warm = static_cast<float>(s.temperature) * 0.085f;
-        const float green = static_cast<float>(s.tint) * 0.065f;
-        s.gainR = gain * (1.0f + warm) * (1.0f - green * 0.30f);
-        s.gainG = gain * (1.0f + green);
-        s.gainB = gain * (1.0f - warm) * (1.0f - green * 0.30f);
+        const auto balance = color::cameraBalance(s.exposure, s.temperature, s.tint);
+        s.gainR = balance.r; s.gainG = balance.g; s.gainB = balance.b;
         return s;
     }
 
@@ -978,16 +979,16 @@ public:
         addDouble(desc, page, "printColorStrength", "Print Color Strength", 1.0, 0.0, 1.0, 0.01, print, "Scales print palette, saturation, cast, and gamut compression. Zero removes these; print exposure, balance, and tone remain independent.");
         addDouble(desc, page, "printToneStrength", "Print Tone Strength", 1.0, 0.0, 1.0, 0.01, print, "Scales print contrast, toe, rolloff, and black lift. Zero removes these; print color, exposure, and balance remain independent.");
         addDouble(desc, page, "exposure", "Exposure", 0.0, -4.0, 4.0, 0.01, negative);
-        addDouble(desc, page, "temperature", "Temperature", 0.0, -1.0, 1.0, 0.01, negative);
-        addDouble(desc, page, "tint", "Tint", 0.0, -1.0, 1.0, 0.01, negative);
-        addDouble(desc, page, "density", "Negative Density", 0.18, -0.6, 0.9, 0.01, negative);
+        addDouble(desc, page, "temperature", "Temperature", 0.0, -3.0, 3.0, 0.01, negative, "Broader linear red/blue balance. Zero is neutral; existing values retain their effect. Creative units, not kelvin.");
+        addDouble(desc, page, "tint", "Tint", 0.0, -3.0, 3.0, 0.01, negative, "Broader linear green/magenta balance. Zero is neutral; existing values retain their effect.");
+        addDouble(desc, page, "density", "Negative Density", 0.18, -1.2, 1.5, 0.01, negative, "Darkens saturated colors without changing neutral grays; negative values brighten them. Expanded creative range with unchanged defaults.");
         addDouble(desc, page, "saturation", "Saturation", 0.95, 0.0, 2.0, 0.01, negative);
         addDouble(desc, page, "toe", "Toe", 0.16, 0.0, 1.0, 0.01, negative);
         addDouble(desc, page, "contrast", "Contrast", 1.08, 0.5, 2.0, 0.01, negative);
         addDouble(desc, page, "negativeShoulder", "Negative Shoulder", 0.50, 0.0, 1.0, 0.01, negative);
-        addDouble(desc, page, "negativeCrosstalk", "Color Crosstalk", 0.35, 0.0, 1.0, 0.01, negative);
+        addDouble(desc, page, "negativeCrosstalk", "Color Crosstalk", 0.35, 0.0, 3.0, 0.01, negative, "Zero is no palette mixing, one is the original family matrix, and values above one intensify that palette. Not a global film strength control.");
         addDouble(desc, page, "gamutCompression", "Gamut Compression", 0.50, 0.0, 1.0, 0.01, negative, "Continuously blends negative gamut compression: 0 is off, 0.5 is half strength, and 1 is full strength. Preserves working-space brightness and chroma direction. Partial strength can retain out-of-range values; Print and downstream color management determine the final display range.");
-        addDouble(desc, page, "skinHue", "Skin Hue", 0.0, -1.0, 1.0, 0.01, negative);
+        addDouble(desc, page, "skinHue", "Skin Hue", 0.0, -3.0, 3.0, 0.01, negative, "Selective warm-color adjustment toward magenta or green, with extra endpoint range. Not face detection; neutral and cool colors are excluded.");
         addDouble(desc, page, "printTone", "Print Tone", 0.0, -1.0, 1.0, 0.01, print);
         addDouble(desc, page, "printContrast", "Print Contrast", 1.0, 0.5, 2.0, 0.01, print);
         addDouble(desc, page, "printRolloff", "Highlight Rolloff", 0.55, 0.0, 1.0, 0.01, print);
@@ -1008,7 +1009,7 @@ public:
         addDouble(desc, page, "aura", "Aura", 0.0, 0.0, 1.0, 0.01, aura);
         addDouble(desc, page, "grain", "Grain", 0.16, 0.0, 2.0, 0.01, grain);
         addDouble(desc, page, "grainSize", "Grain Size", 0.45, 0.0, 1.0, 0.01, grain);
-        addDouble(desc, page, "grainSoftness", "Grain Softness", 0.25, 0.0, 1.0, 0.01, grain);
+        addDouble(desc, page, "grainSoftness", "Grain Softness", 0.25, 0.0, 2.0, 0.01, grain, "Zero to one suppresses fine detail; one to two also smooths the primary grain field at the same lattice pitch, with normalized variance. Existing values retain their texture.");
         addDouble(desc, page, "grainRoughness", "Grain Roughness", 0.32, 0.0, 1.0, 0.01, grain);
         addDouble(desc, page, "grainColor", "Grain Color", 0.25, 0.0, 1.0, 0.01, grain, "Zero gives monochrome grain. Active full-strength Mono Negative automatically uses monochrome grain; texture-only modes retain this setting.");
         addDouble(desc, page, "grainShadows", "Shadow Grain", 1.15, 0.0, 2.0, 0.01, grain);
@@ -1016,7 +1017,7 @@ public:
         addDouble(desc, page, "grainHighlights", "Highlight Grain", 0.42, 0.0, 2.0, 0.01, grain);
         addDouble(desc, page, "pushPull", "Push / Pull", 0, -3, 3, 0.01, development, "Creative development amount: changes contrast and shadow fog around fixed middle gray; also scales enabled grain strength in Full mode without changing grain size or position. Not calibrated camera exposure stops.");
         addDouble(desc, page, "colorRichness", "Color Richness", 0, -1, 1, 0.01, development, "Adjusts muted colors more than saturated colors without changing luminance.");
-        addDouble(desc, page, "splitTone", "Split Tone", 0, 0, 1, 0.01, development, "Shifts shadows toward the selected hue and highlights toward its chromatic opposite. Middle gray remains neutral by default.");
+        addDouble(desc, page, "splitTone", "Split Tone", 0, 0, 3, 0.01, development, "Shifts shadows toward the selected hue and highlights toward its chromatic opposite. Middle gray remains neutral by default. Values above one allow stronger creative toning.");
         addDouble(desc, page, "splitHue", "Shadow Hue", 220, 0, 360, 1, development, "Shadow hue in degrees: red 0, green 120, blue 240. Highlights use the opposite direction.");
         addDouble(desc, page, "splitPivot", "Split Pivot", 0.46135613, 0.2, 0.8, 0.01, development, "Neutral split point in the managed perceptual working space. Default is scene-linear 18% gray.");
         addDouble(desc, page, "splitWidth", "Neutral Width", 0.1, 0, 0.3, 0.01, development, "Width of the unaffected tonal range around Split Pivot.");

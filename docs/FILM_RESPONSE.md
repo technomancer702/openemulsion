@@ -1,4 +1,4 @@
-# Negative and Print Response (v0.21)
+# Negative and Print Response (v0.25)
 
 ## Current Engine
 
@@ -9,6 +9,8 @@ Film Color and Print remain independent. Full can use both, either, or neither. 
 The engine is an original artistic model, not a measured stock calibration, physical emulsion simulation, or reproduction of Filmbox's private implementation. The six film families are creative profiles. There is no new LUT, reference-image dependency, extra image pass, GPU readback, or per-frame texture allocation.
 
 ## Negative
+
+v0.25 expands Temperature/Tint and Skin Hue to -3..3, Color Crosstalk to 0..3, and Negative Density to -1.2..1.5. Existing values/defaults/presets retain their response; above-one Crosstalk intensifies the original matrix rather than changing the meaning of one. See [Slider Tuning](SLIDER_TUNING.md).
 
 The negative uses a shared luminance response, palette mixing, saturation/density, and optional soft gamut compression. Unlike independent RGB tone curves, luminance shaping does not itself rotate hue. Each film family has its own contrast, saturation, and color-mixing profile; the monochrome family uses its own RGB weighting.
 

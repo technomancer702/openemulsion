@@ -1,6 +1,6 @@
 # Upgrade Roadmap
 
-## Completed Through v0.24
+## Completed Through v0.25
 
 - Independent film/print color and tone strengths and in-module Enable toggles.
 - Disabled-module control greying, mode-driven Enable toggles, and mode-aware print-preset locks.
@@ -14,6 +14,7 @@
 - Independently enabled Film Development: Push/Pull with grain-strength coupling and stable grain geometry, Color Richness, and Split Tone.
 - Advanced grain: horizontal desqueeze and independent RGB intensity.
 - Top-level Preset dropdown with twelve complete, editable stock-inspired/creative recipes, Custom inheritance, preserved camera balance/encoding/seed, and recipe/edit-policy plus CPU/OpenCL checks.
+- Targeted slider range expansion with unchanged defaults/presets, variance-normalized primary grain smoothing above Softness one, full-strength Mono semantic greying, historical response anchors, and expanded CPU/OpenCL/performance checks.
 
 ## Bloom Added in v0.18
 

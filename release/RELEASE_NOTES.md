@@ -1,15 +1,14 @@
-# OpenEmulsion v0.24
+# OpenEmulsion v0.25
 
-Experimental Windows x64 update with a top-level look-preset library. The plugin identifier and renderer are unchanged.
+Experimental Windows x64 update with more expressive slider ranges and an extended grain-softness response. The plugin identifier, defaults, and built-in preset looks are retained.
 
-## Changes in v0.24
+## Changes in v0.25
 
-- Added Preset directly below Film Gauge with twelve stock-inspired/creative looks and Custom.
-- Named presets load Full mode, gauge, module switches, and complete editable recipes. All print controls start in Custom style.
-- Preserved input/output color spaces, camera exposure/temperature/tint, and grain seed. Selecting a preset replaces creative tuning and its keyframes, including print exposure/balance.
-- Editing a recipe marks it Custom without resetting settings. Selecting Custom alone retains the current look; undo/reload/time notifications do not reapply presets.
-- Added recipe ownership/range/edit-policy tests and CPU/OpenCL checks across every supported input/output space. Presets add no renderer passes or buffers; their chosen effects use the existing pipeline.
-- See `docs/LOOK_PRESETS.md` for the library and selection behavior. New/existing instances default to Custom without automatic look changes.
+- Expanded Temperature/Tint and Skin Hue to -3..3, Color Crosstalk and Split Tone to 0..3, and Negative Density to -1.2..1.5. Existing values keep their effect; no preset retuning or value migration is needed.
+- Extended Grain Softness to 0..2. Above one, the main grain field is smoothed with approximately stable variance, without extra image passes or buffers. Zero to one retains the previous texture.
+- Greyed out ineffective color controls in active full-strength Mono Negative, including forced-monochrome Grain Color. Partial strength and texture-only modes retain the applicable controls.
+- Added v0.24 response/grain anchors for defaults and all twelve presets, expanded endpoint/semantic UI checks, and CPU/OpenCL parity/performance checks for new ranges and smoothing.
+- Kept selective toe/shoulder and gamut behavior, existing print styles, halation/Aura/bloom, exposure/contrast/saturation, and grain amount/size/roughness unchanged. See `docs/SLIDER_TUNING.md`.
 
 ## Included
 

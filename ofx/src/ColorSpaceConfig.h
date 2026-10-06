@@ -9,6 +9,15 @@
 
 namespace color {
 
+inline ColorRgb cameraBalance(double exposure, double temperature, double tint)
+{
+    const float gain = std::pow(2.0f, static_cast<float>(exposure));
+    const float warm = static_cast<float>(temperature) * 0.085f;
+    const float green = static_cast<float>(tint) * 0.065f;
+    return {gain * (1.0f + warm) * (1.0f - green * 0.30f), gain * (1.0f + green),
+            gain * (1.0f - warm) * (1.0f - green * 0.30f)};
+}
+
 enum SpaceId {
     AlexaLogC3, ArriLogC4, SonyCine, SonyGamut3, DaVinciIntermediate,
     Rec709Gamma24, SRGB, BlackmagicGen5, RedLog3G10, CanonLog2, CanonLog3,

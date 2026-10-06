@@ -8,7 +8,7 @@ Push/Pull, Color Richness, and Split Tone default to zero. At those defaults the
 
 - `Push / Pull`: -3 to +3, default 0. Positive values increase contrast above middle gray, deepen lower midtones, and introduce a neutral shadow fog/lift. Negative values soften contrast, suppress the deepest shadows, and reduce grain strength. Middle gray remains anchored. This is a creative development scale, not calibrated laboratory processing stops or camera exposure compensation.
 - `Color Richness`: -1 to +1, default 0. Positive values enrich muted colors more than already saturated ones; negative values reduce muted chroma. Neutral gray and working-space luminance are preserved. This is separate from ordinary Saturation and Negative Density.
-- `Split Tone`: 0 to 1, default 0. Colors shadows toward Shadow Hue and highlights along the opposite chromatic direction. It preserves working-space luminance and does not tint zero-luminance black by itself.
+- `Split Tone`: 0 to 3, default 0. Colors shadows toward Shadow Hue and highlights along the opposite chromatic direction. Values up to one retain the original response; above one allows stronger creative toning. It preserves working-space luminance and does not tint zero-luminance black by itself.
 - `Shadow Hue`: 0-360 degrees, default 220 (blue/cyan shadows with warm highlights). Red is 0, green is 120, blue is 240. 0 and 360 are identical.
 - `Split Pivot`: 0.2-0.8, default 0.46135613, the scene-linear 18% gray pivot in the managed perceptual domain. These are not camera log values, stops, or output nits.
 - `Neutral Width`: 0-0.3, default 0.1. Defines a completely unaffected interval centered on Split Pivot. At zero, the pivot remains neutral and the two sides still join smoothly.

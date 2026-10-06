@@ -1,6 +1,8 @@
-# Module Controls (v0.20)
+# Module Controls (v0.25)
 
 Disabled modules retain their settings but grey out every option inside the module. The Enable toggle remains editable if the current mode permits that module. Modules excluded by the mode have unavailable toggles and controls, regardless of any stored Enable value.
+
+In active Mono Negative, Color Crosstalk and Skin Hue are unavailable at any strength because this family does not use them. At full Film Color Strength, Saturation, Negative Density, Gamut Compression, and Grain Color also become unavailable. Their stored values are retained. Lowering Film Color Strength below one, changing Film System, disabling Film Color, or entering texture-only modes restores the applicable controls. Strength and system edits refresh this policy alongside mode/module/time changes. See [Slider Tuning](SLIDER_TUNING.md).
 
 A user edit to Mode sets the Enable toggles as follows:
 
@@ -30,6 +32,6 @@ Construction, plugin-edit notifications, and timeline notifications refresh cont
 
 ## Verification
 
-The standalone ModuleControlState regression checks all seven modes, all 128 Enable masks, toggle synchronization, control mappings, global-selector availability, neutral Development, print locking, and sequential mode transitions. The CPU/OpenCL rendering regression remains unchanged and passes with the new UI policy.
+The standalone ModuleControlState regression checks all seven modes, all 128 Enable masks, toggle synchronization, control mappings, global-selector availability, neutral Development, print locking, sequential mode transitions, and Mono semantic availability in every system and at partial/full strengths. The CPU/OpenCL regression separately covers expanded slider endpoints and grain smoothing.
 
 Actual greying, edit-block undo/redo, animated controls, and save/reload still require checks inside Resolve. No processing kernels or per-frame rendering work were added.

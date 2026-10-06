@@ -1,4 +1,4 @@
-# Texture Controls (v0.23)
+# Texture Controls (v0.25)
 
 ## Film Gauge
 
@@ -23,6 +23,8 @@ Super formats use modestly finer/gentler texture than their standard counterpart
 v0.23 orders the expanded dropdown by format size. Older development projects store numeric gauge choices, so indices after 8 mm are not migrated; reselect the intended gauge when opening an older node. The original Custom/8/16/35/65 mm rendering recipes are retained.
 
 ## Advanced Grain
+
+Grain Softness now extends to two: 0..1 retains the original fine-detail reduction; 1..2 also smooths the primary grain field, with normalized variance and unchanged lattice pitch/seed. See [Slider Tuning](SLIDER_TUNING.md).
 
 `Horizontal Stretch` is a horizontal desqueeze ratio from 0.5 to 2.0, default 1. A value of 2 doubles the horizontal scale of both noise layers before their rotations; vertical scale and image dimensions remain unchanged. There is no resampling of footage. Noise variance normalization remains unchanged, so stretch primarily changes structure, not strength. It is independent of Film Gauge and resolution scaling.
 

@@ -15,7 +15,7 @@ inline FilmResponseParameters prepare(const float* s)
 {
     FilmResponseParameters p {};
     p.system = std::clamp(static_cast<int>(s[1]), 0, 5);
-    p.density = s[7];
+    p.density = std::clamp(s[7], -1.2f, 1.5f);
     p.colorStrength = std::clamp(s[film::NegativeColorStrength], 0.0f, 1.0f);
     p.toneStrength = std::clamp(s[film::NegativeToneStrength], 0.0f, 1.0f);
     p.printColorStrength = std::clamp(s[film::PrintColorStrength], 0.0f, 1.0f);
@@ -23,7 +23,7 @@ inline FilmResponseParameters prepare(const float* s)
     p.push = std::clamp(s[film::PushPull], -3.0f, 3.0f);
     p.developmentContrast = std::exp2(p.push * 0.18f);
     p.richness = std::clamp(s[film::ColorRichness], -1.0f, 1.0f);
-    p.splitAmount = std::clamp(s[film::SplitTone], 0.0f, 1.0f);
+    p.splitAmount = std::clamp(s[film::SplitTone], 0.0f, 3.0f);
     p.splitPivot = std::clamp(s[film::SplitPivot], 0.2f, 0.8f);
     p.splitWidth = std::clamp(s[film::SplitWidth], 0.0f, 0.3f);
     p.splitShadows = std::clamp(s[film::SplitShadows], 0.0f, 2.0f);
@@ -52,14 +52,14 @@ inline FilmResponseParameters prepare(const float* s)
     p.negativeTone = {std::clamp(s[10], 0.5f, 2.0f) * contrast[p.system],
         std::clamp(s[9], 0.0f, 1.0f) * 0.85f, 0.88f - 0.18f * shoulder,
         2.1f - 0.90f * shoulder};
-    const float crosstalk = std::clamp(s[29], 0.0f, 1.0f);
+    const float crosstalk = std::clamp(s[29], 0.0f, 3.0f);
     for (int i = 0; i < 9; ++i) {
         const float identity = i % 4 == 0 ? 1.0f : 0.0f;
         p.negativeMatrix[i] = identity + (matrices[p.system][i] - identity) * crosstalk;
     }
     p.negativeSat = std::clamp(s[8], 0.0f, 2.0f) * saturation[p.system];
     p.negativeCompression = std::clamp(s[30], 0.0f, 1.0f);
-    p.skinHue = std::clamp(s[31], -1.0f, 1.0f);
+    p.skinHue = std::clamp(s[31], -3.0f, 3.0f);
 
     const auto print = printstyle::resolve(s);
     const float tone = std::clamp(print[printstyle::Tone], -1.0f, 1.0f);
