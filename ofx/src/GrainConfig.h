@@ -27,7 +27,7 @@ inline GrainParameters prepare(const float* settings, int height, double time)
     const auto format = gauge::prepare(settings);
     const float push = (film::modulesForSettings(settings) & film::Development) ?
         std::clamp(settings[film::PushPull], -3.0f, 3.0f) : 0.0f;
-    return {1.0f / ((0.55f + size * 2.65f) * styleSize * scale * format.scale * std::exp2(push * 0.12f)),
+    return {1.0f / ((0.55f + size * 2.65f) * styleSize * scale * format.scale),
             detail * (1.0f - softness), std::clamp(settings[18], 0.0f, 1.0f),
             std::clamp(settings[21], 0.0f, 1.0f) * (1.0f - film::monochromeStrength(settings)),
             settings[16] * format.grainStrength * std::exp2(push * 0.22f), settings[22], settings[23], settings[24],

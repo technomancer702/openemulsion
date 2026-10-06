@@ -686,10 +686,30 @@ static void testDevelopmentAndGrain()
     const auto baseline = grain::prepare(s.data(),1080,37);
     s[film::PushPull] = 3;
     auto pushed = grain::prepare(s.data(),1080,37);
-    require(pushed.amount > baseline.amount && pushed.inverseSize < baseline.inverseSize,"Push does not change grain intensity and size");
+    require(pushed.amount > baseline.amount && pushed.inverseSize == baseline.inverseSize,"Push changes grain size or fails to increase intensity");
     s[film::PushPull] = -3;
     auto pulled = grain::prepare(s.data(),1080,37);
-    require(pulled.amount < baseline.amount && pulled.inverseSize > baseline.inverseSize,"Pull does not refine grain");
+    require(pulled.amount < baseline.amount && pulled.inverseSize == baseline.inverseSize,"Pull changes grain size or fails to reduce intensity");
+    for (int height : {1080,2160,4320}) for (int style = 0; style < 4; ++style)
+        for (int format = 0; format < 5; ++format) for (float stretch : {0.5f,1.0f,2.0f}) {
+            auto stable = s;
+            stable[3] = static_cast<float>(style); stable[film::FilmGauge] = static_cast<float>(format);
+            stable[film::GrainStretch] = stretch; stable[film::PushPull] = 0;
+            stable[21] = 1; stable[25] = 89;
+            const auto reference = grain::prepare(stable.data(),height,37);
+            for (float push : {-3.0f,-1.0f,1.0f,3.0f}) {
+                stable[film::PushPull] = push;
+                auto adjusted = grain::prepare(stable.data(),height,37);
+                requireNear(adjusted.amount,reference.amount*std::exp2(push*0.22f),1e-7f,"Push/Pull grain strength coupling changed");
+                require(adjusted.seed == reference.seed,"Push/Pull reseeds grain");
+                // Remove the intended strength change to compare the exact spatial field.
+                adjusted.amount = reference.amount;
+                for (int y : {0,57,height-1}) for (int x : {0,29,1921,7679}) {
+                    const auto a = grain_delta(x,y,0.45f,reference), b = grain_delta(x,y,0.45f,adjusted);
+                    require(a.r == b.r && a.g == b.g && a.b == b.b,"Push/Pull moves or reshapes grain");
+                }
+            }
+        }
     for (int mode : {2,3,4,5}) {
         s[0] = static_cast<float>(mode);
         auto g = grain::prepare(s.data(),1080,37);
@@ -715,7 +735,7 @@ static void testDevelopmentAndGrain()
     }
     s[16] = 0;
     require(grain::prepare(s.data(),1080,37).amount == 0,"Development enables zero grain");
-    std::puts("Development/grain: neutral defaults, monotonic HDR, gray pivot, richness, split isolation, Push/Pull texture coupling, stretch variance, and channel gains pass.");
+    std::puts("Development/grain: neutral defaults, monotonic HDR, gray pivot, richness, split isolation, Push/Pull strength with fixed grain geometry, stretch variance, and channel gains pass.");
 }
 
 static void testBloom()
@@ -1576,6 +1596,31 @@ public:
 
     void testDevelopmentControls()
     {
+        // Equal tonal weights isolate spatial stability from the intended tone/strength changes.
+        const int stableWidth = 193, stableHeight = 129;
+        std::vector<float> flat(stableWidth*stableHeight*4,0.46135613f);
+        for (size_t i = 3; i < flat.size(); i += 4) flat[i] = 0.37f;
+        for (int style = 0; style < 4; ++style) {
+            auto stable = filmSettings(); stable[0] = 0; stable[27] = 0;
+            stable[19] = film::Development | film::Grain; stable[3] = static_cast<float>(style);
+            stable[16] = 0.1f; stable[21] = 1; stable[25] = 89;
+            stable[22] = stable[23] = stable[24] = 1;
+            stable[film::GrainStretch] = 2; stable[film::GrainRed] = 0.5f; stable[film::GrainBlue] = 1.8f;
+            const auto reference = render(flat,stableWidth,stableHeight,stable);
+            for (float push : {-3.0f,-1.0f,1.0f,3.0f}) {
+                stable[film::PushPull] = push;
+                const auto adjusted = render(flat,stableWidth,stableHeight,stable);
+                auto withoutGrain = stable; withoutGrain[16] = 0;
+                const auto developed = render(flat,stableWidth,stableHeight,withoutGrain);
+                const float strength = std::exp2(push*0.22f);
+                for (size_t i = 0; i < flat.size(); ++i) {
+                    if (i%4 == 3) require(adjusted[i] == flat[i],"Push/Pull changes grain image alpha");
+                    else requireNear(adjusted[i]-developed[i],(reference[i]-flat[i])*strength,
+                                     3e-6f,"GPU Push/Pull moves or resizes grain instead of changing strength");
+                }
+            }
+        }
+        std::puts("OpenCL: Push/Pull preserves rendered grain geometry for every style, including stretched RGB grain.");
         for (int source = 0; source < color::SpaceCount; ++source) {
             for (int mode = 0; mode <= 5; ++mode) for (float push : {-3.0f,0.0f,3.0f}) {
                 auto s = filmSettings();

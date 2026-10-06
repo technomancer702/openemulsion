@@ -23,7 +23,7 @@
 #define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, halation, aura, and linear-light bloom, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 18
+#define kPluginVersionMinor 19
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -909,7 +909,7 @@ public:
         addDouble(desc, page, "grainShadows", "Shadow Grain", 1.15, 0.0, 2.0, 0.01, grain);
         addDouble(desc, page, "grainMidtones", "Midtone Grain", 0.80, 0.0, 2.0, 0.01, grain);
         addDouble(desc, page, "grainHighlights", "Highlight Grain", 0.42, 0.0, 2.0, 0.01, grain);
-        addDouble(desc, page, "pushPull", "Push / Pull", 0, -3, 3, 0.01, development, "Creative development amount: changes contrast and shadow fog around fixed middle gray; also scales enabled grain size and strength in Full mode. Not calibrated camera exposure stops.");
+        addDouble(desc, page, "pushPull", "Push / Pull", 0, -3, 3, 0.01, development, "Creative development amount: changes contrast and shadow fog around fixed middle gray; also scales enabled grain strength in Full mode without changing grain size or position. Not calibrated camera exposure stops.");
         addDouble(desc, page, "colorRichness", "Color Richness", 0, -1, 1, 0.01, development, "Adjusts muted colors more than saturated colors without changing luminance.");
         addDouble(desc, page, "splitTone", "Split Tone", 0, 0, 1, 0.01, development, "Shifts shadows toward the selected hue and highlights toward its chromatic opposite. Middle gray remains neutral by default.");
         addDouble(desc, page, "splitHue", "Shadow Hue", 220, 0, 360, 1, development, "Shadow hue in degrees: red 0, green 120, blue 240. Highlights use the opposite direction.");

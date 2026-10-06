@@ -1,4 +1,4 @@
-# Texture Controls (v0.18)
+# Texture Controls (v0.19)
 
 ## Film Gauge
 
@@ -20,7 +20,7 @@ Custom and 35 mm currently render identically. Larger-format settings give finer
 
 `Red Grain`, `Green Grain`, and `Blue Grain` multiply each channel's noise delta by 0-2, default 1. Zero removes grain from that working-space channel; source color is not multiplied. Grain Color at zero uses a shared monochrome noise field, but unequal channel multipliers can tint that field. Active full-strength Mono Negative still finishes the final composite monochrome, including unequal channel gains. The channel controls operate in the managed Rec.709-primary working space, not individual camera-gamut channels.
 
-Enabled Film Development in Full mode scales grain size by `2^(0.12 * Push/Pull)` and strength by `2^(0.22 * Push/Pull)`. Zero Grain and the Grain Enable toggle still win. Grain Only and Halation, Bloom & Grain Only ignore development entirely, preserving their independent texture workflow. Grain remains additive after print/halo, keyed by final working luminance; negative-density-driven, pre-print grain is still future work.
+Enabled Film Development in Full mode scales grain strength by `2^(0.22 * Push/Pull)` without changing grain size or sampling coordinates. At a fixed frame/seed, adjusting Push/Pull preserves the noise pattern; tonal weighting still follows final working luminance. Zero Grain and the Grain Enable toggle still win. Grain Only and Halation, Bloom & Grain Only ignore development entirely, preserving their independent texture workflow. Grain remains additive after print/halo, keyed by final working luminance; negative-density-driven, pre-print grain is still future work.
 
 ## Highlight Selection
 

@@ -6,7 +6,7 @@ Film Color, Film Development, Print, Halation, Aura, Bloom, and Grain can be ena
 
 ## Status
 
-Experimental, Windows x64. Current development version: **v0.18**. The current implementation supports OpenCL acceleration and a multithreaded CPU fallback. CUDA, Metal, macOS, and Linux builds are not implemented.
+Experimental, Windows x64. Current development version: **v0.19**. The current implementation supports OpenCL acceleration and a multithreaded CPU fallback. CUDA, Metal, macOS, and Linux builds are not implemented.
 
 OpenEmulsion is an original artistic approximation, not a measured film-stock calibration or a complete HDR rendering transform. There is no DCTL dependency. Rendering has been tested in Resolve, but this is not yet a stable production release.
 
@@ -75,7 +75,7 @@ Modes: **Full**, **Color Only**, **Halation, Bloom & Grain Only**, **Grain Only*
 Each module's first control is an **Enable** toggle that independently bypasses that stage without resetting its settings. In Full mode, disabling Film Color, Film Development, and Print leaves texture only. Bypass and all-disabled processing preserve RGBA exactly, including negative RGB and values above 1.
 
 - **Film Color:** independent color/tone strengths, six creative families, linear-light exposure/balance, density, saturation, toe, contrast, shoulder, crosstalk, gamut compression, and Skin Hue.
-- **Film Development:** Push/Pull changes tone and grain size/strength; Color Richness favors muted colors; Split Tone has hue, pivot, neutral width, and separate shadow/highlight intensities. Neutral defaults preserve the previous look.
+- **Film Development:** Push/Pull changes tone and grain strength without moving or resizing the grain pattern; Color Richness favors muted colors; Split Tone has hue, pivot, neutral width, and separate shadow/highlight intensities. Neutral defaults preserve the previous look.
 - **Print:** Full (Film Print), Standard, Extended (Telecine), and Custom. Named presets load and lock their tone/color recipe; Custom unlocks the last recipe without changing its look. Color/tone strengths, exposure, and RGB balance remain editable in every style.
 - **Grain:** Fine, Classic, Rough, and Debug styles; strength, size, softness, roughness, color, horizontal stretch, independent RGB intensity, tonal weighting, and repeatable frame/seed variation.
 - **Halation and Aura:** smooth source-highlight selection with adjustable threshold/transition, red-to-amber tint, independent tight-halo and broad-aura radii, and resolution-aware continuous Gaussian spread. Matte mode exposes the signal.

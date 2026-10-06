@@ -1,4 +1,4 @@
-# Film Development (v0.17)
+# Film Development (v0.19)
 
 An independently switchable creative stage between Film Color and Print, available in Full and Color Only. Its first control is Enable. Film Color may be disabled while Development remains enabled; camera exposure/balance still belongs only to Film Color. Development ignores Film Color/Print strengths and does not rewrite their settings or print presets.
 
@@ -6,7 +6,7 @@ Push/Pull, Color Richness, and Split Tone default to zero. At those defaults the
 
 ## Controls
 
-- `Push / Pull`: -3 to +3, default 0. Positive values increase contrast above middle gray, deepen lower midtones, and introduce a neutral shadow fog/lift. Negative values soften contrast, suppress the deepest shadows, and refine grain. Middle gray remains anchored. This is a creative development scale, not calibrated laboratory processing stops or camera exposure compensation.
+- `Push / Pull`: -3 to +3, default 0. Positive values increase contrast above middle gray, deepen lower midtones, and introduce a neutral shadow fog/lift. Negative values soften contrast, suppress the deepest shadows, and reduce grain strength. Middle gray remains anchored. This is a creative development scale, not calibrated laboratory processing stops or camera exposure compensation.
 - `Color Richness`: -1 to +1, default 0. Positive values enrich muted colors more than already saturated ones; negative values reduce muted chroma. Neutral gray and working-space luminance are preserved. This is separate from ordinary Saturation and Negative Density.
 - `Split Tone`: 0 to 1, default 0. Colors shadows toward Shadow Hue and highlights along the opposite chromatic direction. It preserves working-space luminance and does not tint zero-luminance black by itself.
 - `Shadow Hue`: 0-360 degrees, default 220 (blue/cyan shadows with warm highlights). Red is 0, green is 120, blue is 240. 0 and 360 are identical.
@@ -18,7 +18,7 @@ Print response runs afterward and may compress or modify the final appearance. F
 
 ## Texture and Color Management
 
-Push/Pull changes enabled grain size by `2^(0.12 * amount)` and grain strength by `2^(0.22 * amount)` in Full mode. Positive amounts make grain coarser/stronger; negative amounts make it finer/gentler. It never enables zero-strength or disabled grain. It does not alter halation selection/spread, Aura, or the original source-highlight key.
+Push/Pull scales enabled grain strength by `2^(0.22 * amount)` in Full mode. Positive amounts make grain stronger; negative amounts make it gentler. At a fixed frame/seed it does not change grain size, sampling coordinates, stretch, or the noise pattern. Size remains controlled by Grain Size, style, Film Gauge, and render resolution. This fixes the grain enlargement/sliding present in v0.17-v0.18. It never enables zero-strength or disabled grain. It does not alter halation selection/spread, Aura, or the original source-highlight key. Tonal weights still respond to the developed image's luminance.
 
 Grain Only, Halation, Bloom & Grain Only, Halation Matte, Bloom Matte, and Bypass ignore all Development controls, including grain coupling. For your own LUT in Full mode, disable Film Color, Film Development, and Print. Texture-only output preserves the input encoding. Non-neutral Development on its own counts as a color stage and honors the Output Color Space selector.
 
@@ -36,7 +36,7 @@ All calculations share C++/OpenCL math and run in the existing final image pass.
 
 ## Verification
 
-Tests cover exact neutral defaults and inactive-stage isolation, monotonic neutral/HDR ramps, fixed gray, neutral Richness, luminance-preserving opposing split hues, dead-zone isolation, intensity endpoints, Push/Pull grain coupling, all module masks, all 15 inputs and six modes, alpha, and Mono preservation. Grain tests cover stretch correlation/variance and exact channel multipliers. Host UI, animation/save/reload, undo/redo, and subjective footage appearance still require Resolve checks.
+Tests cover exact neutral defaults and inactive-stage isolation, monotonic neutral/HDR ramps, fixed gray, neutral Richness, luminance-preserving opposing split hues, dead-zone isolation, intensity endpoints, Push/Pull grain strength coupling with fixed geometry across every style/gauge/stretch and HD/4K/8K heights, all module masks, all 15 inputs and six modes, alpha, and Mono preservation. OpenCL rendered-grain residual checks also verify spatial stability for every style. Grain tests cover stretch correlation/variance and exact channel multipliers. Host UI, animation/save/reload, undo/redo, and subjective footage appearance still require Resolve checks.
 
 The optional fifth preview argument adds a development chart:
 

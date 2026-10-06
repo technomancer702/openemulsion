@@ -1,13 +1,13 @@
 # Upgrade Roadmap
 
-## Completed Through v0.18
+## Completed Through v0.19
 
 - Independent film/print color and tone strengths and in-module Enable toggles.
 - Resolution-aware smooth halation, refined highlight selection, tint, and independent Aura radius.
 - Creative film-gauge presets.
 - Fixed print recipes with editable Custom inheritance.
 - Monochrome finishing that includes print and texture.
-- Independently enabled Film Development: Push/Pull with grain coupling, Color Richness, and Split Tone.
+- Independently enabled Film Development: Push/Pull with grain-strength coupling and stable grain geometry, Color Richness, and Split Tone.
 - Advanced grain: horizontal desqueeze and independent RGB intensity.
 
 ## Bloom Added in v0.18
