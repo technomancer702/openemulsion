@@ -474,6 +474,50 @@ static void testStrengthControls()
     std::puts("Strengths: exact zero response, independent tone/color controls, partial tone, and retained print exposure pass.");
 }
 
+static void testGaugeProfiles()
+{
+    const std::array<const char*,9> labels {{"Custom","8 mm","Super 8","16 mm","Super 16",
+        "35 mm","Super 35","65 mm","70 mm (15-perf)"}};
+    const std::array<float,9> scales {{1.0f,2.60f,2.35f,1.65f,1.45f,1.0f,0.90f,0.70f,0.50f}};
+    const std::array<float,9> strengths {{1.0f,1.35f,1.28f,1.15f,1.10f,1.0f,0.95f,0.80f,0.70f}};
+    require(gauge::Profiles.size() == labels.size(), "Film gauge choices missing");
+    for (int format = 0; format < gauge::Count; ++format) {
+        require(std::string(gauge::Profiles[format].label) == labels[format], "Film gauge order/label changed");
+        requireNear(gauge::Profiles[format].scale,scales[format],0,"Film gauge size recipe changed");
+        requireNear(gauge::Profiles[format].grainStrength,strengths[format],0,"Film gauge intensity recipe changed");
+        if (format > gauge::Standard8) {
+            require(scales[format] < scales[format-1], "Larger format does not have finer texture");
+            require(strengths[format] < strengths[format-1], "Larger format does not have gentler grain");
+        }
+        for (int height : {1080,2160,4320}) {
+            auto s = settings(1); s[16] = 0.6f;
+            const auto base = grain::prepare(s.data(),height,37);
+            const auto baseHalo = halation::prepare(s.data(),height);
+            const auto baseBloom = bloom::prepare(s.data(),height);
+            s[film::FilmGauge] = static_cast<float>(format);
+            const auto stored = s;
+            const auto grain = grain::prepare(s.data(),height,37);
+            const auto halo = halation::prepare(s.data(),height);
+            const auto glow = bloom::prepare(s.data(),height);
+            requireNear(grain.inverseSize * scales[format],base.inverseSize,1e-6f,"Gauge grain resolution scaling");
+            requireNear(grain.amount,base.amount * strengths[format],1e-6f,"Gauge grain amount scaling");
+            require(grain.seed == base.seed, "Gauge changes grain seed");
+            requireNear(halo.radiusScale,baseHalo.radiusScale * scales[format],1e-6f,"Gauge halo resolution scaling");
+            require(halo.downsample == baseHalo.downsample,"Gauge changes blur grid dimensions");
+            requireNear(halation_key(0.6f,0.5f,0.4f,halo.key),
+                halation_key(0.6f,0.5f,0.4f,baseHalo.key),0,"Gauge changes highlight selection");
+            requireNear(glow.sigma,baseBloom.sigma,0,"Gauge changes independent bloom spread");
+            require(s == stored,"Gauge overwrites stored sliders");
+        }
+    }
+    auto s = settings(1);
+    s[film::FilmGauge] = -100;
+    require(std::string(gauge::prepare(s.data()).label) == labels.front(),"Low gauge index not clamped");
+    s[film::FilmGauge] = 100;
+    require(std::string(gauge::prepare(s.data()).label) == labels.back(),"High gauge index not clamped");
+    std::puts("Film Gauge: nine choices, recipes, progressive texture, HD/4K/8K scaling, seed/key/bloom isolation, and index bounds pass.");
+}
+
 static void testHalationControls()
 {
     auto s = settings(1);
@@ -505,7 +549,7 @@ static void testHalationControls()
     requireNear(a.weights[a.radius].local,b.weights[b.radius].local,1e-7f,"Aura radius changes local halation");
     s[16] = 1;
     auto p = grain::prepare(s.data(),1080,37);
-    for (int format = 0; format < 5; ++format) {
+    for (int format = 0; format < gauge::Count; ++format) {
         s[film::FilmGauge] = static_cast<float>(format);
         auto g = grain::prepare(s.data(),1080,37);
         const auto halo = halation::prepare(s.data(),1080);
@@ -740,7 +784,7 @@ static void testDevelopmentAndGrain()
     auto pulled = grain::prepare(s.data(),1080,37);
     require(pulled.amount < baseline.amount && pulled.inverseSize == baseline.inverseSize,"Pull changes grain size or fails to reduce intensity");
     for (int height : {1080,2160,4320}) for (int style = 0; style < 4; ++style)
-        for (int format = 0; format < 5; ++format) for (float stretch : {0.5f,1.0f,2.0f}) {
+        for (int format = 0; format < gauge::Count; ++format) for (float stretch : {0.5f,1.0f,2.0f}) {
             auto stable = s;
             stable[3] = static_cast<float>(style); stable[film::FilmGauge] = static_cast<float>(format);
             stable[film::GrainStretch] = stretch; stable[film::PushPull] = 0;
@@ -1149,7 +1193,7 @@ public:
 
     void writeTexturePreview(const char* path, bool monochrome = false)
     {
-        const int panelWidth = 256, height = 640, width = panelWidth * 5, rowBytes = width * 3;
+        const int panelWidth = 256, height = 640, width = panelWidth * gauge::Count, rowBytes = width * 3;
         std::vector<float> input(panelWidth * height * 4, 1.0f);
         for (int y = 0; y < height; ++y) for (int x = 0; x < panelWidth; ++x) {
             const bool light = (x-128)*(x-128) + (y-150)*(y-150) < 64 ||
@@ -1163,8 +1207,8 @@ public:
             const size_t i = (static_cast<size_t>(y) * panelWidth + x) * 4;
             input[i] = input[i+1] = input[i+2] = 0.025f;
         }
-        std::array<std::vector<float>, 5> columns;
-        for (int format = 0; format < 5; ++format) {
+        std::array<std::vector<float>, gauge::Count> columns;
+        for (int format = 0; format < gauge::Count; ++format) {
             auto s = settings(1.2f,1.2f,0.6f,2);
             s[film::FilmGauge] = static_cast<float>(format);
             if (monochrome) { s[0] = 0; s[1] = 4; }
@@ -1198,7 +1242,9 @@ public:
             file.write(reinterpret_cast<const char*>(row.data()),row.size());
         }
         require(file.good(),"Texture preview write failed");
-        std::printf("Texture preview: %s (columns Custom/8mm/16mm/35mm/65mm; bands lights/grain).\n",path);
+        std::printf("Texture preview: %s (columns",path);
+        for (const auto& profile : gauge::Profiles) std::printf(" / %s",profile.label);
+        std::puts("; bands lights/grain).");
     }
 
     void benchmark()
@@ -1222,7 +1268,7 @@ public:
                 cases.push_back(s);
             }
         }
-        for (int format : {1,2,4}) {
+        for (int format = gauge::Standard8; format < gauge::Count; ++format) {
             auto s = filmSettings();
             s[0] = 0; s[26] = color::AlexaLogC3; s[27] = 1;
             s[13] = s[15] = 1; s[14] = s[film::AuraRadius] = 2;
@@ -1472,7 +1518,7 @@ public:
                     auto s = bright;
                     s[26] = static_cast<float>(source); s[27] = static_cast<float>(output);
                     s[2] = static_cast<float>(style); s[3] = static_cast<float>(style);
-                    s[film::FilmGauge] = static_cast<float>(style+1);
+                    s[film::FilmGauge] = static_cast<float>(std::array<int,4>{gauge::Standard8,gauge::Super16,gauge::Super35,gauge::LargeFormat70}[style]);
                     s[film::HalationColor] = style % 2 ? 1 : 0;
                     for (int mode : {0,1}) {
                         s[0] = static_cast<float>(mode);
@@ -1765,12 +1811,12 @@ public:
         }
         for (bool outOfOrder : {false,true}) {
             if (outOfOrder && !unordered) continue;
-            for (int format = 0; format < 5; ++format) {
+            for (int format = 0; format < gauge::Count; ++format) {
                 for (int mode : {0,2,3,4,5}) {
                     auto s = filmSettings();
                     s[0] = static_cast<float>(mode); s[film::FilmGauge] = static_cast<float>(format);
                     s[13] = 1; s[14] = 2; s[15] = 0.7f; s[16] = 0.3f;
-                    s[film::AuraRadius] = 2; s[film::HalationColor] = format / 4.0f;
+                    s[film::AuraRadius] = 2; s[film::HalationColor] = format / static_cast<float>(gauge::Count - 1);
                     test(129,131,s,outOfOrder,37);
                 }
             }
@@ -1797,8 +1843,24 @@ public:
         s[film::HalationThreshold] = 2; s[film::HalationSoftness] = 0.01f;
         s[film::HalationColor] = 1; s[film::AuraRadius] = 2;
         require(reference == render(input,width,height,s), "Halation controls affect grain-only mode");
-        s[0] = 0; s[19] = 0; s[film::FilmGauge] = 1;
-        require(input == render(input,width,height,s), "Gauge breaks exact all-disabled identity");
+        for (int format = 0; format < gauge::Count; ++format) {
+            s = filmSettings(); s[film::FilmGauge] = static_cast<float>(format);
+            const auto original = s;
+            for (int mode : {0,2,3,4}) {
+                s[0] = static_cast<float>(mode); s[19] = 0;
+                require(input == render(input,width,height,s), "Gauge breaks exact all-disabled identity");
+            }
+            s = original; s[0] = 2;
+            require(input == render(input,width,height,s), "Gauge enables zero-strength texture");
+            s = original; s[0] = 1;
+            const auto colorOnly = render(input,width,height,s);
+            s[film::FilmGauge] = gauge::Custom;
+            require(colorOnly == render(input,width,height,s), "Gauge affects color-only processing");
+            s = original; s[0] = 2; s[19] = film::Bloom; s[film::BloomAmount] = 1;
+            const auto bloomOnly = render(input,width,height,s);
+            s[film::FilmGauge] = gauge::Custom;
+            require(bloomOnly == render(input,width,height,s), "Gauge affects bloom-only processing");
+        }
         std::puts("OpenCL: partial/zero color-tone parity in all spaces, all gauges/modes, enlarged/odd grids, and control isolation pass.");
     }
 
@@ -1920,6 +1982,7 @@ int main(int argc, char** argv)
         testPrintPresets();
         testMonochrome();
         testStrengthControls();
+        testGaugeProfiles();
         testHalationControls();
         testDevelopmentAndGrain();
         testBloom();

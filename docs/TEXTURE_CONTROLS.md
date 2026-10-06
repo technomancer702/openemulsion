@@ -1,4 +1,4 @@
-# Texture Controls (v0.19)
+# Texture Controls (v0.23)
 
 ## Film Gauge
 
@@ -8,11 +8,19 @@ Film Gauge is an original creative approximation, not a measured calibration of 
 | --- | ---: | ---: |
 | Custom | 1.00x | 1.00x |
 | 8 mm | 2.60x | 1.35x |
+| Super 8 | 2.35x | 1.28x |
 | 16 mm | 1.65x | 1.15x |
+| Super 16 | 1.45x | 1.10x |
 | 35 mm | 1.00x | 1.00x |
+| Super 35 | 0.90x | 0.95x |
 | 65 mm | 0.70x | 0.80x |
+| 70 mm (15-perf) | 0.50x | 0.70x |
 
 Custom and 35 mm currently render identically. Larger-format settings give finer, gentler grain and tighter halo spread; smaller-format settings give stronger, coarser texture. Fine/Classic/Rough grain styles, color, softness, roughness, and tonal weighting remain independently adjustable. Active full-strength Mono Negative automatically uses monochrome grain regardless of Grain Color; texture-only modes keep the requested grain color. Zero grain, halation, or aura strength stays zero under every preset, and module switches still take precedence.
+
+Super formats use modestly finer/gentler texture than their standard counterparts. The 70 mm choice represents a 15-perf large-frame look, not a 5-perf 70 mm print of the same 65 mm negative. Kodak distinguishes [65 mm 5-perf and 15-perf capture and their 70 mm prints](https://www.kodak.com/en/motion/blog-post/dunkirk-imax/). Our multipliers are artistic recipes, not gate-area ratios or measured stock granularity. No preset crops, resizes, changes aspect ratio, or adds borders; Bloom and film/print color response are unchanged.
+
+v0.23 orders the expanded dropdown by format size. Older development projects store numeric gauge choices, so indices after 8 mm are not migrated; reselect the intended gauge when opening an older node. The original Custom/8/16/35/65 mm rendering recipes are retained.
 
 ## Advanced Grain
 
@@ -48,7 +56,7 @@ Use Grain Only or Halation, Bloom & Grain Only, or disable Film Color, Film Deve
 
 ## Verification
 
-Tests cover smooth bounded highlight selection, threshold/transition activity, hue luminance, independent radii, gauge size/strength multipliers, zero-strength behavior, HD/4K normalized halo spread, odd-sized work grids through 8K height, CPU/OpenCL parity, and texture/color isolation. These are synthetic numerical checks, not comparison against measured film scans. OpenCL out-of-order queue checks run only when the device supports them.
+Tests cover all nine gauge choices and their recipes, gauge index bounds, seed/highlight/bloom isolation, smooth bounded highlight selection, threshold/transition activity, hue luminance, independent radii, gauge size/strength multipliers, zero-strength behavior, HD/4K normalized halo spread, odd-sized work grids through 8K height, CPU/OpenCL parity, and texture/color isolation. These are synthetic numerical checks, not comparison against measured film scans. OpenCL out-of-order queue checks run only when the device supports them.
 
 An optional synthetic GPU preview compares all gauges across isolated lights and grain-only patches:
 
@@ -56,4 +64,4 @@ An optional synthetic GPU preview compares all gauges across isolated lights and
 .\build\ofx\HalationTests.exe analysis\grain-preview.bmp analysis\response-preview.bmp analysis\texture-preview.bmp
 ```
 
-Columns are Custom, 8 mm, 16 mm, 35 mm, and 65 mm. This deliberately strong test texture is not a recommended grading preset. No texture preview is produced without an OpenCL device.
+Columns are Custom, 8 mm, Super 8, 16 mm, Super 16, 35 mm, Super 35, 65 mm, and 70 mm (15-perf). This deliberately strong test texture is not a recommended grading preset. No texture preview is produced without an OpenCL device.

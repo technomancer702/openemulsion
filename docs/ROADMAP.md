@@ -1,6 +1,6 @@
 # Upgrade Roadmap
 
-## Completed Through v0.22
+## Completed Through v0.23
 
 - Independent film/print color and tone strengths and in-module Enable toggles.
 - Disabled-module control greying, mode-driven Enable toggles, and mode-aware print-preset locks.
@@ -8,7 +8,7 @@
 - Original plugin icon with editable SVG, RGBA PNG, and incremental resource packaging checks.
 - Experimental Windows release ZIP packaging with instructions, matching source, compiler runtime notices, hashes, and extracted OFX load checks.
 - Resolution-aware smooth halation, refined highlight selection, tint, and independent Aura radius.
-- Creative film-gauge presets.
+- Creative film-gauge presets, expanded in v0.23 to Custom/8/Super 8/16/Super 16/35/Super 35/65/70 mm (15-perf), with the original recipes retained.
 - Fixed print recipes with editable Custom inheritance.
 - Monochrome finishing that includes print and texture.
 - Independently enabled Film Development: Push/Pull with grain-strength coupling and stable grain geometry, Color Richness, and Split Tone.

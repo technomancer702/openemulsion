@@ -1,6 +1,13 @@
-# OpenEmulsion v0.22
+# OpenEmulsion v0.23
 
-First public experimental release for Windows x64. This package preserves the tested v0.22 rendering engine; packaging does not introduce a new look or plugin identifier.
+Experimental Windows x64 update with an expanded Film Gauge dropdown. The plugin identifier and original gauge recipes are unchanged.
+
+## Changes in v0.23
+
+- Added Super 8, Super 16, Super 35, and 70 mm (15-perf) creative texture presets.
+- Retained Custom, 8 mm, 16 mm, 35 mm, and 65 mm rendering recipes, with all formats in size order.
+- Expanded CPU/OpenCL coverage and the optional texture preview to all nine choices. No extra rendering passes or buffers are added.
+- Existing development nodes store numeric gauge indices: reselect your gauge after updating if it was 16, 35, or 65 mm. Other settings are not reset.
 
 ## Included
 

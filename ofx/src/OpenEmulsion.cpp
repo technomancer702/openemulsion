@@ -24,7 +24,7 @@
 #define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, halation, aura, and linear-light bloom, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 22
+#define kPluginVersionMinor 23
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -860,7 +860,7 @@ public:
         choice->setLabels("Film Gauge", "Film Gauge", "Film Gauge");
         for (const auto& profile : gauge::Profiles) choice->appendOption(profile.label);
         choice->setDefault(0);
-        choice->setHint("Creative format presets scale grain size/strength and halation/aura spread together. Sliders remain independent; zero strength stays zero.");
+        choice->setHint("Creative format presets scale grain size/strength and halation/aura spread together. 70 mm represents a 15-perf large-frame look. No crop or image resize; sliders remain independent and zero strength stays zero.");
         page->addChild(*choice);
 
         GroupParamDescriptor* negative = addGroup(desc, page, "negativeControls", "Film Color", false);
