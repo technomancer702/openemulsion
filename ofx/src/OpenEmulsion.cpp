@@ -22,7 +22,7 @@
 #define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, and smooth halation, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 15
+#define kPluginVersionMinor 16
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -710,17 +710,16 @@ public:
         choice->setHint("Creative format presets scale grain size/strength and halation/aura spread together. Sliders remain independent; zero strength stays zero.");
         page->addChild(*choice);
 
-        GroupParamDescriptor* modules = addGroup(desc, page, "modules", "Modules", true);
-        addToggle(desc, page, modules, "enableNegative", "Film Color");
-        addToggle(desc, page, modules, "enablePrint", "Print");
-        addToggle(desc, page, modules, "enableHalation", "Halation");
-        addToggle(desc, page, modules, "enableAura", "Aura");
-        addToggle(desc, page, modules, "enableGrain", "Grain");
         GroupParamDescriptor* negative = addGroup(desc, page, "negativeControls", "Film Color", false);
+        addToggle(desc, page, negative, "enableNegative", "Enable");
         GroupParamDescriptor* print = addGroup(desc, page, "printControls", "Print", false);
+        addToggle(desc, page, print, "enablePrint", "Enable");
         GroupParamDescriptor* halation = addGroup(desc, page, "halationControls", "Halation", false);
+        addToggle(desc, page, halation, "enableHalation", "Enable");
         GroupParamDescriptor* aura = addGroup(desc, page, "auraControls", "Aura", false);
+        addToggle(desc, page, aura, "enableAura", "Enable");
         GroupParamDescriptor* grain = addGroup(desc, page, "grainControls", "Grain", true);
+        addToggle(desc, page, grain, "enableGrain", "Enable");
 
         choice = desc.defineChoiceParam("system");
         choice->setLabels("Film System", "Film System", "Film System");

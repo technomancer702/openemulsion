@@ -72,7 +72,7 @@ See [Color Spaces](docs/COLOR_SPACES.md) for exact gamut pairs, workflow details
 
 Modes: **Full**, **Color Only**, **Halation & Grain Only**, **Grain Only**, **Bypass**, and **Halation Matte**.
 
-The Modules switches can further disable individual stages. In Full mode, disabling Film Color and Print leaves texture only. Bypass and all-disabled processing preserve RGBA exactly, including negative RGB and values above 1.
+Each module's first control is an **Enable** toggle that independently bypasses that stage without resetting its settings. In Full mode, disabling Film Color and Print leaves texture only. Bypass and all-disabled processing preserve RGBA exactly, including negative RGB and values above 1.
 
 - **Film Color:** independent color/tone strengths, six creative families, linear-light exposure/balance, density, saturation, toe, contrast, shoulder, crosstalk, gamut compression, and Skin Hue.
 - **Print:** Full (Film Print), Standard, Extended (Telecine), and Custom. Named presets load and lock their tone/color recipe; Custom unlocks the last recipe without changing its look. Color/tone strengths, exposure, and RGB balance remain editable in every style.
