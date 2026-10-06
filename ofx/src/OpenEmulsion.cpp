@@ -24,7 +24,7 @@
 #define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, halation, aura, and linear-light bloom, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 20
+#define kPluginVersionMinor 21
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -289,7 +289,7 @@ public:
                     Rgb c = work;
                     if (colorEnabled(settings_)) {
                         c = cameraStage(c, settings_);
-                        c = response_negative(c, responseParameters_);
+                        c = response_negative_stage(c, responseParameters_);
                     }
                     if (modules & film::Development) c = response_development(c, responseParameters_);
                     if (printEnabled(settings_)) {
@@ -922,7 +922,7 @@ public:
         addDouble(desc, page, "contrast", "Contrast", 1.08, 0.5, 2.0, 0.01, negative);
         addDouble(desc, page, "negativeShoulder", "Negative Shoulder", 0.50, 0.0, 1.0, 0.01, negative);
         addDouble(desc, page, "negativeCrosstalk", "Color Crosstalk", 0.35, 0.0, 1.0, 0.01, negative);
-        addDouble(desc, page, "gamutCompression", "Gamut Compression", 0.50, 0.0, 1.0, 0.01, negative);
+        addDouble(desc, page, "gamutCompression", "Gamut Compression", 0.50, 0.0, 1.0, 0.01, negative, "Continuously blends negative gamut compression: 0 is off, 0.5 is half strength, and 1 is full strength. Preserves working-space brightness and chroma direction. Partial strength can retain out-of-range values; Print and downstream color management determine the final display range.");
         addDouble(desc, page, "skinHue", "Skin Hue", 0.0, -1.0, 1.0, 0.01, negative);
         addDouble(desc, page, "printTone", "Print Tone", 0.0, -1.0, 1.0, 0.01, print);
         addDouble(desc, page, "printContrast", "Print Contrast", 1.0, 0.5, 2.0, 0.01, print);

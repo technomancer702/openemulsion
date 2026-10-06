@@ -83,7 +83,7 @@ static inline ColorRgb response_luminance_curve(ColorRgb c, ResponseTone p)
     return c;
 }
 
-// Radial compression approaches the RGB boundary smoothly without changing hue/luminance.
+// Radial compression preserves weighted brightness/chroma direction in the working RGB domain.
 static inline ColorRgb response_gamut(ColorRgb c, float ceiling, float knee)
 {
     const float y = response_luma(c);
@@ -173,9 +173,20 @@ static inline ColorRgb response_negative(ColorRgb c, FilmResponseParameters p)
     c.r *= density; c.g *= density; c.b *= density;
     if (p.negativeCompression > 0.0f) {
         const float ceiling = RESPONSE_MAX(p.toneStrength > 0.0f ? p.negativeTone.ceiling : 1.0f, response_luma(c) + 0.05f);
-        c = response_gamut(c, ceiling, 0.98f - p.negativeCompression * 0.53f);
+        // A fixed target makes Amount continuous at zero and uniform across the slider.
+        c = response_mix(c, response_gamut(c, ceiling, 0.45f), p.negativeCompression);
     }
     return response_mix(beforeColor, c, p.colorStrength);
+}
+
+static inline ColorRgb response_negative_stage(ColorRgb c, FilmResponseParameters p)
+{
+    c = response_negative(c, p);
+    // Match the negative-only node's floor before handing partial compression to later stages.
+    if (response_clamps_negative(1, p)) {
+        c.r = RESPONSE_MAX(c.r, 0.0f); c.g = RESPONSE_MAX(c.g, 0.0f); c.b = RESPONSE_MAX(c.b, 0.0f);
+    }
+    return c;
 }
 
 // Creative development, not calibrated chemistry. Gray exposure stays anchored.

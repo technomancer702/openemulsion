@@ -1,4 +1,4 @@
-# Negative and Print Response (v0.17)
+# Negative and Print Response (v0.21)
 
 ## Current Engine
 
@@ -21,7 +21,7 @@ The negative uses a shared luminance response, palette mixing, saturation/densit
 - `Color Crosstalk`: blends each film family's color-mixing matrix with identity. Zero removes the matrix's palette mixing, not its contrast/saturation profile. It is separate from Grain Color.
 - `Negative Density`: higher values darken saturated colors to add density, leaving neutral grays unchanged. Negative values brighten those colors.
 - `Saturation`: overall negative colorfulness, combined with the selected film-family profile.
-- `Gamut Compression`: softens colors approaching or exceeding the effect's working RGB boundary. Higher values begin compression earlier; zero disables this negative-stage compression. Hue/luminance are retained by radial chroma scaling. This is not a standardized ACES gamut compressor or an output-gamut mapping guarantee.
+- `Gamut Compression`: an amount control that blends toward a fixed soft radial compression target in the perceptual working RGB domain. Zero disables this negative-stage compression, 0.5 applies half its RGB change, and 1 applies the full target (knee 0.45). Working-space weighted brightness and chroma direction are retained, not physical scene-linear luminance or perceptual hue in a color appearance model. Partial amounts can retain negative or above-boundary values; final negative-channel clamping, Print, and downstream color management still affect the result. This is not a standardized ACES gamut compressor or an output-gamut mapping guarantee.
 - `Skin Hue`: positive shifts selected warm midtone colors toward magenta; negative shifts toward green. Selection is a soft RGB color region, not face detection, and can also affect similarly colored objects. Neutral, blue, and green colors are excluded. Mono ignores it.
 
 ### Mono Negative
@@ -33,6 +33,12 @@ Lower Film Color Strength progressively restores color both in the negative and 
 The finishing calculation is shared by C++ and OpenCL and runs inside the existing image pass. Tests cover strong halation, Aura, colored-grain settings, every print style, all input/output spaces, partial strengths, alpha, preserved texture activity, and exact disabled-stage isolation.
 
 The neutral axis is preserved by the new negative palette and density logic. Palette changes, saturation, input gamut conversion, and intentional tone mapping can still change the appearance of colored objects. Saturation/compression set to extreme values is a creative override, not a colorimetric correction.
+
+### v0.21 Compression Fix
+
+Earlier versions bypassed compression at exactly zero, but applied the full radial operation at every positive value. The slider only moved its knee from 0.98 toward 0.45, causing an abrupt change near zero on out-of-gamut colors and much smaller changes afterward. It now blends toward the fixed maximum-compression target, so equal slider steps produce equal working-RGB changes before clamping/encoding. The default 0.5 is genuinely half strength; synthetic out-of-gamut red chips retain more red-channel intensity than with the old default. Full strength retains the previous maximum target, and zero retains the negative-only disabled result. Input conversion, palette/density/tone equations, and Print equations are unchanged. This fixes a confirmed control discontinuity, not a claim of a viewing-LUT match or a complete diagnosis of any specific source clip.
+
+Partial compression can leave negative channels. An active negative response now applies its existing negative-channel floor at the stage boundary, before Development/Print/texture, as well as retaining the final film/print floor. This makes negative-then-print composition consistent with two separate nodes instead of allowing channels that a negative-only node would discard to influence Print. Zero color and tone strengths skip the new stage floor and retain signed conversion-only values. Compression remains continuous, but channel-floor crossings and display encoding mean the visible change need not be perfectly linear. Texture-only processing is unchanged.
 
 ## Film Development
 
@@ -83,6 +89,8 @@ New print response approaches a bounded SDR-like perceptual white and uses hue-p
 The frame-level configuration prepares profile matrices, curve coefficients, and print gains once. A 212-byte response structure is passed to the existing OpenCL image kernel. The default tone/color response uses rational/polynomial arithmetic, not per-pixel logs or a sampled LUT. Nonzero print RGB/exposure adjustments additionally use the existing shared linear/perceptual conversion functions.
 
 C++ and OpenCL compile the same response header. Tests cover monotonic HDR ramps through 1,000,000 work-domain units, continuous curve slopes, stable gray pivots, neutral axes/floors, hue/luminance-preserving gamut compression, skin-region isolation, density, locked-recipe immunity in named styles and slider activity in Custom, CPU/GPU parity across all 15 input choices and 24 film/print combinations, all module masks, independent composition, and exact texture/matte/bypass isolation. Additional tests check independent color/tone endpoints, partial tone interpolation, retained exposure with strengths at zero, and CPU/OpenCL response parity at partial strengths in all input spaces using linear output. The existing managed output tests cover all encodings; linear comparisons avoid amplifying float cancellation at Gamma 2.4's near-black singularity for extreme synthetic wide-gamut colors.
+
+Negative compression additionally has a 1001-step amount sweep across all film systems and zero/partial/full color and tone strengths, including negative-channel/HDR red chips. Tests assert continuous behavior at zero, uniform working-RGB interpolation, unchanged working brightness/neutral axes, full-target equality, and Print isolation. GPU-rendered negative-only checks cover endpoints, near-zero and intermediate amounts in every input space, preserved alpha, final negative-channel clamping, and CPU parity. No source clip or viewing LUT is used in these synthetic checks.
 
 Run `ctest --test-dir build/ofx --output-on-failure`. To generate grain and response comparison charts:
 

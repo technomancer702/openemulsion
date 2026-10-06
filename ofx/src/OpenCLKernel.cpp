@@ -223,7 +223,7 @@ __kernel void OpenEmulsionKernel(
     if (modules & 1) {
         ColorRgb rgb = {c.x, c.y, c.z}, gain = {gainR, gainG, gainB};
         rgb = color_balance(rgb, gain);
-        rgb = response_negative(rgb, response);
+        rgb = response_negative_stage(rgb, response);
         c = (float3)(rgb.r, rgb.g, rgb.b);
     }
     if (modules & 32) {

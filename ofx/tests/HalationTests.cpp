@@ -274,6 +274,55 @@ static void requireRgbNear(ColorRgb a, ColorRgb b, float tolerance, const char* 
     requireNear(a.b, b.b, tolerance, message);
 }
 
+static void testNegativeCompression()
+{
+    const std::array<ColorRgb, 10> chips {{{0,0,0}, {0.001f,0.001f,0.001f}, {0.5f,0.5f,0.5f},
+        {4,4,4}, {0.6f,0.46f,0.34f}, {0.95f,0.02f,0.04f}, {3.5f,-0.54f,0.45f},
+        {2.4f,-0.45f,0.31f}, {-0.15f,2.5f,0.4f}, {0.1f,-0.15f,4}}};
+    for (int system = 0; system < 6; ++system) {
+        for (float strength : {0.0f,0.37f,1.0f}) for (float tone : {0.0f,0.63f,1.0f}) {
+            auto s = filmSettings(); s[1] = static_cast<float>(system);
+            s[film::NegativeColorStrength] = strength; s[film::NegativeToneStrength] = tone;
+            s[30] = 0; const auto off = response::prepare(s.data());
+            s[30] = 1; const auto full = response::prepare(s.data());
+            for (auto chip : chips) {
+                const auto a = response_negative(chip,off), b = response_negative(chip,full);
+                for (int step = 0; step <= 1000; ++step) {
+                    s[30] = step / 1000.0f;
+                    const auto out = response_negative(chip,response::prepare(s.data()));
+                    requireRgbNear(out,{a.r+(b.r-a.r)*s[30],a.g+(b.g-a.g)*s[30],a.b+(b.b-a.b)*s[30]},
+                                   2e-6f,"Negative gamut amount is not continuous/linear across its range");
+                    requireNear(response_luma(out),response_luma(a),2e-6f,"Negative gamut amount shifts working brightness");
+                }
+                s[30] = 1e-6f;
+                requireRgbNear(response_negative(chip,response::prepare(s.data())),a,1e-5f,
+                               "Negative gamut amount jumps at zero");
+                const auto staged = response_negative_stage(chip,response::prepare(s.data()));
+                const bool floor = strength > 0 || tone > 0;
+                requireRgbNear(staged,floor ? ColorRgb{std::fmax(a.r,0.0f),std::fmax(a.g,0.0f),std::fmax(a.b,0.0f)} : chip,
+                               1e-5f,"Negative-stage floor is inconsistent or affects zero strengths");
+                requireRgbNear(response_print(chip,off),response_print(chip,full),0,
+                               "Negative gamut amount leaks into Print");
+            }
+        }
+    }
+    auto s = filmSettings(); s[30] = 0;
+    const auto off = response::prepare(s.data());
+    const ColorRgb red {2.4f,-0.45f,0.31f};
+    const auto a = response_negative(red,off);
+    const float ceiling = std::fmax(off.negativeTone.ceiling,response_luma(a)+0.05f);
+    const auto target = response_gamut(a,ceiling,0.45f);
+    s[30] = 1;
+    requireRgbNear(response_negative(red,response::prepare(s.data())),target,2e-6f,
+                   "Full negative gamut amount does not reach the compression target");
+    s[30] = 0.5f;
+    const auto half = response_negative(red,response::prepare(s.data()));
+    require(half.r > target.r && half.r < a.r,"Half gamut amount still crushes bright red at full strength");
+    require(half.r > response_gamut(a,ceiling,0.715f).r,
+            "New default compression darkens the HDR red chip as much as the old default");
+    std::puts("Negative gamut: continuous zero, uniform 1001-step amount sweep, brightness, neutrals, bright-red endpoints, strengths, and Print isolation pass.");
+}
+
 static void testPrintPresets()
 {
     const std::array<ColorRgb, 6> chips {{{0,0,0},{0.08f,0.08f,0.08f},{0.5f,0.5f,0.5f},
@@ -921,7 +970,7 @@ static void writeResponsePreview(const char* path, bool development = false)
                 c = {v,v,v};
             }
             const auto p = columns[x / 256];
-            c = response_negative(c,p);
+            c = response_negative_stage(c,p);
             if (development) c = response_development(c,p);
             c = response_print(c,p);
             if (development && y >= 384) {
@@ -1055,7 +1104,7 @@ public:
                 if (spatial)
                     h = halation::signal(blur.sample(x, y), halation_key(work.r, work.g, work.b, halo.key), effective[13], effective[15]);
                 ColorRgb processed = work;
-                if (modules & film::Negative) processed = response_negative(color_balance(processed, {s[4],s[5],s[6]}), responseParameters);
+                if (modules & film::Negative) processed = response_negative_stage(color_balance(processed, {s[4],s[5],s[6]}), responseParameters);
                 if (modules & film::Development) processed = response_development(processed, responseParameters);
                 if (modules & film::Print) processed = response_print(processed, responseParameters);
                 std::array<float, 3> rgb {processed.r + h * halo.key.red, processed.g + h * halo.key.green, processed.b + h * halo.key.blue};
@@ -1753,6 +1802,51 @@ public:
         std::puts("OpenCL: partial/zero color-tone parity in all spaces, all gauges/modes, enlarged/odd grids, and control isolation pass.");
     }
 
+    void testNegativeCompression()
+    {
+        const std::array<ColorRgb, 8> chips {{{0,0,0},{0.5f,0.5f,0.5f},{4,4,4},
+            {0.6f,0.46f,0.34f},{0.95f,0.02f,0.04f},{3.5f,-0.54f,0.45f},
+            {2.4f,-0.45f,0.31f},{0.1f,-0.15f,4}}};
+        for (int source = 0; source < color::SpaceCount; ++source) {
+            auto s = filmSettings(); s[0] = 0; s[19] = film::Negative;
+            s[26] = static_cast<float>(source); s[27] = 4; // sRGB keeps the amount sweep in working RGB.
+            const auto conversion = color::prepare(s.data());
+            std::vector<float> input(chips.size()*4);
+            for (size_t i = 0; i < chips.size(); ++i) {
+                const auto encoded = color_from_work(chips[i],color::prepare(source,0,true));
+                input[i*4] = encoded.r; input[i*4+1] = encoded.g; input[i*4+2] = encoded.b;
+                input[i*4+3] = static_cast<float>(i)/chips.size();
+            }
+            s[30] = 0; const auto off = response::prepare(s.data());
+            s[30] = 1; const auto full = response::prepare(s.data());
+            for (float amount : {0.0f,1e-6f,0.001f,0.01f,0.1f,0.25f,0.5f,0.75f,0.9f,0.99f,1.0f}) {
+                s[30] = amount;
+                const auto output = render(input,static_cast<int>(chips.size()),1,s);
+                for (size_t i = 0; i < chips.size(); ++i) {
+                    const auto work = color_to_work({input[i*4],input[i*4+1],input[i*4+2]},conversion);
+                    const auto a = response_negative(work,off), b = response_negative(work,full);
+                    ColorRgb expected {std::fmax(0.0f,a.r+(b.r-a.r)*amount),std::fmax(0.0f,a.g+(b.g-a.g)*amount),
+                                       std::fmax(0.0f,a.b+(b.b-a.b)*amount)};
+                    requireRgbNear({output[i*4],output[i*4+1],output[i*4+2]},expected,2e-5f,
+                                   "GPU negative gamut amount jumps or diverges from its endpoints");
+                    require(output[i*4+3] == input[i*4+3],"Negative gamut amount changes alpha");
+                }
+                auto combinedSettings = s; combinedSettings[19] = film::Negative | film::Print;
+                const auto combined = render(input,static_cast<int>(chips.size()),1,combinedSettings);
+                auto printSettings = s; printSettings[19] = film::Print; printSettings[26] = color::SRGB;
+                const auto separate = render(output,static_cast<int>(chips.size()),1,printSettings);
+                for (size_t i = 0; i < combined.size(); ++i)
+                    requireNear(combined[i],separate[i],3e-5f,
+                                "Partial negative gamut compression changes combined versus separate Print nodes");
+            }
+            for (float amount : {0.0f,0.001f,0.01f,0.5f,1.0f}) {
+                s[30] = amount; s[27] = 5;
+                test(17,19,s,false);
+            }
+        }
+        std::puts("OpenCL: negative-only gamut amount endpoints/near-zero/intermediates, saturated/HDR chips, separate-node Print composition, alpha, and CPU parity in all input spaces pass.");
+    }
+
     void testFilmResponse()
     {
         for (int source = 0; source < static_cast<int>(color::spaces().size()); ++source) {
@@ -1822,6 +1916,7 @@ int main(int argc, char** argv)
         testGrain();
         testColorSpaces();
         testResponse();
+        testNegativeCompression();
         testPrintPresets();
         testMonochrome();
         testStrengthControls();
@@ -1884,6 +1979,7 @@ int main(int argc, char** argv)
         }
         gpu.testManagedColor();
         gpu.testFilmResponse();
+        gpu.testNegativeCompression();
         gpu.testPrintPresetTransitions();
         gpu.testMonochromeOutput();
         gpu.testUpgradeControls();
