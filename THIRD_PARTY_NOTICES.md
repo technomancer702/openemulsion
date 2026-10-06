@@ -101,9 +101,9 @@ SOFTWARE.
 
 ## Compiler Runtimes
 
-MinGW builds statically link GCC and MinGW runtime components. Binary distributors must also include the notices applicable to their actual toolchain, including the GCC Runtime Library Exception and MinGW runtime notices. These compiler components are not included as source in this repository. Do not treat the project MPL license as replacing dependency licenses.
+The current Windows release uses WinLibs GCC 16.1.0, MinGW-w64 14.0.0, UCRT, and POSIX threads. GCC/libstdc++ and Winpthreads runtime components are linked statically. The matching upstream license texts, including the GCC Runtime Library Exception and aggregated MinGW runtime notices, are tracked in `licenses/` and packaged inside `Contents/Licenses`. Provenance is recorded in `licenses/README.md`. These compiler components are not included as source in this repository. Do not treat the project MPL license as replacing dependency licenses.
 
-The generated plugin bundle includes this file and the project LICENSE. Review toolchain-specific runtime notices when preparing a public binary release.
+The generated plugin bundle includes this file, the project LICENSE, and the runtime notices. Reassess toolchain-specific notices before distributing a build made with a different compiler. Windows system libraries and the GPU driver's dynamically loaded OpenCL runtime are not redistributed.
 
 ## Numerical References
 

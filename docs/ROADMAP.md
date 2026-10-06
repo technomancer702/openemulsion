@@ -6,6 +6,7 @@
 - Disabled-module control greying, mode-driven Enable toggles, and mode-aware print-preset locks.
 - Continuous negative gamut-compression amount, without the full-strength jump immediately above zero; consistent negative-channel flooring before later stages.
 - Original plugin icon with editable SVG, RGBA PNG, and incremental resource packaging checks.
+- Experimental Windows release ZIP packaging with instructions, matching source, compiler runtime notices, hashes, and extracted OFX load checks.
 - Resolution-aware smooth halation, refined highlight selection, tint, and independent Aura radius.
 - Creative film-gauge presets.
 - Fixed print recipes with editable Custom inheritance.
@@ -23,7 +24,7 @@ Synthetic checks cover bounded extraction, colored/white sources, continuous con
 
 - Investigate negative-response-driven, pre-print grain rather than the current additive post-print grain. Preserve independent texture-only operation and predictable print interaction.
 - Reference-based profiles using properly licensed original scans and measured charts. Current film families remain original creative approximations; do not claim measured stock calibration without measurements.
-- Ready-to-install Windows release ZIPs with complete compiler/runtime redistribution notices and clean-machine installation checks.
+- Clean-machine Resolve installation checks, other-GPU/host testing, and signed release binaries. Current ZIP checks validate extracted payloads and native OFX loading, not a second-machine Resolve session.
 - CUDA backend for NVIDIA hosts after suitable hardware/testing becomes available. GPU ownership/event handling and existing CPU/OpenCL parity must remain intact.
 
 macOS/Metal is postponed because no Mac is available for verification. Dust, scratches, borders, gate weave, and other damage effects are lower priority than core response, texture, and performance.

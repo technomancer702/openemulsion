@@ -89,6 +89,16 @@ set(DIST_RESOURCES "${CMAKE_SOURCE_DIR}/../dist/OpenEmulsion.ofx.bundle/Contents
 add_custom_target(OpenEmulsionResources
     COMMAND ${CMAKE_COMMAND} -E make_directory "${BUNDLE_RESOURCES}" "${DIST_RESOURCES}"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/../LICENSE" "${CMAKE_SOURCE_DIR}/../THIRD_PARTY_NOTICES.md"
+        "${CMAKE_BINARY_DIR}/OpenEmulsion.ofx.bundle/Contents/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/../LICENSE" "${CMAKE_SOURCE_DIR}/../THIRD_PARTY_NOTICES.md"
+        "${CMAKE_SOURCE_DIR}/../dist/OpenEmulsion.ofx.bundle/Contents/"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/../licenses"
+        "${CMAKE_BINARY_DIR}/OpenEmulsion.ofx.bundle/Contents/Licenses"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/../licenses"
+        "${CMAKE_SOURCE_DIR}/../dist/OpenEmulsion.ofx.bundle/Contents/Licenses"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${PLUGIN_RESOURCES}/org.openemulsion.film.png"
         "${PLUGIN_RESOURCES}/org.openemulsion.film.svg"
         "${BUNDLE_RESOURCES}/"

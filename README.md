@@ -12,6 +12,8 @@ OpenEmulsion is an original artistic approximation, not a measured film-stock ca
 
 ## Build
 
+For the prebuilt Windows ZIP, follow `INSTALL.md` inside the release instead of the development build/install steps below. The first experimental binary release is v0.22; it includes a complete OFX bundle, installation and usage guides, runtime notices, matching project source, and a SHA-256 checksum. macOS/Linux binaries are not available.
+
 Prerequisites:
 
 - Windows x64 and DaVinci Resolve's OpenFX developer files.
@@ -112,6 +114,12 @@ New-Item -ItemType Directory -Path analysis -Force
 ```
 
 The optional sixth preview path produces a five-panel bloom comparison; see [Bloom](docs/BLOOM.md). The optional third preview uses OpenCL and compares Custom/8/16/35/65 mm gauges across isolated lights and grain-only patches; it is skipped when no OpenCL device is available.
+
+## Release Packaging
+
+Commit release files first, then run `.\tools\package_release.ps1`. It builds and tests Release, verifies the supported compiler/runtime notices and imported DLLs, and creates `dist/releases/OpenEmulsion-v0.22-Windows-x64.zip` plus `.zip.sha256`. Use `-Force` only when deliberately replacing a generated archive. Release output is ignored by Git; upload the ZIP and checksum as release assets, not repository files.
+
+The packager includes only the bundle, release guides, documentation, licenses, and a `git archive` source snapshot of the exact revision in `manifest.json`. It validates the extracted files and hashes, loads the extracted OFX binary using only its directory and Windows system DLL search, and checks its exported identifier/version. To recheck an archive, run `.\tools\test_release.ps1 -Archive "dist/releases/OpenEmulsion-v0.22-Windows-x64.zip"` in 64-bit PowerShell. This is not a clean-machine Resolve installation test or a code-signing/security certification; separate-machine and other-GPU validation remain outstanding.
 
 Optional Resolve test charts:
 
