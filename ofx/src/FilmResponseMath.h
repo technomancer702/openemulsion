@@ -22,6 +22,9 @@ typedef struct FilmResponseParameters {
     ColorRgb printGain;
     float printGamutKnee;
     float colorStrength, toneStrength, printColorStrength, printToneStrength;
+    float push, developmentContrast, richness, splitAmount;
+    float splitPivot, splitWidth, splitShadows, splitHighlights;
+    ColorRgb splitTint;
 } FilmResponseParameters;
 
 static inline float response_clamp(float x, float lo, float hi)
@@ -173,6 +176,45 @@ static inline ColorRgb response_negative(ColorRgb c, FilmResponseParameters p)
         c = response_gamut(c, ceiling, 0.98f - p.negativeCompression * 0.53f);
     }
     return response_mix(beforeColor, c, p.colorStrength);
+}
+
+// Creative development, not calibrated chemistry. Gray exposure stays anchored.
+static inline ColorRgb response_development(ColorRgb c, FilmResponseParameters p)
+{
+    if (p.push == 0.0f && p.richness == 0.0f && p.splitAmount == 0.0f) return c;
+    float y = response_luma(c);
+    if (p.push != 0.0f && y >= 0.0f) {
+        const float pivot = 0.46135613f;
+        float developed = y < pivot ? pivot * y / (y + p.developmentContrast * (pivot - y)) :
+            pivot + p.developmentContrast * (y - pivot);
+        const float shadow = 1.0f - response_clamp(y / pivot, 0.0f, 1.0f);
+        if (p.push > 0.0f) developed += p.push * 0.012f * shadow * shadow;
+        else developed *= 1.0f + p.push * 0.10f * shadow * shadow;
+        // Scale chroma with brightness except near black, where fog is neutral.
+        const float scale = 1.0f + (developed - y) / RESPONSE_MAX(y, 0.05f);
+        c.r = developed + (c.r - y) * scale;
+        c.g = developed + (c.g - y) * scale;
+        c.b = developed + (c.b - y) * scale;
+        y = developed;
+    }
+    if (p.richness != 0.0f) {
+        const float chroma = RESPONSE_MAX(c.r, RESPONSE_MAX(c.g, c.b)) - RESPONSE_MIN(c.r, RESPONSE_MIN(c.g, c.b));
+        const float relative = chroma / RESPONSE_MAX(y, 0.08f);
+        if (chroma > 0.0f) c = response_saturation(c, 1.0f + p.richness * 0.65f / (1.0f + 4.0f * relative * relative));
+    }
+    if (p.splitAmount != 0.0f) {
+        const float low = p.splitPivot - p.splitWidth * 0.5f;
+        const float high = p.splitPivot + p.splitWidth * 0.5f;
+        const float shadows = 1.0f - response_smooth(0.0f, low, y);
+        const float highlights = response_smooth(high, 1.25f, y);
+        const float envelope = RESPONSE_MAX(y, 0.0f) / (RESPONSE_MAX(y, 0.0f) + 0.05f);
+        const float weight = p.splitAmount * 0.08f * envelope *
+            (shadows * p.splitShadows - highlights * p.splitHighlights);
+        c.r += p.splitTint.r * weight;
+        c.g += p.splitTint.g * weight;
+        c.b += p.splitTint.b * weight;
+    }
+    return c;
 }
 
 static inline ColorRgb response_print(ColorRgb c, FilmResponseParameters p)

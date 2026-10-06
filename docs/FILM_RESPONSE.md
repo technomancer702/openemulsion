@@ -1,10 +1,10 @@
-# Negative and Print Response (v0.15)
+# Negative and Print Response (v0.17)
 
 ## Current Engine
 
 Film Response is the only negative/print engine. There is no response-model selector, unmanaged input, or compatibility path. Film controls are available immediately; print-recipe controls are editable in Custom. New instances default to input `Rec.709 / Gamma 2.4` and output `Same as Input`; select the actual space entering the node before grading. Earlier development builds changed input choice indices; check stored input/output selections when using old test nodes. Recreate pre-v0.14 print test nodes or reselect a named print style to populate its displayed recipe under the new workflow.
 
-Film Color and Print remain independent. Full can use both, either, or neither. Grain Only, Halation & Grain Only, Bypass, and Halation Matte never use the negative/print response controls. Disabling Film Color also disables camera exposure/white balance; disabling Print disables all its tone and balance adjustments. Turning both off retains the texture-only input/output behavior documented in [Color Spaces](COLOR_SPACES.md).
+Film Color and Print remain independent. Full can use both, either, or neither. Grain Only, Halation & Grain Only, Bypass, and Halation Matte never use the negative/print response controls. Disabling Film Color also disables camera exposure/white balance; disabling Print disables all its tone and balance adjustments. With Film Development also disabled or neutral, turning both off retains the texture-only input/output behavior documented in [Color Spaces](COLOR_SPACES.md).
 
 The engine is an original artistic model, not a measured stock calibration, physical emulsion simulation, or reproduction of Filmbox's private implementation. The six film families are creative profiles. There is no new LUT, reference-image dependency, extra image pass, GPU readback, or per-frame texture allocation.
 
@@ -33,6 +33,10 @@ Lower Film Color Strength progressively restores color both in the negative and 
 The finishing calculation is shared by C++ and OpenCL and runs inside the existing image pass. Tests cover strong halation, Aura, colored-grain settings, every print style, all input/output spaces, partial strengths, alpha, preserved texture activity, and exact disabled-stage isolation.
 
 The neutral axis is preserved by the new negative palette and density logic. Palette changes, saturation, input gamut conversion, and intentional tone mapping can still change the appearance of colored objects. Saturation/compression set to extreme values is a creative override, not a colorimetric correction.
+
+## Film Development
+
+The independent development stage runs between Film Color and Print. Neutral controls skip the stage completely; disabling it also removes Push/Pull's grain coupling. It does not depend on Film Color/Print strengths. See [Film Development](FILM_DEVELOPMENT.md) for controls, equations, and limitations. Full-strength Mono finishes the complete composite after development, so Split Tone cannot recolor Mono.
 
 ## Print
 
@@ -76,7 +80,7 @@ New print response approaches a bounded SDR-like perceptual white and uses hue-p
 
 ## GPU and Tests
 
-The frame-level configuration prepares profile matrices, curve coefficients, and print gains once. A 168-byte response structure is passed to the existing OpenCL image kernel. The default tone/color response uses rational/polynomial arithmetic, not per-pixel logs or a sampled LUT. Nonzero print RGB/exposure adjustments additionally use the existing shared linear/perceptual conversion functions.
+The frame-level configuration prepares profile matrices, curve coefficients, and print gains once. A 212-byte response structure is passed to the existing OpenCL image kernel. The default tone/color response uses rational/polynomial arithmetic, not per-pixel logs or a sampled LUT. Nonzero print RGB/exposure adjustments additionally use the existing shared linear/perceptual conversion functions.
 
 C++ and OpenCL compile the same response header. Tests cover monotonic HDR ramps through 1,000,000 work-domain units, continuous curve slopes, stable gray pivots, neutral axes/floors, hue/luminance-preserving gamut compression, skin-region isolation, density, locked-recipe immunity in named styles and slider activity in Custom, CPU/GPU parity across all 15 input choices and 24 film/print combinations, all module masks, independent composition, and exact texture/matte/bypass isolation. Additional tests check independent color/tone endpoints, partial tone interpolation, retained exposure with strengths at zero, and CPU/OpenCL response parity at partial strengths in all input spaces using linear output. The existing managed output tests cover all encodings; linear comparisons avoid amplifying float cancellation at Gamma 2.4's near-black singularity for extreme synthetic wide-gamut colors.
 

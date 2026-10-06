@@ -133,8 +133,8 @@ inline ColorParameters prepare(int source, int output, bool textureOnly)
 
 inline ColorParameters prepare(const float* settings)
 {
-    const int modules = film::modulesForMode(static_cast<int>(settings[0]), static_cast<int>(settings[film::ModuleIndex]));
-    return prepare(static_cast<int>(settings[26]), static_cast<int>(settings[27]), !(modules & (film::Negative | film::Print)));
+    const int modules = film::modulesForSettings(settings);
+    return prepare(static_cast<int>(settings[26]), static_cast<int>(settings[27]), !(modules & (film::Negative | film::Development | film::Print)));
 }
 
 } // namespace color

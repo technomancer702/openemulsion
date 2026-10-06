@@ -22,7 +22,7 @@
 #define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, and smooth halation, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 16
+#define kPluginVersionMinor 17
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -38,6 +38,7 @@ struct Settings {
     int sourceSpace = color::Rec709Gamma24;
     int outputSpace = 0;
     bool enableNegative = true;
+    bool enableDevelopment = true;
     bool enablePrint = true;
     bool enableHalation = true;
     bool enableAura = true;
@@ -84,6 +85,18 @@ struct Settings {
     double halationSoftness = 0.52;
     double halationColor = 0.5;
     double auraRadius = 1;
+    double pushPull = 0;
+    double colorRichness = 0;
+    double splitTone = 0;
+    double splitHue = 220;
+    double splitPivot = 0.46135613;
+    double splitWidth = 0.1;
+    double splitShadows = 1;
+    double splitHighlights = 1;
+    double grainStretch = 1;
+    double grainRed = 1;
+    double grainGreen = 1;
+    double grainBlue = 1;
     int grainSeed = 0;
     float gainR = 1.0f;
     float gainG = 1.0f;
@@ -93,6 +106,7 @@ struct Settings {
 int moduleMask(const Settings& s)
 {
     return (s.enableNegative ? film::Negative : 0) | (s.enablePrint ? film::Print : 0) |
+           (s.enableDevelopment && (s.pushPull != 0 || s.colorRichness != 0 || s.splitTone != 0) ? film::Development : 0) |
            (s.enableHalation ? film::Halation : 0) | (s.enableAura ? film::Aura : 0) | (s.enableGrain ? film::Grain : 0);
 }
 
@@ -265,6 +279,7 @@ public:
                         c = cameraStage(c, settings_);
                         c = response_negative(c, responseParameters_);
                     }
+                    if (modules & film::Development) c = response_development(c, responseParameters_);
                     if (printEnabled(settings_)) {
                         c = response_print(c, responseParameters_);
                     }
@@ -293,7 +308,7 @@ public:
                     c = response_finish(c, modules, responseParameters_);
                     if (clampOutput) c = {std::max(c.r, 0.0f), std::max(c.g, 0.0f), std::max(c.b, 0.0f)};
                     if (settings_.mode != 5) {
-                        const bool unchanged = !(modules & (film::Negative | film::Print)) && c.r == work.r && c.g == work.g && c.b == work.b;
+                        const bool unchanged = !(modules & (film::Negative | film::Development | film::Print)) && c.r == work.r && c.g == work.g && c.b == work.b;
                         c = unchanged ? original : color_from_work(c, colorParameters_);
                     }
                     dstPix[0] = c.r;
@@ -361,6 +376,18 @@ private:
         out[film::HalationSoftness] = static_cast<float>(s.halationSoftness);
         out[film::HalationColor] = static_cast<float>(s.halationColor);
         out[film::AuraRadius] = static_cast<float>(s.auraRadius);
+        out[film::PushPull] = static_cast<float>(s.pushPull);
+        out[film::ColorRichness] = static_cast<float>(s.colorRichness);
+        out[film::SplitTone] = static_cast<float>(s.splitTone);
+        out[film::SplitHue] = static_cast<float>(s.splitHue);
+        out[film::SplitPivot] = static_cast<float>(s.splitPivot);
+        out[film::SplitWidth] = static_cast<float>(s.splitWidth);
+        out[film::SplitShadows] = static_cast<float>(s.splitShadows);
+        out[film::SplitHighlights] = static_cast<float>(s.splitHighlights);
+        out[film::GrainStretch] = static_cast<float>(s.grainStretch);
+        out[film::GrainRed] = static_cast<float>(s.grainRed);
+        out[film::GrainGreen] = static_cast<float>(s.grainGreen);
+        out[film::GrainBlue] = static_cast<float>(s.grainBlue);
     }
 
     OFX::Image* src_ = nullptr;
@@ -387,6 +414,7 @@ public:
         printStyle_ = fetchChoiceParam("printStyle");
         grainStyle_ = fetchChoiceParam("grainStyle");
         enableNegative_ = fetchBooleanParam("enableNegative");
+        enableDevelopment_ = fetchBooleanParam("enableDevelopment");
         enablePrint_ = fetchBooleanParam("enablePrint");
         enableHalation_ = fetchBooleanParam("enableHalation");
         enableAura_ = fetchBooleanParam("enableAura");
@@ -434,6 +462,18 @@ public:
         halationSoftness_ = fetchDoubleParam("halationSoftness");
         halationColor_ = fetchDoubleParam("halationColor");
         auraRadius_ = fetchDoubleParam("auraRadius");
+        pushPull_ = fetchDoubleParam("pushPull");
+        colorRichness_ = fetchDoubleParam("colorRichness");
+        splitTone_ = fetchDoubleParam("splitTone");
+        splitHue_ = fetchDoubleParam("splitHue");
+        splitPivot_ = fetchDoubleParam("splitPivot");
+        splitWidth_ = fetchDoubleParam("splitWidth");
+        splitShadows_ = fetchDoubleParam("splitShadows");
+        splitHighlights_ = fetchDoubleParam("splitHighlights");
+        grainStretch_ = fetchDoubleParam("grainStretch");
+        grainRed_ = fetchDoubleParam("grainRed");
+        grainGreen_ = fetchDoubleParam("grainGreen");
+        grainBlue_ = fetchDoubleParam("grainBlue");
         for (int control = 0; control < printstyle::ControlCount; ++control)
             printRecipeControls_[control] = fetchDoubleParam(printstyle::Parameters[control].name);
         printStyle_->getValue(printStyleForUI_);
@@ -519,6 +559,7 @@ private:
         printStyle_->getValueAtTime(time, s.printStyle);
         grainStyle_->getValueAtTime(time, s.grainStyle);
         s.enableNegative = enableNegative_->getValueAtTime(time);
+        s.enableDevelopment = enableDevelopment_->getValueAtTime(time);
         s.enablePrint = enablePrint_->getValueAtTime(time);
         s.enableHalation = enableHalation_->getValueAtTime(time);
         s.enableAura = enableAura_->getValueAtTime(time);
@@ -566,6 +607,18 @@ private:
         s.halationSoftness = halationSoftness_->getValueAtTime(time);
         s.halationColor = halationColor_->getValueAtTime(time);
         s.auraRadius = auraRadius_->getValueAtTime(time);
+        s.pushPull = pushPull_->getValueAtTime(time);
+        s.colorRichness = colorRichness_->getValueAtTime(time);
+        s.splitTone = splitTone_->getValueAtTime(time);
+        s.splitHue = splitHue_->getValueAtTime(time);
+        s.splitPivot = splitPivot_->getValueAtTime(time);
+        s.splitWidth = splitWidth_->getValueAtTime(time);
+        s.splitShadows = splitShadows_->getValueAtTime(time);
+        s.splitHighlights = splitHighlights_->getValueAtTime(time);
+        s.grainStretch = grainStretch_->getValueAtTime(time);
+        s.grainRed = grainRed_->getValueAtTime(time);
+        s.grainGreen = grainGreen_->getValueAtTime(time);
+        s.grainBlue = grainBlue_->getValueAtTime(time);
         const float gain = std::pow(2.0f, static_cast<float>(s.exposure));
         const float warm = static_cast<float>(s.temperature) * 0.085f;
         const float green = static_cast<float>(s.tint) * 0.065f;
@@ -586,6 +639,7 @@ private:
     int printStyleForUI_ = printstyle::Standard;
     OFX::ChoiceParam* grainStyle_ = nullptr;
     OFX::BooleanParam* enableNegative_ = nullptr;
+    OFX::BooleanParam* enableDevelopment_ = nullptr;
     OFX::BooleanParam* enablePrint_ = nullptr;
     OFX::BooleanParam* enableHalation_ = nullptr;
     OFX::BooleanParam* enableAura_ = nullptr;
@@ -633,6 +687,18 @@ private:
     OFX::DoubleParam* halationSoftness_ = nullptr;
     OFX::DoubleParam* halationColor_ = nullptr;
     OFX::DoubleParam* auraRadius_ = nullptr;
+    OFX::DoubleParam* pushPull_ = nullptr;
+    OFX::DoubleParam* colorRichness_ = nullptr;
+    OFX::DoubleParam* splitTone_ = nullptr;
+    OFX::DoubleParam* splitHue_ = nullptr;
+    OFX::DoubleParam* splitPivot_ = nullptr;
+    OFX::DoubleParam* splitWidth_ = nullptr;
+    OFX::DoubleParam* splitShadows_ = nullptr;
+    OFX::DoubleParam* splitHighlights_ = nullptr;
+    OFX::DoubleParam* grainStretch_ = nullptr;
+    OFX::DoubleParam* grainRed_ = nullptr;
+    OFX::DoubleParam* grainGreen_ = nullptr;
+    OFX::DoubleParam* grainBlue_ = nullptr;
 };
 
 class OpenEmulsionFactory : public OFX::PluginFactoryHelper<OpenEmulsionFactory> {
@@ -698,7 +764,7 @@ public:
 
         choice = desc.defineChoiceParam("outputSpace");
         choice->setLabels("Output Color Space", "Output Color Space", "Output Color Space");
-        choice->setHint("Applies when Film Color or Print is active. Texture-only processing always returns the input space. Bypass ignores this setting.");
+        choice->setHint("Applies when Film Color, Film Development, or Print is active. Texture-only processing always returns the input space. Bypass ignores this setting.");
         for (const auto* label : color::OutputLabels) choice->appendOption(label);
         choice->setDefault(0);
         page->addChild(*choice);
@@ -712,6 +778,8 @@ public:
 
         GroupParamDescriptor* negative = addGroup(desc, page, "negativeControls", "Film Color", false);
         addToggle(desc, page, negative, "enableNegative", "Enable");
+        GroupParamDescriptor* development = addGroup(desc, page, "developmentControls", "Film Development", false);
+        addToggle(desc, page, development, "enableDevelopment", "Enable");
         GroupParamDescriptor* print = addGroup(desc, page, "printControls", "Print", false);
         addToggle(desc, page, print, "enablePrint", "Enable");
         GroupParamDescriptor* halation = addGroup(desc, page, "halationControls", "Halation", false);
@@ -793,6 +861,18 @@ public:
         addDouble(desc, page, "grainShadows", "Shadow Grain", 1.15, 0.0, 2.0, 0.01, grain);
         addDouble(desc, page, "grainMidtones", "Midtone Grain", 0.80, 0.0, 2.0, 0.01, grain);
         addDouble(desc, page, "grainHighlights", "Highlight Grain", 0.42, 0.0, 2.0, 0.01, grain);
+        addDouble(desc, page, "pushPull", "Push / Pull", 0, -3, 3, 0.01, development, "Creative development amount: changes contrast and shadow fog around fixed middle gray; also scales enabled grain size and strength in Full mode. Not calibrated camera exposure stops.");
+        addDouble(desc, page, "colorRichness", "Color Richness", 0, -1, 1, 0.01, development, "Adjusts muted colors more than saturated colors without changing luminance.");
+        addDouble(desc, page, "splitTone", "Split Tone", 0, 0, 1, 0.01, development, "Shifts shadows toward the selected hue and highlights toward its chromatic opposite. Middle gray remains neutral by default.");
+        addDouble(desc, page, "splitHue", "Shadow Hue", 220, 0, 360, 1, development, "Shadow hue in degrees: red 0, green 120, blue 240. Highlights use the opposite direction.");
+        addDouble(desc, page, "splitPivot", "Split Pivot", 0.46135613, 0.2, 0.8, 0.01, development, "Neutral split point in the managed perceptual working space. Default is scene-linear 18% gray.");
+        addDouble(desc, page, "splitWidth", "Neutral Width", 0.1, 0, 0.3, 0.01, development, "Width of the unaffected tonal range around Split Pivot.");
+        addDouble(desc, page, "splitShadows", "Shadow Intensity", 1, 0, 2, 0.01, development, "Scales the shadow side of Split Tone independently.");
+        addDouble(desc, page, "splitHighlights", "Highlight Intensity", 1, 0, 2, 0.01, development, "Scales the highlight side of Split Tone independently.");
+        addDouble(desc, page, "grainStretch", "Horizontal Stretch", 1, 0.5, 2, 0.01, grain, "Horizontal grain desqueeze ratio. One is round grain; two doubles its horizontal scale without changing frame dimensions.");
+        addDouble(desc, page, "grainRed", "Red Grain", 1, 0, 2, 0.01, grain, "Scales red-channel grain intensity; zero removes it. Full-strength Mono Negative still finishes the composite monochrome.");
+        addDouble(desc, page, "grainGreen", "Green Grain", 1, 0, 2, 0.01, grain, "Scales green-channel grain intensity independently.");
+        addDouble(desc, page, "grainBlue", "Blue Grain", 1, 0, 2, 0.01, grain, "Scales blue-channel grain intensity independently.");
         IntParamDescriptor* seed = desc.defineIntParam("grainSeed");
         seed->setLabels("Grain Seed", "Grain Seed", "Grain Seed");
         seed->setDefault(0);

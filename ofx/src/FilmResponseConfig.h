@@ -20,6 +20,22 @@ inline FilmResponseParameters prepare(const float* s)
     p.toneStrength = std::clamp(s[film::NegativeToneStrength], 0.0f, 1.0f);
     p.printColorStrength = std::clamp(s[film::PrintColorStrength], 0.0f, 1.0f);
     p.printToneStrength = std::clamp(s[film::PrintToneStrength], 0.0f, 1.0f);
+    p.push = std::clamp(s[film::PushPull], -3.0f, 3.0f);
+    p.developmentContrast = std::exp2(p.push * 0.18f);
+    p.richness = std::clamp(s[film::ColorRichness], -1.0f, 1.0f);
+    p.splitAmount = std::clamp(s[film::SplitTone], 0.0f, 1.0f);
+    p.splitPivot = std::clamp(s[film::SplitPivot], 0.2f, 0.8f);
+    p.splitWidth = std::clamp(s[film::SplitWidth], 0.0f, 0.3f);
+    p.splitShadows = std::clamp(s[film::SplitShadows], 0.0f, 2.0f);
+    p.splitHighlights = std::clamp(s[film::SplitHighlights], 0.0f, 2.0f);
+    const float hue = std::clamp(s[film::SplitHue], 0.0f, 360.0f) / 60.0f;
+    auto hueChannel = [hue](float offset) {
+        const float t = std::fmod(hue + offset, 6.0f);
+        return std::clamp(std::abs(t - 3.0f) - 1.0f, 0.0f, 1.0f);
+    };
+    p.splitTint = {hueChannel(0), hueChannel(4), hueChannel(2)};
+    const float tintLuma = response_luma(p.splitTint);
+    p.splitTint.r -= tintLuma; p.splitTint.g -= tintLuma; p.splitTint.b -= tintLuma;
 
     // Original creative profiles, not measured or branded stock calibrations.
     const std::array<std::array<float, 9>, 6> matrices {{

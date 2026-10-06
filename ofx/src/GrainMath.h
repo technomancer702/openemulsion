@@ -32,6 +32,8 @@ typedef struct GrainParameters {
     float highlights;
     GrainUInt seed;
     int debug;
+    float inverseStretch;
+    float red, green, blue;
 } GrainParameters;
 
 static inline GrainUInt grain_hash(GrainUInt value)
@@ -95,7 +97,7 @@ static inline float grain_shape(float value, float roughness)
 
 static inline GrainVector grain_delta(int x, int y, float luminance, GrainParameters p)
 {
-    float px = ((float)x + 0.5f) * p.inverseSize;
+    float px = ((float)x + 0.5f) * p.inverseSize * p.inverseStretch;
     float py = ((float)y + 0.5f) * p.inverseSize;
     // Rotated, independently seeded layers avoid axis-aligned grain cells.
     float u = px * 0.8f + py * 0.6f + grain_random(p.seed + 11u) * 8.0f;
@@ -112,9 +114,9 @@ static inline GrainVector grain_delta(int x, int y, float luminance, GrainParame
     float tonal = p.shadows * shadow + p.midtones * (1.0f - shadow - high) + p.highlights * high;
     float amplitude = p.amount * (p.debug ? 0.70f : 0.12f * tonal);
     GrainVector result = {
-        grain_shape(mono + (n.r - mono) * p.color, p.roughness) * amplitude,
-        grain_shape(mono + (n.g - mono) * p.color, p.roughness) * amplitude,
-        grain_shape(mono + (n.b - mono) * p.color, p.roughness) * amplitude
+        grain_shape(mono + (n.r - mono) * p.color, p.roughness) * amplitude * p.red,
+        grain_shape(mono + (n.g - mono) * p.color, p.roughness) * amplitude * p.green,
+        grain_shape(mono + (n.b - mono) * p.color, p.roughness) * amplitude * p.blue
     };
     return result;
 }

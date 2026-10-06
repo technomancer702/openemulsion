@@ -58,6 +58,15 @@ static grain::PackedSettings settings(float radius, float amount = 1.0f, float a
     s[film::PrintColorStrength] = s[film::PrintToneStrength] = 1.0f;
     s[film::HalationThreshold] = 0.48f; s[film::HalationSoftness] = 0.52f;
     s[film::HalationColor] = 0.50f; s[film::AuraRadius] = 1.0f;
+    s[film::SplitHue] = 220.0f;
+    s[film::SplitPivot] = 0.46135613f;
+    s[film::SplitWidth] = 0.1f;
+    s[film::SplitShadows] = 1.0f;
+    s[film::SplitHighlights] = 1.0f;
+    s[film::GrainStretch] = 1.0f;
+    s[film::GrainRed] = 1.0f;
+    s[film::GrainGreen] = 1.0f;
+    s[film::GrainBlue] = 1.0f;
     return s;
 }
 
@@ -604,6 +613,93 @@ static void testGrain()
     std::puts("Grain: style/size/softness structure, stable amplitude, neutral mean, mono/color, tonal controls, seeds, and HD/4K scaling pass.");
 }
 
+static void testDevelopmentAndGrain()
+{
+    auto s = filmSettings();
+    const std::array<ColorRgb, 6> chips {{{0,0,0}, {0.1f,0.1f,0.1f}, {0.46135613f,0.46135613f,0.46135613f},
+        {0.52f,0.46f,0.42f}, {1.2f,0.15f,-0.1f}, {-0.2f,2.0f,0.4f}}};
+    auto p = response::prepare(s.data());
+    for (auto c : chips) requireRgbNear(response_development(c,p),c,0,"Neutral development changes pixels");
+    require(!(film::modulesForSettings(s.data()) & film::Development),"Neutral development still active");
+    for (float push : {-3.0f,-1.0f,0.0f,1.0f,3.0f}) {
+        s[film::PushPull] = push;
+        p = response::prepare(s.data());
+        requireRgbNear(response_development(chips[2],p),chips[2],2e-7f,"Push/Pull moves middle gray");
+        float previous = -1;
+        for (int i = 0; i <= 4000; ++i) {
+            float v = i / 2000.0f;
+            const auto c = response_development({v,v,v},p);
+            require(c.r >= previous && std::isfinite(c.r),"Development tone folds or is nonfinite");
+            requireRgbNear(c,{c.r,c.r,c.r},2e-7f,"Push/Pull tints neutral grays");
+            previous = c.r;
+        }
+        for (float v : {10.0f,1000.0f,1000000.0f}) {
+            const auto c = response_development({v,v,v},p);
+            require(c.r > previous && std::isfinite(c.r),"Development clips HDR");
+            previous = c.r;
+        }
+    }
+    s[film::PushPull] = 0;
+    s[film::ColorRichness] = 1;
+    p = response::prepare(s.data());
+    requireRgbNear(response_development(chips[2],p),chips[2],0,"Richness tints gray");
+    for (auto c : chips) requireNear(response_luma(response_development(c,p)),response_luma(c),3e-7f,"Richness changes luminance");
+    auto muted = chips[3], vivid = chips[4];
+    auto m = response_development(muted,p), v = response_development(vivid,p);
+    require((m.r-m.b)/(muted.r-muted.b) > (v.r-v.b)/(vivid.r-vivid.b),"Richness does not favor muted colors");
+    s[film::ColorRichness] = 0;
+    s[film::SplitTone] = 1;
+    for (float hue : {0.0f,60.0f,120.0f,220.0f,240.0f,360.0f}) {
+        s[film::SplitHue] = hue;
+        p = response::prepare(s.data());
+        for (float y : {p.splitPivot-0.049f,p.splitPivot,p.splitPivot+0.049f})
+            requireRgbNear(response_development({y,y,y},p),{y,y,y},0,"Split Tone leaks into neutral zone");
+        const auto low = response_development({0.1f,0.1f,0.1f},p);
+        const auto high = response_development({0.9f,0.9f,0.9f},p);
+        requireNear(response_luma(low),0.1f,2e-7f,"Shadow tint changes luminance");
+        requireNear(response_luma(high),0.9f,2e-7f,"Highlight tint changes luminance");
+        require((low.r-low.g)*(high.r-high.g)+(low.b-low.g)*(high.b-high.g) < 0,"Split hues are not opposed");
+        p.splitShadows = 0;
+        requireRgbNear(response_development({0.1f,0.1f,0.1f},p),{0.1f,0.1f,0.1f},0,"Shadow intensity zero not isolated");
+        p.splitHighlights = 0;
+        requireRgbNear(response_development({0.9f,0.9f,0.9f},p),{0.9f,0.9f,0.9f},0,"Highlight intensity zero not isolated");
+    }
+    s = filmSettings(); s[0] = 0; s[16] = 0.5f; s[17] = 0.5f;
+    const auto baseline = grain::prepare(s.data(),1080,37);
+    s[film::PushPull] = 3;
+    auto pushed = grain::prepare(s.data(),1080,37);
+    require(pushed.amount > baseline.amount && pushed.inverseSize < baseline.inverseSize,"Push does not change grain intensity and size");
+    s[film::PushPull] = -3;
+    auto pulled = grain::prepare(s.data(),1080,37);
+    require(pulled.amount < baseline.amount && pulled.inverseSize > baseline.inverseSize,"Pull does not refine grain");
+    for (int mode : {2,3,4,5}) {
+        s[0] = static_cast<float>(mode);
+        auto g = grain::prepare(s.data(),1080,37);
+        require(g.amount == baseline.amount && g.inverseSize == baseline.inverseSize,"Development leaks into texture-only/bypass/matte grain");
+    }
+    s[0] = 0; s[19] = film::All & ~film::Development;
+    auto g = grain::prepare(s.data(),1080,37);
+    require(g.amount == baseline.amount && g.inverseSize == baseline.inverseSize,"Disabled development changes grain");
+    s[19] = film::All; s[film::PushPull] = 0; s[21] = 1;
+    auto round = grain::prepare(s.data(),1080,37);
+    auto stretched = round; stretched.inverseStretch = 0.5f;
+    auto narrow = round; narrow.inverseStretch = 2;
+    auto a = grainStatistics(round), b = grainStatistics(stretched), c = grainStatistics(narrow);
+    require(b.correlation > a.correlation+0.1 && c.correlation < a.correlation-0.1,"Horizontal grain stretch does not change structure");
+    require(std::abs(a.rms-b.rms)/a.rms < 0.05 && std::abs(a.rms-c.rms)/a.rms < 0.05,"Stretch changes grain variance");
+    s[film::GrainRed] = 0; s[film::GrainGreen] = 0.5f; s[film::GrainBlue] = 2;
+    auto mixed = grain::prepare(s.data(),1080,37);
+    for (int y = 0; y < 64; ++y) for (int x = 0; x < 64; ++x) {
+        auto original = grain_delta(x,y,0.45f,round), adjusted = grain_delta(x,y,0.45f,mixed);
+        requireNear(adjusted.r,0,0,"Zero red grain still visible");
+        requireNear(adjusted.g,original.g*0.5f,0,"Green grain multiplier incorrect");
+        requireNear(adjusted.b,original.b*2,0,"Blue grain multiplier incorrect");
+    }
+    s[16] = 0;
+    require(grain::prepare(s.data(),1080,37).amount == 0,"Development enables zero grain");
+    std::puts("Development/grain: neutral defaults, monotonic HDR, gray pivot, richness, split isolation, Push/Pull texture coupling, stretch variance, and channel gains pass.");
+}
+
 static void writePreview(const char* path)
 {
     const int width = 960, height = 540, rowBytes = width * 3;
@@ -635,7 +731,7 @@ static void writePreview(const char* path)
     std::printf("Preview written: %s (columns Fine/Classic/Rough; rows small/large grain).\n", path);
 }
 
-static void writeResponsePreview(const char* path)
+static void writeResponsePreview(const char* path, bool development = false)
 {
     const int width = 1024, height = 512, rowBytes = width * 3;
     std::array<unsigned char, 54> header {};
@@ -645,10 +741,18 @@ static void writeResponsePreview(const char* path)
     };
     putInt(2, 54 + rowBytes * height); putInt(18, width); putInt(22, height);
     std::array<FilmResponseParameters, 4> columns;
+    std::array<GrainParameters, 4> grains;
     for (int column = 0; column < 4; ++column) {
         auto s = filmSettings();
-        s[2] = static_cast<float>(column);
+        if (development) {
+            s[0] = 0; s[16] = 0.45f; s[17] = 0.45f;
+            s[film::PushPull] = column == 0 ? -2.0f : (column == 2 ? 2.0f : 0.0f);
+            s[film::SplitTone] = column == 3 ? 1.0f : 0.0f;
+            s[film::ColorRichness] = column == 3 ? 0.8f : 0.0f;
+            s[film::GrainStretch] = column == 3 ? 2.0f : 1.0f;
+        } else s[2] = static_cast<float>(column);
         columns[column] = response::prepare(s.data());
+        grains[column] = grain::prepare(s.data(),1080,37);
     }
     std::ofstream file(path, std::ios::binary);
     require(file.good(), "Cannot write response preview");
@@ -665,12 +769,22 @@ static void writeResponsePreview(const char* path)
                 c = hues[(y - 256) / 16];
                 const float scale = 0.05f + t * 1.5f;
                 c.r *= scale; c.g *= scale; c.b *= scale;
+            } else if (development) {
+                const float base = 0.25f + t * 0.5f;
+                c = {base,base,base};
             } else {
                 const float linear = 0.18f * std::exp2(t * 16.0f - 6.0f);
                 const float v = color_encode(linear, ColorSRGB);
                 c = {v,v,v};
             }
-            c = response_print(response_negative(c, columns[x / 256]), columns[x / 256]);
+            const auto p = columns[x / 256];
+            c = response_negative(c,p);
+            if (development) c = response_development(c,p);
+            c = response_print(c,p);
+            if (development && y >= 384) {
+                const auto delta = grain_delta(x%256,y,response_luma(c),grains[x/256]);
+                c.r += delta.r; c.g += delta.g; c.b += delta.b;
+            }
             const std::array<float, 3> bgr {c.b,c.g,c.r};
             for (int channel = 0; channel < 3; ++channel)
                 row[x * 3 + channel] = static_cast<unsigned char>(std::clamp(bgr[channel], 0.0f, 1.0f) * 255.0f + 0.5f);
@@ -678,7 +792,9 @@ static void writeResponsePreview(const char* path)
         }
         file.write(reinterpret_cast<const char*>(row.data()), row.size());
     }
-    std::printf("Response preview: %s (columns Full/Standard/Extended/Custom; bands gray/skin/colors/HDR).\n", path);
+    std::printf("Response preview: %s (%s).\n", path, development ?
+        "columns Pull/Neutral/Push/Split+Richness+Stretch; bands gray/skin/colors/grain" :
+        "columns Full/Standard/Extended/Custom; bands gray/skin/colors/HDR");
 }
 
 class Gpu {
@@ -773,7 +889,7 @@ public:
         }
         require(finish(q) == 0, "GPU execution failed");
         require(readBuffer(q, dst, 1, 0, count * sizeof(float), output.data(), 0, nullptr, nullptr) == 0, "Cannot read GPU output");
-        const int modules = film::modulesForMode(static_cast<int>(s[0]), static_cast<int>(s[19]));
+        const int modules = film::modulesForSettings(s.data());
         auto effective = s;
         if (!(modules & film::Halation)) effective[13] = 0.0f;
         if (!(modules & film::Aura)) effective[15] = 0.0f;
@@ -794,6 +910,7 @@ public:
                     h = halation::signal(blur.sample(x, y), halation_key(work.r, work.g, work.b, halo.key), effective[13], effective[15]);
                 ColorRgb processed = work;
                 if (modules & film::Negative) processed = response_negative(color_balance(processed, {s[4],s[5],s[6]}), responseParameters);
+                if (modules & film::Development) processed = response_development(processed, responseParameters);
                 if (modules & film::Print) processed = response_print(processed, responseParameters);
                 std::array<float, 3> rgb {processed.r + h * halo.key.red, processed.g + h * halo.key.green, processed.b + h * halo.key.blue};
                 if (s[0] == 5.0f) {
@@ -811,7 +928,7 @@ public:
                     const auto finished = response_finish({rgb[0],rgb[1],rgb[2]}, modules, responseParameters);
                     rgb = {finished.r,finished.g,finished.b};
                     if (response_clamps_negative(modules, responseParameters)) for (auto& v : rgb) v = std::max(v, 0.0f);
-                    const bool unchanged = identity || (!(modules & 3) && rgb[0] == work.r && rgb[1] == work.g && rgb[2] == work.b);
+                    const bool unchanged = identity || (!(modules & (film::Negative | film::Development | film::Print)) && rgb[0] == work.r && rgb[1] == work.g && rgb[2] == work.b);
                     const auto encoded = unchanged ? original : color_from_work({rgb[0], rgb[1], rgb[2]}, colorParameters);
                     rgb = {encoded.r, encoded.g, encoded.b};
                 }
@@ -919,6 +1036,15 @@ public:
             s[13] = s[15] = 1; s[14] = s[film::AuraRadius] = 2;
             cases.push_back(s);
         }
+        for (int source : {color::AlexaLogC3,color::DaVinciIntermediate}) for (bool active : {false,true}) {
+            auto s = filmSettings(); s[0] = 0; s[26] = static_cast<float>(source); s[27] = 1;
+            s[13] = s[15] = 1; s[14] = s[film::AuraRadius] = 2;
+            if (active) {
+                s[film::PushPull] = 2; s[film::ColorRichness] = 0.8f; s[film::SplitTone] = 0.75f;
+                s[film::GrainStretch] = 2; s[film::GrainBlue] = 1.5f;
+            }
+            cases.push_back(s);
+        }
         for (auto s : cases) {
             s[16] = 0.16f;
             s[17] = 0.45f;
@@ -930,7 +1056,7 @@ public:
                 require(RunOpenEmulsionOpenCL(queue, width, height, static_cast<float>(frame), s.data(), reinterpret_cast<const float*>(src), reinterpret_cast<float*>(dst)), "Benchmark render failed");
             require(finish(queue) == 0, "Benchmark execution failed");
             const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() / 12.0;
-            std::printf("4K %s, mode %.0f, film %.0f, gauge %s, radius %.1f, aura %.1f/radius %.1f: %.2f ms/frame (GPU resident, excludes Resolve/transfers).\n", color::spaces()[static_cast<int>(s[26])].label, s[0], s[1], gauge::prepare(s.data()).label, s[14], s[15], s[film::AuraRadius], ms);
+            std::printf("4K %s, mode %.0f, film %.0f, gauge %s, radius %.1f, aura %.1f/radius %.1f, development %.1f/%.1f/%.1f: %.2f ms/frame (GPU resident, excludes Resolve/transfers).\n", color::spaces()[static_cast<int>(s[26])].label, s[0], s[1], gauge::prepare(s.data()).label, s[14], s[15], s[film::AuraRadius], s[film::PushPull],s[film::ColorRichness],s[film::SplitTone],ms);
         }
         releaseMem(src);
         releaseMem(dst);
@@ -1187,6 +1313,71 @@ public:
         std::puts("OpenCL: neutral Mono with print/halation/aura/grain across all input/output spaces, partial strengths, alpha, active effects, and exact mode/module isolation pass.");
     }
 
+    void testDevelopmentControls()
+    {
+        for (int source = 0; source < color::SpaceCount; ++source) {
+            for (int mode = 0; mode <= 5; ++mode) for (float push : {-3.0f,0.0f,3.0f}) {
+                auto s = filmSettings();
+                s[0] = static_cast<float>(mode); s[26] = static_cast<float>(source); s[27] = 5;
+                s[13] = 1; s[15] = 0.5f; s[16] = 0.4f; s[17] = 0.45f;
+                s[film::PushPull] = push; s[film::ColorRichness] = push < 0 ? -1 : 1;
+                s[film::SplitTone] = 1; s[film::SplitHue] = 220;
+                s[film::GrainStretch] = 2; s[film::GrainRed] = 0.25f; s[film::GrainBlue] = 1.8f;
+                test(33,31,s,false,37);
+                if (mode < 2) { s[1] = 4; test(33,31,s,false,37); }
+            }
+        }
+        for (int mask = 0; mask <= film::All; ++mask) {
+            auto s = filmSettings(); s[0] = 0; s[27] = 5;
+            s[19] = static_cast<float>(mask); s[13] = 1; s[15] = 0.5f; s[16] = 0.3f;
+            s[film::PushPull] = 2; s[film::ColorRichness] = 0.8f; s[film::SplitTone] = 0.7f;
+            test(17,19,s,false,37);
+        }
+        const int width = 33, height = 31;
+        std::vector<float> input(width*height*4);
+        for (size_t i = 0; i < input.size(); ++i) input[i] = static_cast<float>(i%101)/80.0f-0.1f;
+        for (int mode = 0; mode <= 5; ++mode) {
+            auto s = filmSettings(); s[0] = static_cast<float>(mode);
+            s[13] = 1; s[15] = 0.5f; s[16] = 0.3f;
+            if (mode < 2) s[19] = film::All & ~film::Development;
+            const auto before = render(input,width,height,s);
+            s[film::PushPull] = 3; s[film::ColorRichness] = 1; s[film::SplitTone] = 1;
+            s[film::SplitHue] = 340; s[film::SplitPivot] = 0.7f; s[film::SplitWidth] = 0.3f;
+            require(before == render(input,width,height,s),"Inactive development changes output");
+        }
+        auto s = filmSettings(); s[0] = 0; s[19] = film::Development; s[27] = 5;
+        require(render(input,width,height,s) == input,"Neutral development-only is not exact identity");
+        s[27] = 0;
+        const auto base = render(input,width,height,s);
+        for (auto control : {film::PushPull,film::ColorRichness,film::SplitTone}) {
+            auto adjusted = s; adjusted[control] = 1;
+            require(base != render(input,width,height,adjusted),"Development control has no visible effect");
+        }
+        s[film::SplitTone] = 1;
+        for (float pivot : {0.2f,0.8f}) for (float span : {0.0f,0.3f}) for (float hue : {0.0f,120.0f,360.0f}) {
+            s[film::SplitPivot] = pivot; s[film::SplitWidth] = span; s[film::SplitHue] = hue;
+            s[film::SplitShadows] = 0; s[film::SplitHighlights] = 2;
+            test(33,31,s,false);
+            s[film::SplitShadows] = 2; s[film::SplitHighlights] = 0;
+            test(33,31,s,false);
+        }
+        s = filmSettings(); s[0] = 3; s[16] = 0.4f;
+        for (float stretch : {0.5f,1.0f,2.0f}) for (float color : {0.0f,1.0f}) {
+            s[film::GrainStretch] = stretch; s[21] = color;
+            s[film::GrainRed] = 0; s[film::GrainGreen] = 2; s[film::GrainBlue] = 0.5f;
+            test(65,63,s,false,37);
+        }
+        s = filmSettings(); s[0] = 0; s[27] = 5;
+        s[19] = film::All; s[1] = 4; s[film::PushPull] = 2; s[film::SplitTone] = 1;
+        s[16] = 0.7f; s[21] = 1; s[film::GrainRed] = 0; s[film::GrainBlue] = 2;
+        const auto mono = render(input,width,height,s);
+        for (size_t i = 0; i < mono.size(); i+=4) {
+            requireNear(mono[i],mono[i+1],2e-6f,"Development recolors Mono");
+            requireNear(mono[i],mono[i+2],2e-6f,"Channel grain recolors Mono");
+        }
+        std::puts("OpenCL: development and advanced grain parity in every space/mode, all masks, visible controls, exact neutral/disabled isolation, and Mono preservation pass.");
+    }
+
     void testUpgradeControls()
     {
         for (int source = 0; source < color::SpaceCount; ++source) {
@@ -1329,8 +1520,10 @@ int main(int argc, char** argv)
         testMonochrome();
         testStrengthControls();
         testHalationControls();
+        testDevelopmentAndGrain();
         if (argc > 1) writePreview(argv[1]);
         if (argc > 2) writeResponsePreview(argv[2]);
+        if (argc > 5) writeResponsePreview(argv[5],true);
         Gpu gpu;
         if (!gpu.queue) {
             std::puts("OpenCL tests skipped: no GPU device available.");
@@ -1387,6 +1580,7 @@ int main(int argc, char** argv)
         gpu.testPrintPresetTransitions();
         gpu.testMonochromeOutput();
         gpu.testUpgradeControls();
+        gpu.testDevelopmentControls();
         if (argc > 3) gpu.writeTexturePreview(argv[3]);
         if (argc > 4) gpu.writeTexturePreview(argv[4],true);
         gpu.benchmark();

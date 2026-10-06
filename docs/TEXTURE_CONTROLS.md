@@ -1,4 +1,4 @@
-# Texture Controls (v0.13)
+# Texture Controls (v0.17)
 
 ## Film Gauge
 
@@ -13,6 +13,14 @@ Film Gauge is an original creative approximation, not a measured calibration of 
 | 65 mm | 0.70x | 0.80x |
 
 Custom and 35 mm currently render identically. Larger-format settings give finer, gentler grain and tighter halo spread; smaller-format settings give stronger, coarser texture. Fine/Classic/Rough grain styles, color, softness, roughness, and tonal weighting remain independently adjustable. Active full-strength Mono Negative automatically uses monochrome grain regardless of Grain Color; texture-only modes keep the requested grain color. Zero grain, halation, or aura strength stays zero under every preset, and module switches still take precedence.
+
+## Advanced Grain
+
+`Horizontal Stretch` is a horizontal desqueeze ratio from 0.5 to 2.0, default 1. A value of 2 doubles the horizontal scale of both noise layers before their rotations; vertical scale and image dimensions remain unchanged. There is no resampling of footage. Noise variance normalization remains unchanged, so stretch primarily changes structure, not strength. It is independent of Film Gauge and resolution scaling.
+
+`Red Grain`, `Green Grain`, and `Blue Grain` multiply each channel's noise delta by 0-2, default 1. Zero removes grain from that working-space channel; source color is not multiplied. Grain Color at zero uses a shared monochrome noise field, but unequal channel multipliers can tint that field. Active full-strength Mono Negative still finishes the final composite monochrome, including unequal channel gains. The channel controls operate in the managed Rec.709-primary working space, not individual camera-gamut channels.
+
+Enabled Film Development in Full mode scales grain size by `2^(0.12 * Push/Pull)` and strength by `2^(0.22 * Push/Pull)`. Zero Grain and the Grain Enable toggle still win. Grain Only and Halation & Grain Only ignore development entirely, preserving their independent texture workflow. Grain remains additive after print/halo, keyed by final working luminance; negative-density-driven, pre-print grain is still future work.
 
 ## Highlight Selection
 
@@ -36,7 +44,7 @@ Scaling preserves the approximate relative spread between HD and 4K, not identic
 
 ## Your Own LUT
 
-Use Grain Only or Halation & Grain Only, or disable both Film Color and Print in Full mode. Choose the input color space actually entering this node. Texture-only rendering returns that same encoding, regardless of the output selector. Turning color/tone strengths to zero alone is not equivalent to disabling those modules: camera/print exposure and color-space conversion still operate.
+Use Grain Only or Halation & Grain Only, or disable Film Color, Film Development, and Print in Full mode. Choose the input color space actually entering this node. Texture-only rendering returns that same encoding, regardless of the output selector. Turning color/tone strengths to zero alone is not equivalent to disabling those modules: camera/print exposure and color-space conversion still operate.
 
 ## Verification
 

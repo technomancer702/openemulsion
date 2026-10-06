@@ -2,11 +2,11 @@
 
 Free, open-source film emulation for DaVinci Resolve: adjustable negative and print response, procedural grain, smooth halation, and aura in a native OpenFX plugin.
 
-Film Color, Print, Halation, Aura, and Grain can be enabled independently. Use the whole pipeline or keep your own grade and LUTs with texture-only processing.
+Film Color, Film Development, Print, Halation, Aura, and Grain can be enabled independently. Use the whole pipeline or keep your own grade and LUTs with texture-only processing.
 
 ## Status
 
-Experimental, Windows x64. The current implementation supports OpenCL acceleration and a multithreaded CPU fallback. CUDA, Metal, macOS, and Linux builds are not implemented.
+Experimental, Windows x64. Current development version: **v0.17**. The current implementation supports OpenCL acceleration and a multithreaded CPU fallback. CUDA, Metal, macOS, and Linux builds are not implemented.
 
 OpenEmulsion is an original artistic approximation, not a measured film-stock calibration or a complete HDR rendering transform. There is no DCTL dependency. Rendering has been tested in Resolve, but this is not yet a stable production release.
 
@@ -72,23 +72,24 @@ See [Color Spaces](docs/COLOR_SPACES.md) for exact gamut pairs, workflow details
 
 Modes: **Full**, **Color Only**, **Halation & Grain Only**, **Grain Only**, **Bypass**, and **Halation Matte**.
 
-Each module's first control is an **Enable** toggle that independently bypasses that stage without resetting its settings. In Full mode, disabling Film Color and Print leaves texture only. Bypass and all-disabled processing preserve RGBA exactly, including negative RGB and values above 1.
+Each module's first control is an **Enable** toggle that independently bypasses that stage without resetting its settings. In Full mode, disabling Film Color, Film Development, and Print leaves texture only. Bypass and all-disabled processing preserve RGBA exactly, including negative RGB and values above 1.
 
 - **Film Color:** independent color/tone strengths, six creative families, linear-light exposure/balance, density, saturation, toe, contrast, shoulder, crosstalk, gamut compression, and Skin Hue.
+- **Film Development:** Push/Pull changes tone and grain size/strength; Color Richness favors muted colors; Split Tone has hue, pivot, neutral width, and separate shadow/highlight intensities. Neutral defaults preserve the previous look.
 - **Print:** Full (Film Print), Standard, Extended (Telecine), and Custom. Named presets load and lock their tone/color recipe; Custom unlocks the last recipe without changing its look. Color/tone strengths, exposure, and RGB balance remain editable in every style.
-- **Grain:** Fine, Classic, Rough, and Debug styles; strength, size, softness, roughness, color, tonal weighting, and repeatable frame/seed variation.
+- **Grain:** Fine, Classic, Rough, and Debug styles; strength, size, softness, roughness, color, horizontal stretch, independent RGB intensity, tonal weighting, and repeatable frame/seed variation.
 - **Halation and Aura:** smooth source-highlight selection with adjustable threshold/transition, red-to-amber tint, independent tight-halo and broad-aura radii, and resolution-aware continuous Gaussian spread. Matte mode exposes the signal.
 - **Film Gauge:** Custom, 8 mm, 16 mm, 35 mm, and 65 mm creative presets coordinate grain size/strength and halo spread without resetting sliders. Custom and 35 mm use the unscaled settings.
 
 With **Mono Negative** and Film Color Strength at 1, the final print and texture composite stays monochrome. Halation/Aura remain visible as neutral glow, and grain automatically becomes monochrome. This does not affect texture-only modes, bypass, or a disabled Film Color module.
 
-Grain Size uses a 1080-line reference, scaling granules with image height. Grain Color at zero gives equal RGB grain. Grain is procedural, not sampled from film scans.
+Grain Size uses a 1080-line reference, scaling granules with image height. Grain Color at zero uses one monochrome noise field; RGB intensity controls at equal values give equal RGB grain. Horizontal Stretch uses a 0.5-2.0 desqueeze ratio and does not resize the image. Grain is procedural, not sampled from film scans.
 
-Strengths default to 1 (full response). Zero Color Strength removes that stage's color character; zero Tone Strength removes its tone shaping. Camera and print exposure/balance remain independent while their modules are enabled. Disable Film Color and Print completely when using your own LUT with texture only.
+Strengths default to 1 (full response). Zero Color Strength removes that stage's color character; zero Tone Strength removes its tone shaping. Camera and print exposure/balance remain independent while their modules are enabled. Disable Film Color, Film Development, and Print completely when using your own LUT with texture only.
 
 Selecting a named print preset replaces Custom recipe adjustments and their keyframes. Print strength, exposure/balance, and other modules are not reset. The style selector itself is not animated; recipe knobs can be animated in Custom.
 
-See [Negative and Print Response](docs/FILM_RESPONSE.md) and [Texture Controls](docs/TEXTURE_CONTROLS.md) for exact semantics and limitations.
+See [Negative and Print Response](docs/FILM_RESPONSE.md), [Film Development](docs/FILM_DEVELOPMENT.md), and [Texture Controls](docs/TEXTURE_CONTROLS.md) for exact semantics and limitations.
 
 ## Performance and Tests
 
@@ -96,7 +97,7 @@ OpenCL runs when Resolve supplies OpenCL image buffers. Otherwise the plugin use
 
 Working buffers are reused on the GPU. The highlight blur uses a resolution-scaled work grid with dense filtering and area-averaged source extraction. Disabled texture stages skip their work. Keep Halation and Aura at zero when unused; Grain Only skips the blur entirely.
 
-The regression harness covers color-space reference values, tone curves, grain statistics, continuous halation, module isolation, partial/zero color-tone strengths, gauge presets, HD/4K halo scaling, odd-sized higher-resolution grids, bypass, alpha, and CPU/OpenCL parity. GPU checks are skipped explicitly when no device is available. GPU-resident 4K timings exclude Resolve, transfers, and other effects; they are not timeline playback guarantees.
+The regression harness covers color-space reference values, tone curves, grain statistics, continuous halation, module isolation, partial/zero color-tone strengths, gauge presets, HD/4K halo scaling, odd-sized higher-resolution grids, bypass, alpha, development tone/split isolation, grain stretch/channel gains, and CPU/OpenCL parity. GPU checks are skipped explicitly when no device is available. GPU-resident 4K timings exclude Resolve, transfers, and other effects; they are not timeline playback guarantees.
 
 Optional synthetic previews:
 
@@ -115,6 +116,8 @@ python tools/generate_test_charts.py
 ```
 
 Generated charts and diagnostics stay local under `analysis/`.
+
+See the [Upgrade Roadmap](docs/ROADMAP.md) for remaining work.
 
 ## Contributing and License
 

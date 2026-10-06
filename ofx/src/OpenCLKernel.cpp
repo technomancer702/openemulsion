@@ -180,6 +180,10 @@ __kernel void OpenEmulsionKernel(
         rgb = response_negative(rgb, response);
         c = (float3)(rgb.r, rgb.g, rgb.b);
     }
+    if (modules & 32) {
+        ColorRgb rgb = response_development((ColorRgb){c.x, c.y, c.z}, response);
+        c = (float3)(rgb.r, rgb.g, rgb.b);
+    }
     if (modules & 2) {
         ColorRgb rgb = {c.x, c.y, c.z};
         rgb = response_print(rgb, response);
@@ -208,7 +212,7 @@ __kernel void OpenEmulsionKernel(
     ColorRgb finished = response_finish((ColorRgb){c.x, c.y, c.z}, modules, response);
     c = (float3)(finished.r, finished.g, finished.b);
     if (response_clamps_negative(modules, response)) c = fmax(c, (float3)(0.0f));
-    if (mode != 5) c = !(modules & 3) && all(c == work) ? original : from_work(c, color);
+    if (mode != 5) c = !(modules & 35) && all(c == work) ? original : from_work(c, color);
     output[idx] = c.x;
     output[idx + 1] = c.y;
     output[idx + 2] = c.z;
@@ -340,19 +344,19 @@ bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, c
     cl_mem inputMem = reinterpret_cast<cl_mem>(const_cast<float*>(input));
     cl_mem outputMem = reinterpret_cast<cl_mem>(output);
     int mode = static_cast<int>(settings[0] + 0.5f);
-    const int modules = film::modulesForMode(mode, static_cast<int>(settings[film::ModuleIndex]));
+    const int modules = film::modulesForSettings(settings);
     const float halation = (modules & film::Halation) ? settings[13] : 0.0f;
     const float aura = (modules & film::Aura) ? settings[15] : 0.0f;
     const GrainParameters grainParameters = grain::prepare(settings, height, time);
     const ColorParameters colorParameters = color::prepare(settings);
     const FilmResponseParameters responseParameters = response::prepare(settings);
-    static_assert(sizeof(FilmResponseParameters) == 168, "OpenCL response structure layout mismatch");
+    static_assert(sizeof(FilmResponseParameters) == 212, "OpenCL response structure layout mismatch");
     const auto haloConfig = halation::prepare(settings, height);
     const int step = haloConfig.downsample;
     static_assert(sizeof(HalationParameters) == 20, "OpenCL halation structure layout mismatch");
     const int identity = film::isIdentity(mode, modules, halation, aura, settings[16]);
     static_assert(sizeof(ColorParameters) == 88, "OpenCL color structure layout mismatch");
-    static_assert(sizeof(GrainParameters) == 40, "OpenCL grain structure layout mismatch");
+    static_assert(sizeof(GrainParameters) == 56, "OpenCL grain structure layout mismatch");
     cl_mem blurMem = inputMem;
     if (halation > 0.0f || aura > 0.0f) {
         const int bw = (width + step - 1) / step, bh = (height + step - 1) / step;
