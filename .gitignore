@@ -1,0 +1,22 @@
+# Generated output and local Resolve installations
+/build/
+/dist/
+/analysis/
+/ofx-plugins/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+CMakeUserPresets.json
+*.local
+
+# Editor and operating-system files
+.vs/
+.vscode/
+.idea/
+__pycache__/
+*.py[cod]
+Thumbs.db
+.DS_Store
+*.swp

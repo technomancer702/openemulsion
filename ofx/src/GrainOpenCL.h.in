@@ -1,0 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
+#pragma once
+
+static const char* GrainOpenCLSource = R"GRAIN(@GRAIN_MATH_SOURCE@)GRAIN";

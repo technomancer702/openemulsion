@@ -1,0 +1,4 @@
+// SPDX-License-Identifier: MPL-2.0
+
+#pragma once
+static const char* ColorOpenCLSource = R"COLOR(@COLOR_MATH_SOURCE@)COLOR";

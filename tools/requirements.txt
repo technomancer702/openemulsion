@@ -1,0 +1,2 @@
+# Optional dependencies for generate_test_charts.py; not needed to build the plugin.
+Pillow>=10.0,<13.0

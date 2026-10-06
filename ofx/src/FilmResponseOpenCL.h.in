@@ -1,0 +1,4 @@
+// SPDX-License-Identifier: MPL-2.0
+
+#pragma once
+static const char* FilmResponseOpenCLSource = R"RESPONSE(@FILM_RESPONSE_SOURCE@)RESPONSE";

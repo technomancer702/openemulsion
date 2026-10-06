@@ -1,0 +1,114 @@
+# OpenEmulsion
+
+Free, open-source film emulation for DaVinci Resolve: adjustable negative and print response, procedural grain, smooth halation, and aura in a native OpenFX plugin.
+
+Film Color, Print, Halation, Aura, and Grain can be enabled independently. Use the whole pipeline or keep your own grade and LUTs with texture-only processing.
+
+## Status
+
+Experimental, Windows x64. The current implementation supports OpenCL acceleration and a multithreaded CPU fallback. CUDA, Metal, macOS, and Linux builds are not implemented.
+
+OpenEmulsion is an original artistic approximation, not a measured film-stock calibration or a complete HDR rendering transform. There is no DCTL dependency. Rendering has been tested in Resolve, but this is not yet a stable production release.
+
+## Build
+
+Prerequisites:
+
+- Windows x64 and DaVinci Resolve's OpenFX developer files.
+- CMake 3.20 or newer, Ninja, and a C++17 compiler on PATH.
+- The current development build is tested with MinGW-w64 GCC. Other compiler configurations need verification.
+- An OpenCL-capable GPU/driver for GPU rendering. No OpenCL SDK is needed to compile.
+
+The default developer-file location is:
+
+```text
+C:\ProgramData\Blackmagic Design\DaVinci Resolve\Support\Developer\OpenFX
+```
+
+It must contain both `OpenFX-1.4` and `Support`. These external SDK files are not vendored in this repository.
+
+From the project root:
+
+```powershell
+.\tools\build_ofx.ps1
+ctest --test-dir build/ofx --output-on-failure
+```
+
+For an alternate SDK location:
+
+```powershell
+.\tools\build_ofx.ps1 -ResolveOpenFXRoot "D:\SDKs\OpenFX"
+```
+
+The bundle is generated at `dist/OpenEmulsion.ofx.bundle`. Build output is excluded from Git; release binaries should be distributed separately.
+
+## Install
+
+Close Resolve, then run:
+
+```powershell
+.\tools\install_ofx.ps1
+```
+
+The installer copies the bundle into this project's `ofx-plugins` directory and adds that directory to the user `OFX_PLUGIN_PATH`. Keep the project folder in place while using this installation.
+
+Restart Resolve from the Start Menu or a new shell. Look for **OpenFX > OpenEmulsion > OpenEmulsion**. Alternatively, manually copy the bundle to the standard Windows OFX directory, `C:\Program Files\Common Files\OFX\Plugins` (administrator access required).
+
+Earlier development builds appeared as Cleanroom Film. OpenEmulsion uses a new plugin identifier; existing Cleanroom nodes are not migrated. The installer does not remove an older plugin.
+
+## Color Workflow
+
+Set **Input Color Space** to the RGB space entering the node, which may differ from the camera recording space. It is not auto-detected.
+
+- Unconverted Alexa footage: choose **ARRI Alexa LogC3 / Wide Gamut 3 (EI 800)**. For an SDR look with Film Color or Print enabled, choose **Rec.709 / Gamma 2.4** output.
+- A DaVinci Wide Gamut/Intermediate timeline: choose that input and **Same as Input** output, keeping the project's normal output transform.
+- Your own LUT: use **Grain Only** or **Halation & Grain Only** and select the space entering this node. Texture-only processing preserves its input encoding for a downstream LUT.
+
+New instances default to Rec.709/Gamma 2.4 input and Same as Input output. Supported choices also include ARRI LogC4, Sony S-Log3, Blackmagic Film Gen 5, RED Log3G10, Canon Log 2/3, Panasonic V-Log, ACEScct, ACEScg, sRGB, and linear Rec.709.
+
+See [Color Spaces](docs/COLOR_SPACES.md) for exact gamut pairs, workflow details, references, and limitations.
+
+## Modes and Controls
+
+Modes: **Full**, **Color Only**, **Halation & Grain Only**, **Grain Only**, **Bypass**, and **Halation Matte**.
+
+The Modules switches can further disable individual stages. In Full mode, disabling Film Color and Print leaves texture only. Bypass and all-disabled processing preserve RGBA exactly, including negative RGB and values above 1.
+
+- **Film Color:** six creative families, linear-light exposure/balance, density, saturation, toe, contrast, shoulder, crosstalk, gamut compression, and Skin Hue.
+- **Print:** Contact, Standard, Telecine, and Custom profiles with independent tone, contrast, rolloff, color, neutralization, saturation, black point, exposure, and RGB balance.
+- **Grain:** Fine, Classic, Rough, and Debug styles; strength, size, softness, roughness, color, tonal weighting, and repeatable frame/seed variation.
+- **Halation and Aura:** source-highlight-keyed, continuous Gaussian spread. Radius changes spread; Aura adds a broader glow. Matte mode exposes the signal.
+
+Grain Size uses a 1080-line reference, scaling granules with image height. Grain Color at zero gives equal RGB grain. Grain is procedural, not sampled from film scans.
+
+See [Negative and Print Response](docs/FILM_RESPONSE.md) for response control semantics.
+
+## Performance and Tests
+
+OpenCL runs when Resolve supplies OpenCL image buffers. Otherwise the plugin uses CPU rendering; a machine's general GPU capability alone does not guarantee OpenCL execution in the host.
+
+Working buffers are reused on the GPU. Disabled texture stages skip their work. Keep Halation and Aura at zero when unused; Grain Only skips the blur entirely.
+
+The regression harness covers color-space reference values, tone curves, grain statistics, continuous halation, module isolation, bypass, alpha, and CPU/OpenCL parity. GPU checks are skipped explicitly when no device is available. GPU-resident 4K timings exclude Resolve, transfers, and other effects; they are not timeline playback guarantees.
+
+Optional synthetic previews:
+
+```powershell
+New-Item -ItemType Directory -Path analysis -Force
+.\build\ofx\HalationTests.exe analysis\grain-preview.bmp analysis\response-preview.bmp
+```
+
+Optional Resolve test charts:
+
+```powershell
+python -m pip install -r tools/requirements.txt
+python tools/generate_test_charts.py
+```
+
+Generated charts and diagnostics stay local under `analysis/`.
+
+## Contributing and License
+
+See [Contributing](CONTRIBUTING.md). OpenEmulsion source is licensed under [MPL-2.0](LICENSE). External OpenFX components retain their own notices in [Third-Party Notices](THIRD_PARTY_NOTICES.md).
+
+No proprietary film-plugin binaries, shaders, LUTs, or stock profiles are included.
