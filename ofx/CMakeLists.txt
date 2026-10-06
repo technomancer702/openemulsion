@@ -82,6 +82,25 @@ foreach(config IN LISTS CMAKE_CONFIGURATION_TYPES)
         LIBRARY_OUTPUT_DIRECTORY_${config_upper} "${CMAKE_BINARY_DIR}/OpenEmulsion.ofx.bundle/Contents/Win64")
 endforeach()
 
+# Run even without a relink so resource-only edits reach both bundles.
+set(PLUGIN_RESOURCES "${CMAKE_CURRENT_SOURCE_DIR}/resources")
+set(BUNDLE_RESOURCES "${CMAKE_BINARY_DIR}/OpenEmulsion.ofx.bundle/Contents/Resources")
+set(DIST_RESOURCES "${CMAKE_SOURCE_DIR}/../dist/OpenEmulsion.ofx.bundle/Contents/Resources")
+add_custom_target(OpenEmulsionResources
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${BUNDLE_RESOURCES}" "${DIST_RESOURCES}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${PLUGIN_RESOURCES}/org.openemulsion.film.png"
+        "${PLUGIN_RESOURCES}/org.openemulsion.film.svg"
+        "${BUNDLE_RESOURCES}/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${PLUGIN_RESOURCES}/org.openemulsion.film.png"
+        "${PLUGIN_RESOURCES}/org.openemulsion.film.svg"
+        "${DIST_RESOURCES}/"
+    DEPENDS "${PLUGIN_RESOURCES}/org.openemulsion.film.png" "${PLUGIN_RESOURCES}/org.openemulsion.film.svg"
+    VERBATIM
+)
+add_dependencies(OpenEmulsion OpenEmulsionResources)
+
 add_custom_command(TARGET OpenEmulsion POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/../dist"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -95,6 +114,12 @@ add_custom_command(TARGET OpenEmulsion POST_BUILD
 
 include(CTest)
 if(BUILD_TESTING)
+    add_test(NAME PluginIconPackaging
+        COMMAND ${CMAKE_COMMAND}
+            "-DSOURCE_ROOT=${CMAKE_CURRENT_SOURCE_DIR}"
+            "-DBUILD_ROOT=${CMAKE_BINARY_DIR}"
+            "-DDIST_ROOT=${CMAKE_SOURCE_DIR}/../dist"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/PluginIconTests.cmake")
     add_executable(HalationTests tests/HalationTests.cpp src/OpenCLKernel.cpp)
     target_include_directories(HalationTests PRIVATE src "${CMAKE_CURRENT_BINARY_DIR}")
     target_compile_definitions(HalationTests PRIVATE NOMINMAX)

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 128 128">
+  <title>OpenEmulsion</title>
+  <desc>A white film frame with coral, yellow, and turquoise emulsion layers.</desc>
+  <path fill="#f4f5f5" fill-rule="evenodd" d="M18 12h92a6 6 0 0 1 6 6v92a6 6 0 0 1-6 6H18a6 6 0 0 1-6-6V18a6 6 0 0 1 6-6z M32 22v84h64V22z M20 26v12h8V26z M20 58v12h8V58z M20 90v12h8V90z M100 26v12h8V26z M100 58v12h8V58z M100 90v12h8V90z"/>
+  <rect x="36" y="28" width="56" height="20" rx="2" fill="#ff5955"/>
+  <rect x="36" y="54" width="56" height="20" rx="2" fill="#ffd04b"/>
+  <rect x="36" y="80" width="56" height="20" rx="2" fill="#22c7c5"/>
+</svg>

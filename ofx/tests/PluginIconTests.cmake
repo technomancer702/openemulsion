@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: MPL-2.0
+
+file(READ "${SOURCE_ROOT}/src/OpenEmulsion.cpp" source)
+string(REGEX MATCH "#define kPluginIdentifier \"([^\"]+)\"" identifier "${source}")
+if(NOT identifier)
+    message(FATAL_ERROR "Cannot find the plugin identifier for icon discovery")
+endif()
+set(icon "${CMAKE_MATCH_1}")
+
+foreach(extension IN ITEMS png svg)
+    set(original "${SOURCE_ROOT}/resources/${icon}.${extension}")
+    if(NOT EXISTS "${original}")
+        message(FATAL_ERROR "Missing source icon: ${original}")
+    endif()
+    file(SHA256 "${original}" expected)
+    foreach(root IN ITEMS "${BUILD_ROOT}" "${DIST_ROOT}")
+        set(packaged "${root}/OpenEmulsion.ofx.bundle/Contents/Resources/${icon}.${extension}")
+        if(NOT EXISTS "${packaged}")
+            message(FATAL_ERROR "Missing packaged icon: ${packaged}")
+        endif()
+        file(SHA256 "${packaged}" actual)
+        if(NOT actual STREQUAL expected)
+            message(FATAL_ERROR "Stale packaged icon: ${packaged}")
+        endif()
+    endforeach()
+endforeach()
+
+# PNG signature/IHDR, 256x256, 8 bits per channel, RGBA (color type 6).
+file(READ "${SOURCE_ROOT}/resources/${icon}.png" header OFFSET 0 LIMIT 26 HEX)
+if(NOT header STREQUAL "89504e470d0a1a0a0000000d4948445200000100000001000806")
+    message(FATAL_ERROR "Plugin icon must be a 256x256 32-bit RGBA PNG")
+endif()
+message(STATUS "Plugin icon names, PNG format, and build/distribution hashes match")

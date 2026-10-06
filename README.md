@@ -6,7 +6,7 @@ Film Color, Film Development, Print, Halation, Aura, Bloom, and Grain can be ena
 
 ## Status
 
-Experimental, Windows x64. Current development version: **v0.21**. The current implementation supports OpenCL acceleration and a multithreaded CPU fallback. CUDA, Metal, macOS, and Linux builds are not implemented.
+Experimental, Windows x64. Current development version: **v0.22**. The current implementation supports OpenCL acceleration and a multithreaded CPU fallback. CUDA, Metal, macOS, and Linux builds are not implemented.
 
 OpenEmulsion is an original artistic approximation, not a measured film-stock calibration or a complete HDR rendering transform. There is no DCTL dependency. Rendering has been tested in Resolve, but this is not yet a stable production release.
 
@@ -41,6 +41,8 @@ For an alternate SDK location:
 ```
 
 The bundle is generated at `dist/OpenEmulsion.ofx.bundle`. Build output is excluded from Git; release binaries should be distributed separately.
+
+The original film-frame icon is packaged in `Contents/Resources`, using the plugin identifier as its filename according to the [OpenFX icon convention](https://openfx.readthedocs.io/en/main/Reference/ofxPackaging.html#plug-in-icons). Its editable SVG and 256x256 RGBA PNG are tracked in `ofx/resources`. Builds copy both assets even when no binary relink is needed. No additional asset-generation dependency is needed to build or install the plugin. Icon display and sizing are controlled by the host; restart Resolve after installation.
 
 ## Install
 

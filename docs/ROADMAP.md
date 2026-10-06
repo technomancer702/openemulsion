@@ -1,10 +1,11 @@
 # Upgrade Roadmap
 
-## Completed Through v0.21
+## Completed Through v0.22
 
 - Independent film/print color and tone strengths and in-module Enable toggles.
 - Disabled-module control greying, mode-driven Enable toggles, and mode-aware print-preset locks.
 - Continuous negative gamut-compression amount, without the full-strength jump immediately above zero; consistent negative-channel flooring before later stages.
+- Original plugin icon with editable SVG, RGBA PNG, and incremental resource packaging checks.
 - Resolution-aware smooth halation, refined highlight selection, tint, and independent Aura radius.
 - Creative film-gauge presets.
 - Fixed print recipes with editable Custom inheritance.
