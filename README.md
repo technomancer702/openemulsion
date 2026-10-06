@@ -74,29 +74,38 @@ Modes: **Full**, **Color Only**, **Halation & Grain Only**, **Grain Only**, **By
 
 The Modules switches can further disable individual stages. In Full mode, disabling Film Color and Print leaves texture only. Bypass and all-disabled processing preserve RGBA exactly, including negative RGB and values above 1.
 
-- **Film Color:** six creative families, linear-light exposure/balance, density, saturation, toe, contrast, shoulder, crosstalk, gamut compression, and Skin Hue.
-- **Print:** Contact, Standard, Telecine, and Custom profiles with independent tone, contrast, rolloff, color, neutralization, saturation, black point, exposure, and RGB balance.
+- **Film Color:** independent color/tone strengths, six creative families, linear-light exposure/balance, density, saturation, toe, contrast, shoulder, crosstalk, gamut compression, and Skin Hue.
+- **Print:** Full (Film Print), Standard, Extended (Telecine), and Custom. Named presets load and lock their tone/color recipe; Custom unlocks the last recipe without changing its look. Color/tone strengths, exposure, and RGB balance remain editable in every style.
 - **Grain:** Fine, Classic, Rough, and Debug styles; strength, size, softness, roughness, color, tonal weighting, and repeatable frame/seed variation.
-- **Halation and Aura:** source-highlight-keyed, continuous Gaussian spread. Radius changes spread; Aura adds a broader glow. Matte mode exposes the signal.
+- **Halation and Aura:** smooth source-highlight selection with adjustable threshold/transition, red-to-amber tint, independent tight-halo and broad-aura radii, and resolution-aware continuous Gaussian spread. Matte mode exposes the signal.
+- **Film Gauge:** Custom, 8 mm, 16 mm, 35 mm, and 65 mm creative presets coordinate grain size/strength and halo spread without resetting sliders. Custom and 35 mm use the unscaled settings.
+
+With **Mono Negative** and Film Color Strength at 1, the final print and texture composite stays monochrome. Halation/Aura remain visible as neutral glow, and grain automatically becomes monochrome. This does not affect texture-only modes, bypass, or a disabled Film Color module.
 
 Grain Size uses a 1080-line reference, scaling granules with image height. Grain Color at zero gives equal RGB grain. Grain is procedural, not sampled from film scans.
 
-See [Negative and Print Response](docs/FILM_RESPONSE.md) for response control semantics.
+Strengths default to 1 (full response). Zero Color Strength removes that stage's color character; zero Tone Strength removes its tone shaping. Camera and print exposure/balance remain independent while their modules are enabled. Disable Film Color and Print completely when using your own LUT with texture only.
+
+Selecting a named print preset replaces Custom recipe adjustments and their keyframes. Print strength, exposure/balance, and other modules are not reset. The style selector itself is not animated; recipe knobs can be animated in Custom.
+
+See [Negative and Print Response](docs/FILM_RESPONSE.md) and [Texture Controls](docs/TEXTURE_CONTROLS.md) for exact semantics and limitations.
 
 ## Performance and Tests
 
 OpenCL runs when Resolve supplies OpenCL image buffers. Otherwise the plugin uses CPU rendering; a machine's general GPU capability alone does not guarantee OpenCL execution in the host.
 
-Working buffers are reused on the GPU. Disabled texture stages skip their work. Keep Halation and Aura at zero when unused; Grain Only skips the blur entirely.
+Working buffers are reused on the GPU. The highlight blur uses a resolution-scaled work grid with dense filtering and area-averaged source extraction. Disabled texture stages skip their work. Keep Halation and Aura at zero when unused; Grain Only skips the blur entirely.
 
-The regression harness covers color-space reference values, tone curves, grain statistics, continuous halation, module isolation, bypass, alpha, and CPU/OpenCL parity. GPU checks are skipped explicitly when no device is available. GPU-resident 4K timings exclude Resolve, transfers, and other effects; they are not timeline playback guarantees.
+The regression harness covers color-space reference values, tone curves, grain statistics, continuous halation, module isolation, partial/zero color-tone strengths, gauge presets, HD/4K halo scaling, odd-sized higher-resolution grids, bypass, alpha, and CPU/OpenCL parity. GPU checks are skipped explicitly when no device is available. GPU-resident 4K timings exclude Resolve, transfers, and other effects; they are not timeline playback guarantees.
 
 Optional synthetic previews:
 
 ```powershell
 New-Item -ItemType Directory -Path analysis -Force
-.\build\ofx\HalationTests.exe analysis\grain-preview.bmp analysis\response-preview.bmp
+.\build\ofx\HalationTests.exe analysis\grain-preview.bmp analysis\response-preview.bmp analysis\texture-preview.bmp
 ```
+
+The optional third preview uses OpenCL and compares Custom/8/16/35/65 mm gauges across isolated lights and grain-only patches; it is skipped when no OpenCL device is available.
 
 Optional Resolve test charts:
 

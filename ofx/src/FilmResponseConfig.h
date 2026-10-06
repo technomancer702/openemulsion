@@ -6,6 +6,8 @@
 #include <array>
 #include <cmath>
 #include "FilmResponseMath.h"
+#include "FilmModules.h"
+#include "PrintStyleConfig.h"
 
 namespace response {
 
@@ -13,8 +15,11 @@ inline FilmResponseParameters prepare(const float* s)
 {
     FilmResponseParameters p {};
     p.system = std::clamp(static_cast<int>(s[1]), 0, 5);
-    const int printStyle = std::clamp(static_cast<int>(s[2]), 0, 3);
     p.density = s[7];
+    p.colorStrength = std::clamp(s[film::NegativeColorStrength], 0.0f, 1.0f);
+    p.toneStrength = std::clamp(s[film::NegativeToneStrength], 0.0f, 1.0f);
+    p.printColorStrength = std::clamp(s[film::PrintColorStrength], 0.0f, 1.0f);
+    p.printToneStrength = std::clamp(s[film::PrintToneStrength], 0.0f, 1.0f);
 
     // Original creative profiles, not measured or branded stock calibrations.
     const std::array<std::array<float, 9>, 6> matrices {{
@@ -40,24 +45,23 @@ inline FilmResponseParameters prepare(const float* s)
     p.negativeCompression = std::clamp(s[30], 0.0f, 1.0f);
     p.skinHue = std::clamp(s[31], -1.0f, 1.0f);
 
-    const std::array<float, 4> printContrast {1.20f,1.12f,0.99f,1.08f};
-    const std::array<float, 4> printToe {0.60f,0.35f,0.15f,0.35f};
-    const std::array<float, 4> printKnee {0.67f,0.73f,0.80f,0.73f};
-    const std::array<float, 4> printColor {1.0f,0.76f,0.28f,0.76f};
-    const std::array<float, 4> lift {1.30f,1.0f,0.30f,1.0f};
-    const float tone = std::clamp(s[32], -1.0f, 1.0f), rolloff = std::clamp(s[34], 0.0f, 1.0f);
-    p.printTone = {printContrast[printStyle] * std::clamp(s[33], 0.5f, 2.0f) * (1.0f - 0.15f * tone),
-        std::clamp(printToe[printStyle] - 0.25f * tone, 0.0f, 0.85f),
-        std::clamp(printKnee[printStyle] + 0.06f * tone - (rolloff - 0.55f) * 0.25f, 0.55f, 0.93f), 1.0f};
-    const float palette = (1.0f - std::clamp(s[11], 0.0f, 1.0f)) * printColor[printStyle];
+    const auto print = printstyle::resolve(s);
+    const float tone = std::clamp(print[printstyle::Tone], -1.0f, 1.0f);
+    const float rolloff = std::clamp(print[printstyle::Rolloff], 0.0f, 1.0f);
+    // Piecewise-linear anchors keep Full/Standard/Extended reachable on one curve.
+    const float baseContrast = 1.12f - tone * (tone < 0.0f ? 0.08f : 0.13f);
+    p.printTone = {baseContrast * std::clamp(print[printstyle::Contrast], 0.5f, 2.0f),
+        std::clamp(0.35f - tone * (tone < 0.0f ? 0.25f : 0.20f), 0.0f, 0.85f),
+        std::clamp(0.73f + tone * (tone < 0.0f ? 0.06f : 0.07f) - (rolloff - 0.55f) * 0.25f, 0.55f, 0.93f), 1.0f};
+    const float palette = 1.0f - std::clamp(print[printstyle::Color], 0.0f, 1.0f);
     const std::array<float, 9> printMatrix {0.91f,0.065f,0.025f, 0.025f,0.95f,0.025f, 0.01f,0.085f,0.905f};
     for (int i = 0; i < 9; ++i) {
         const float identity = i % 4 == 0 ? 1.0f : 0.0f;
         p.printMatrix[i] = identity + (printMatrix[i] - identity) * palette;
     }
-    p.printSat = std::clamp(s[36], 0.0f, 2.0f) * (1.0f - palette * 0.10f);
-    p.printCast = palette * (1.0f - std::clamp(s[35], 0.0f, 1.0f));
-    p.printLift = std::clamp(s[12], 0.0f, 1.0f) * 0.035f * lift[printStyle];
+    p.printSat = std::clamp(print[printstyle::Saturation], 0.0f, 2.0f) * (1.0f - palette * 0.10f);
+    p.printCast = palette * (1.0f - std::clamp(print[printstyle::Neutralize], 0.0f, 1.0f));
+    p.printLift = std::clamp(print[printstyle::BlackPoint], 0.0f, 1.0f) * 0.035f;
     p.printGamutKnee = 0.95f - palette * 0.30f;
     const float exposure = std::clamp(s[37], -2.0f, 2.0f);
     p.printGain = {std::exp2(exposure + std::clamp(s[38], -2.0f, 2.0f)),

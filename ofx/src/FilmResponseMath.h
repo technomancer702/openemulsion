@@ -21,6 +21,7 @@ typedef struct FilmResponseParameters {
     float negativeSat, negativeCompression, skinHue, printSat, printCast, printLift;
     ColorRgb printGain;
     float printGamutKnee;
+    float colorStrength, toneStrength, printColorStrength, printToneStrength;
 } FilmResponseParameters;
 
 static inline float response_clamp(float x, float lo, float hi)
@@ -117,16 +118,50 @@ static inline ColorRgb response_skin(ColorRgb c, float hue)
     return c;
 }
 
+static inline ColorRgb response_mix(ColorRgb a, ColorRgb b, float amount)
+{
+    if (amount <= 0.0f) return a;
+    if (amount >= 1.0f) return b;
+    ColorRgb c = {a.r + (b.r - a.r) * amount, a.g + (b.g - a.g) * amount, a.b + (b.b - a.b) * amount};
+    return c;
+}
+
+static inline ColorRgb response_apply_tone(ColorRgb c, ResponseTone tone, float strength)
+{
+    return strength > 0.0f ? response_mix(c, response_luminance_curve(c, tone), strength) : c;
+}
+
+static inline int response_clamps_negative(int modules, FilmResponseParameters p)
+{
+    return ((modules & 1) && (p.colorStrength > 0.0f || p.toneStrength > 0.0f)) ||
+           ((modules & 2) && (p.printColorStrength > 0.0f || p.printToneStrength > 0.0f));
+}
+
+// Print and texture stages run after the negative; do not let them recolor Mono.
+static inline ColorRgb response_finish(ColorRgb c, int modules, FilmResponseParameters p)
+{
+    if (!(modules & 1) || p.system != 4 || p.colorStrength <= 0.0f) return c;
+    const float y = response_luma(c);
+    ColorRgb neutral = {y, y, y};
+    return response_mix(c, neutral, p.colorStrength);
+}
+
 static inline ColorRgb response_negative(ColorRgb c, FilmResponseParameters p)
 {
-    if (p.system == 4) {
-        const float mono = c.r * 0.30f + c.g * 0.59f + c.b * 0.11f;
-        c.r = c.g = c.b = mono;
-    } else {
-        c = response_palette(c, p.negativeMatrix);
-        c = response_skin(c, p.skinHue);
+    const ColorRgb original = c;
+    if (p.colorStrength > 0.0f) {
+        if (p.system == 4) {
+            const float mono = c.r * 0.30f + c.g * 0.59f + c.b * 0.11f;
+            c.r = c.g = c.b = mono;
+        } else {
+            c = response_palette(c, p.negativeMatrix);
+            c = response_skin(c, p.skinHue);
+        }
+        c = response_mix(original, c, p.colorStrength);
     }
-    c = response_luminance_curve(c, p.negativeTone);
+    c = response_apply_tone(c, p.negativeTone, p.toneStrength);
+    if (p.colorStrength <= 0.0f) return c;
+    const ColorRgb beforeColor = c;
     c = response_saturation(c, p.negativeSat);
     const float y = response_luma(c);
     const float chroma = RESPONSE_MAX(c.r, RESPONSE_MAX(c.g, c.b)) - RESPONSE_MIN(c.r, RESPONSE_MIN(c.g, c.b));
@@ -134,22 +169,25 @@ static inline ColorRgb response_negative(ColorRgb c, FilmResponseParameters p)
     const float density = 1.0f - p.density * 0.18f * (relative / (1.0f + relative));
     c.r *= density; c.g *= density; c.b *= density;
     if (p.negativeCompression > 0.0f) {
-        const float ceiling = RESPONSE_MAX(p.negativeTone.ceiling, response_luma(c) + 0.05f);
+        const float ceiling = RESPONSE_MAX(p.toneStrength > 0.0f ? p.negativeTone.ceiling : 1.0f, response_luma(c) + 0.05f);
         c = response_gamut(c, ceiling, 0.98f - p.negativeCompression * 0.53f);
     }
-    return c;
+    return response_mix(beforeColor, c, p.colorStrength);
 }
 
 static inline ColorRgb response_print(ColorRgb c, FilmResponseParameters p)
 {
     c = color_balance(c, p.printGain);
-    c = response_palette(c, p.printMatrix);
-    c = response_luminance_curve(c, p.printTone);
-    c = response_saturation(c, p.printSat);
+    if (p.printColorStrength > 0.0f) c = response_mix(c, response_palette(c, p.printMatrix), p.printColorStrength);
+    c = response_apply_tone(c, p.printTone, p.printToneStrength);
+    if (p.printColorStrength > 0.0f) c = response_mix(c, response_saturation(c, p.printSat), p.printColorStrength);
     float y = response_luma(c);
     // A neutral lift raises black without tinting it; casts disappear at both endpoints.
-    const float lifted = y * (1.0f - p.printLift) + p.printLift;
+    const float lift = p.printLift * p.printToneStrength;
+    const float lifted = y * (1.0f - lift) + lift;
     c.r += lifted - y; c.g += lifted - y; c.b += lifted - y;
+    if (p.printColorStrength <= 0.0f) return c;
+    const ColorRgb beforeCast = c;
     y = response_clamp(y, 0.0f, 1.0f);
     const float shadow = 4.0f * y * (1.0f - y) * (1.0f - y);
     const float high = 4.0f * y * y * (1.0f - y);
@@ -158,7 +196,8 @@ static inline ColorRgb response_print(ColorRgb c, FilmResponseParameters p)
                      p.printCast * (shadow * 0.024f - high * 0.028f)};
     const float correction = response_luma(bias);
     c.r += bias.r - correction; c.g += bias.g - correction; c.b += bias.b - correction;
-    return response_gamut(c, 1.0f, p.printGamutKnee);
+    const float ceiling = p.printToneStrength >= 1.0f ? 1.0f : RESPONSE_MAX(1.0f, response_luma(c) + 0.05f);
+    return response_mix(beforeCast, response_gamut(c, ceiling, p.printGamutKnee), p.printColorStrength);
 }
 
 #ifndef __cplusplus

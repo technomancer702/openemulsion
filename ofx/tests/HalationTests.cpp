@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "HalationBlur.h"
+#include "HalationConfig.h"
 #include "GrainConfig.h"
 #include "ColorSpaceConfig.h"
 #include "FilmResponseConfig.h"
@@ -25,12 +26,13 @@ static void require(bool value, const char* message)
 
 static halation::Blur cpuBlur(const std::vector<float>& input, int width, int height, const grain::PackedSettings& settings)
 {
-    halation::Blur blur(width, height, halation::Filter(settings[13], settings[14], settings[15]));
+    const auto halo = halation::prepare(settings.data(), height);
+    halation::Blur blur(width, height, halation::Filter(settings[13], settings[14], settings[15], halo.auraRadius, halo.radiusScale), halo.downsample);
     const auto color = color::prepare(settings.data());
     blur.extractRows(0, blur.height, [&](int x, int y) {
         const size_t i = (static_cast<size_t>(y) * width + x) * 4;
         const auto work = color_to_work({input[i], input[i + 1], input[i + 2]}, color);
-        return halation::highlight(work.r, work.g, work.b);
+        return halation_key(work.r, work.g, work.b, halo.key);
     });
     blur.blurRows(0, blur.height, true);
     blur.blurRows(0, blur.height, false);
@@ -52,6 +54,10 @@ static grain::PackedSettings settings(float radius, float amount = 1.0f, float a
     s[23] = 0.80f;
     s[24] = 0.42f;
     s[26] = color::SRGB;
+    s[film::NegativeColorStrength] = s[film::NegativeToneStrength] = 1.0f;
+    s[film::PrintColorStrength] = s[film::PrintToneStrength] = 1.0f;
+    s[film::HalationThreshold] = 0.48f; s[film::HalationSoftness] = 0.52f;
+    s[film::HalationColor] = 0.50f; s[film::AuraRadius] = 1.0f;
     return s;
 }
 
@@ -59,7 +65,7 @@ static grain::PackedSettings filmSettings()
 {
     auto s = settings(0.0f, 0.0f, 0.0f, 1);
     s[2] = 1.0f; s[7] = 0.18f; s[8] = 0.95f; s[9] = 0.16f; s[10] = 1.08f;
-    s[11] = 0.25f; s[12] = 0.45f;
+    s[11] = 0.43f; s[12] = 0.45f;
     s[28] = 0.50f; s[29] = 0.35f; s[30] = 0.50f;
     s[33] = s[36] = 1.0f; s[34] = 0.55f;
     return s;
@@ -167,6 +173,10 @@ static void testResponse()
     for (int system = 0; system < 6; ++system) {
         for (int style = 0; style < 4; ++style) {
             s[1] = static_cast<float>(system); s[2] = static_cast<float>(style);
+            printstyle::applyPreset(style, [&](int control, double value) {
+                s[printstyle::Parameters[control].setting] = static_cast<float>(value);
+            });
+            s[2] = printstyle::Custom; s[35] = 1.0f;
             const auto p = response::prepare(s.data());
             for (float v : {0.0f, 0.001f, 0.05f, 0.18f, 0.46135613f, 0.9f, 4.0f, 1000.0f}) {
                 const auto n = response_negative({v,v,v}, p), t = response_print(n, p);
@@ -217,11 +227,237 @@ static void testResponse()
                 const auto after = control[0] <= 10 || (control[0] >= 28 && control[0] <= 31) ? response_negative(c, adjusted) : response_print(c, adjusted);
                 difference += std::abs(before.r-after.r) + std::abs(before.g-after.g) + std::abs(before.b-after.b);
             }
-            if (difference <= 0.00001) std::fprintf(stderr, "Dead control %.0f, print style %d\n", control[0], style);
-            require(difference > 0.00001, "Response slider has no effect");
+            const bool recipe = std::any_of(printstyle::Parameters.begin(), printstyle::Parameters.end(),
+                [&](const auto& parameter) { return parameter.setting == static_cast<int>(control[0]); });
+            if (!printstyle::isCustom(style) && recipe) {
+                require(difference == 0, "Fixed print recipe accepts a locked slider");
+            } else {
+                if (difference <= 0.00001) std::fprintf(stderr, "Dead control %.0f, print style %d\n", control[0], style);
+                require(difference > 0.00001, "Editable response slider has no effect");
+            }
         }
     }
-    std::puts("Response: monotonic HDR curves, smooth joins, stable gray, gamut hue/luminance, skin isolation, density, and all print-style controls pass.");
+    std::puts("Response: monotonic HDR curves, smooth joins, stable gray, gamut hue/luminance, skin isolation, density, fixed recipes, and editable Custom/balance controls pass.");
+}
+
+static void requireRgbNear(ColorRgb a, ColorRgb b, float tolerance, const char* message)
+{
+    requireNear(a.r, b.r, tolerance, message);
+    requireNear(a.g, b.g, tolerance, message);
+    requireNear(a.b, b.b, tolerance, message);
+}
+
+static void testPrintPresets()
+{
+    const std::array<ColorRgb, 6> chips {{{0,0,0},{0.08f,0.08f,0.08f},{0.5f,0.5f,0.5f},
+        {0.8f,0.2f,0.1f},{-0.2f,0.3f,1.8f},{5,5,5}}};
+    for (int style = printstyle::Full; style < printstyle::Custom; ++style) {
+        require(!printstyle::isCustom(style), "Named print style is editable");
+        auto s = filmSettings(); s[2] = static_cast<float>(style);
+        s[37] = 0.25f; s[38] = -0.10f; s[film::PrintColorStrength] = 0.71f;
+        const auto beforeSelection = s;
+        int writes = 0;
+        printstyle::applyPreset(style, [&](int control, double value) {
+            s[printstyle::Parameters[control].setting] = static_cast<float>(value);
+            ++writes;
+        });
+        require(writes == printstyle::ControlCount, "Preset does not populate every recipe knob");
+        for (int index = 0; index < film::SettingsCount; ++index) {
+            const bool recipe = std::any_of(printstyle::Parameters.begin(), printstyle::Parameters.end(),
+                [&](const auto& parameter) { return parameter.setting == index; });
+            if (!recipe) require(s[index] == beforeSelection[index], "Preset resets independent settings");
+        }
+        const auto named = response::prepare(s.data());
+        s[2] = printstyle::Custom;
+        const auto inherited = s;
+        printstyle::applyPreset(printstyle::Custom, [&](int, double) { ++writes; });
+        require(s == inherited && writes == printstyle::ControlCount, "Custom overwrites inherited knobs");
+        const auto custom = response::prepare(s.data());
+        for (auto chip : chips)
+            requireRgbNear(response_print(chip,named), response_print(chip,custom), 0, "Custom changes the inherited preset look");
+        auto dirty = s; dirty[2] = static_cast<float>(style);
+        for (int control = 0; control < printstyle::ControlCount; ++control)
+            dirty[printstyle::Parameters[control].setting] = control % 2 ? 1.8f : -1;
+        const auto fixed = response::prepare(dirty.data());
+        for (auto chip : chips)
+            requireRgbNear(response_print(chip,named), response_print(chip,fixed), 0, "Stored knobs change a fixed recipe");
+    }
+    require(printstyle::isCustom(printstyle::Custom), "Custom print style remains locked");
+    auto s = filmSettings();
+    const auto standard = response::prepare(s.data());
+    requireNear(standard.printTone.contrast,1.12f,1e-7f,"Standard contrast changed");
+    requireNear(standard.printTone.toe,0.35f,1e-7f,"Standard toe changed");
+    requireNear(standard.printTone.knee,0.73f,1e-7f,"Standard knee changed");
+    requireNear(standard.printCast,0.57f,1e-7f,"Standard print character changed");
+    requireNear(standard.printLift,0.45f*0.035f,1e-7f,"Standard black lift changed");
+    for (int style : {printstyle::Full,printstyle::Extended}) {
+        s[2] = static_cast<float>(style);
+        const auto p = response::prepare(s.data());
+        require(std::abs(p.printTone.contrast-standard.printTone.contrast) > 0.05f, "Print presets lack distinct tone");
+        require(std::abs(p.printLift-standard.printLift) > 0.004f, "Print presets lack distinct black points");
+    }
+    s[2] = printstyle::Extended;
+    const auto extended = response::prepare(s.data());
+    for (float gray : {0.05f,0.20f,0.50f,0.80f}) {
+        const auto c = response_print({gray,gray,gray},extended);
+        requireNear(c.r,c.g,2e-6f,"Extended gray axis R/G");
+        requireNear(c.g,c.b,2e-6f,"Extended gray axis G/B");
+    }
+    std::puts("Print presets: fixed recipes, populated knobs, exact Custom inheritance, independent settings, preserved Standard, and neutral Extended pass.");
+}
+
+static void testMonochrome()
+{
+    const std::array<ColorRgb, 4> chips {{{0.2f,0.4f,0.8f},{1.4f,0.6f,0.2f},{-0.2f,0.3f,1.8f},{8,2,1}}};
+    for (int mode = 0; mode <= 5; ++mode) for (int mask = 0; mask <= film::All; ++mask) {
+        for (float strength : {0.0f,0.37f,1.0f}) {
+            auto s = filmSettings();
+            s[0] = static_cast<float>(mode); s[1] = 4; s[19] = static_cast<float>(mask);
+            s[film::NegativeColorStrength] = strength; s[21] = 1; s[16] = 0.7f;
+            const int modules = film::modulesForMode(mode,mask);
+            const float expectedStrength = modules & film::Negative ? strength : 0;
+            requireNear(film::monochromeStrength(s.data()),expectedStrength,0,"Mono strength ignores module/mode gating");
+            const auto p = response::prepare(s.data());
+            const auto grain = grain::prepare(s.data(),1080,37);
+            requireNear(grain.color,1-expectedStrength,0,"Mono grain color is not gated/blended");
+            for (auto chip : chips) {
+                const auto c = response_finish(chip,modules,p);
+                const float y = response_luma(chip);
+                requireRgbNear(c,response_mix(chip,{y,y,y},expectedStrength),0,"Mono finalization blend");
+                requireNear(response_luma(c),y,2e-6f,"Mono finalization changes luminance");
+                if (expectedStrength == 1) require(c.r == c.g && c.g == c.b,"Full Mono finalization has chroma");
+                if (expectedStrength == 0) require(c.r == chip.r && c.g == chip.g && c.b == chip.b,"Inactive Mono alters pixels");
+            }
+            if (expectedStrength == 1) {
+                const auto delta = grain_delta(29,57,0.45f,grain);
+                require(delta.r == delta.g && delta.g == delta.b,"Full Mono retains colored grain");
+            }
+        }
+    }
+    for (int system : {0,1,2,3,5}) {
+        auto s = filmSettings(); s[1] = static_cast<float>(system); s[21] = 1;
+        const auto p = response::prepare(s.data());
+        require(grain::prepare(s.data(),1080,37).color == 1,"Non-Mono loses colored grain");
+        for (auto chip : chips) requireRgbNear(response_finish(chip,film::All,p),chip,0,"Non-Mono finalization changes pixels");
+    }
+    std::puts("Monochrome: neutral final composite, luminance preservation, continuous strengths, mono grain, and exact inactive/non-Mono isolation pass.");
+}
+
+static void testStrengthControls()
+{
+    const std::array<ColorRgb, 5> chips {{{0.08f,0.08f,0.08f}, {0.5f,0.5f,0.5f},
+        {0.8f,0.2f,0.1f}, {-0.2f,0.3f,1.8f}, {5,5,5}}};
+    for (int system = 0; system < 6; ++system) {
+        for (int style = 0; style < 4; ++style) {
+            auto s = filmSettings();
+            s[1] = static_cast<float>(system); s[2] = static_cast<float>(style);
+            s[film::NegativeColorStrength] = s[film::NegativeToneStrength] = 0;
+            s[film::PrintColorStrength] = s[film::PrintToneStrength] = 0;
+            auto p = response::prepare(s.data());
+            for (auto c : chips) {
+                requireRgbNear(response_negative(c, p), c, 0, "Zero negative strengths change pixels");
+                requireRgbNear(response_print(c, p), c, 0, "Zero print strengths change pixels");
+            }
+            // Tone-only processing ignores palette, saturation, density, and print casts.
+            s[film::NegativeToneStrength] = s[film::PrintToneStrength] = 1;
+            p = response::prepare(s.data());
+            auto changed = s;
+            changed[7] = 0.9f; changed[8] = 2; changed[29] = changed[30] = changed[31] = 1;
+            changed[11] = changed[35] = 1; changed[36] = 2;
+            auto q = response::prepare(changed.data());
+            for (auto c : chips) {
+                requireRgbNear(response_negative(c, p), response_negative(c, q), 0, "Disabled negative color leaks");
+                requireRgbNear(response_print(c, p), response_print(c, q), 0, "Disabled print color leaks");
+            }
+            // Color-only processing ignores the toe, contrast, shoulder, and lifted floor.
+            s[film::NegativeColorStrength] = s[film::PrintColorStrength] = 1;
+            s[film::NegativeToneStrength] = s[film::PrintToneStrength] = 0;
+            p = response::prepare(s.data());
+            changed = s;
+            changed[9] = changed[28] = 1; changed[10] = 2;
+            changed[12] = changed[32] = changed[34] = 1; changed[33] = 2;
+            q = response::prepare(changed.data());
+            for (auto c : chips) {
+                requireRgbNear(response_negative(c, p), response_negative(c, q), 0, "Disabled negative tone leaks");
+                requireRgbNear(response_print(c, p), response_print(c, q), 0, "Disabled print tone leaks");
+                require(std::isfinite(response_print(c, p).r), "Color-only HDR overflows");
+            }
+            // Partial tone strength interpolates the luminance response, not the source encoding.
+            s[film::NegativeColorStrength] = 0; s[film::NegativeToneStrength] = 0.37f;
+            p = response::prepare(s.data());
+            const ColorRgb gray {0.6f,0.6f,0.6f};
+            requireRgbNear(response_negative(gray, p),
+                response_mix(gray, response_luminance_curve(gray, p.negativeTone), 0.37f), 1e-6f, "Tone strength interpolation");
+        }
+    }
+    auto s = filmSettings();
+    s[film::PrintColorStrength] = s[film::PrintToneStrength] = 0;
+    s[37] = 1;
+    requireRgbNear(response_print({0.4f,0.3f,0.2f}, response::prepare(s.data())),
+        color_balance({0.4f,0.3f,0.2f}, {2,2,2}), 2e-6f, "Print exposure disabled by strengths");
+    std::puts("Strengths: exact zero response, independent tone/color controls, partial tone, and retained print exposure pass.");
+}
+
+static void testHalationControls()
+{
+    auto s = settings(1);
+    auto base = halation::prepare(s.data(), 1080);
+    const float reference = halation_key(0.60f,0.60f,0.60f,base.key);
+    s[film::HalationThreshold] = 0.70f;
+    require(halation_key(0.60f,0.60f,0.60f,halation::prepare(s.data(),1080).key) < reference, "Threshold is ineffective");
+    s[film::HalationThreshold] = 0.48f; s[film::HalationSoftness] = 0.80f;
+    require(halation_key(0.60f,0.60f,0.60f,halation::prepare(s.data(),1080).key) < reference, "Transition is ineffective");
+    float previous = -1;
+    for (int i = 0; i <= 3000; ++i) {
+        const float v = i / 1000.0f, key = halation_key(v,v,v,base.key);
+        require(key >= previous && key >= 0 && key <= 1, "Highlight key folds/escapes");
+        previous = key;
+    }
+    for (float hue : {0.0f,0.5f,1.0f}) {
+        s[film::HalationColor] = hue;
+        const auto p = halation::prepare(s.data(),1080).key;
+        requireNear(p.red*0.2126f+p.green*0.7152f+p.blue*0.0722f, 0.291827f, 1e-6f, "Hue changes halo luminance");
+    }
+    s = settings(1);
+    s[film::AuraRadius] = 0;
+    auto narrow = halation::prepare(s.data(),1080);
+    halation::Filter a(1,1,1,narrow.auraRadius,narrow.radiusScale);
+    s[film::AuraRadius] = 2;
+    auto wide = halation::prepare(s.data(),1080);
+    halation::Filter b(1,1,1,wide.auraRadius,wide.radiusScale);
+    require(b.radius > a.radius, "Aura radius is ineffective");
+    requireNear(a.weights[a.radius].local,b.weights[b.radius].local,1e-7f,"Aura radius changes local halation");
+    s[16] = 1;
+    auto p = grain::prepare(s.data(),1080,37);
+    for (int format = 0; format < 5; ++format) {
+        s[film::FilmGauge] = static_cast<float>(format);
+        auto g = grain::prepare(s.data(),1080,37);
+        const auto halo = halation::prepare(s.data(),1080);
+        requireNear(g.inverseSize * gauge::Profiles[format].scale, p.inverseSize, 1e-6f, "Gauge grain scale");
+        requireNear(g.amount, gauge::Profiles[format].grainStrength, 1e-6f, "Gauge grain strength");
+        requireNear(halo.radiusScale, gauge::Profiles[format].scale, 1e-6f, "Gauge halation scale");
+        s[16] = 0;
+        require(grain::prepare(s.data(),1080,37).amount == 0, "Gauge enables zero grain");
+        s[16] = 1;
+    }
+    std::array<double,2> variance {};
+    for (int scale = 1; scale <= 2; ++scale) {
+        const int width = 160 * scale, height = 1080 * scale;
+        s = settings(1);
+        const auto halo = halation::prepare(s.data(),height);
+        halation::Blur blur(width,height,halation::Filter(1,1,1,halo.auraRadius,halo.radiusScale),halo.downsample);
+        blur.extractRows(0,blur.height,[&](int x,int y) { return x == width/2 && y == height/2 ? 1.0f : 0.0f; });
+        blur.blurRows(0,blur.height,true); blur.blurRows(0,blur.height,false);
+        double mass = 0, center = 0, moment = 0;
+        for (int y = 0; y < height; ++y) for (int x = 0; x < width; ++x) {
+            const auto h = blur.sample(x,y);
+            mass += h.local; center += h.local*x; moment += h.local*x*x;
+        }
+        require(std::abs(mass-1) < 1e-4, "Resolution-scaled blur loses small lights");
+        variance[scale-1] = (moment/mass-(center/mass)*(center/mass))/(height*height);
+    }
+    require(std::abs(variance[1]/variance[0]-1) < 0.025, "Halation size changes between HD and 4K");
+    std::puts("Halation: threshold/transition, bounded smooth key, luminance-stable hue, independent aura, gauge scaling, and HD/4K spread pass.");
 }
 
 static void testImpulse()
@@ -442,7 +678,7 @@ static void writeResponsePreview(const char* path)
         }
         file.write(reinterpret_cast<const char*>(row.data()), row.size());
     }
-    std::printf("Response preview: %s (columns Contact/Standard/Telecine/Custom; bands gray/skin/colors/HDR).\n", path);
+    std::printf("Response preview: %s (columns Full/Standard/Extended/Custom; bands gray/skin/colors/HDR).\n", path);
 }
 
 class Gpu {
@@ -545,6 +781,7 @@ public:
         const auto grainParameters = grain::prepare(s.data(), height, time);
         const auto colorParameters = color::prepare(s.data());
         const auto responseParameters = response::prepare(s.data());
+        const auto halo = halation::prepare(s.data(), height);
         const bool identity = film::isIdentity(static_cast<int>(s[0]), modules, effective[13], effective[15], s[16]);
         for (int y = 0; y < height; ++y) {
             for (int x = 0; x < width; ++x) {
@@ -554,11 +791,11 @@ public:
                 const auto work = color_to_work(original, colorParameters);
                 const bool spatial = effective[13] > 0.0f || effective[15] > 0.0f;
                 if (spatial)
-                    h = halation::signal(blur.sample(x, y), halation::highlight(work.r, work.g, work.b), effective[13], effective[15]);
+                    h = halation::signal(blur.sample(x, y), halation_key(work.r, work.g, work.b, halo.key), effective[13], effective[15]);
                 ColorRgb processed = work;
                 if (modules & film::Negative) processed = response_negative(color_balance(processed, {s[4],s[5],s[6]}), responseParameters);
                 if (modules & film::Print) processed = response_print(processed, responseParameters);
-                std::array<float, 3> rgb {processed.r + h * 0.55f, processed.g + h * 0.24f, processed.b + h * 0.045f};
+                std::array<float, 3> rgb {processed.r + h * halo.key.red, processed.g + h * halo.key.green, processed.b + h * halo.key.blue};
                 if (s[0] == 5.0f) {
                     const float matte = std::clamp(h * 2.0f, 0.0f, 1.0f);
                     rgb = {matte, matte * 0.55f, matte * 0.10f};
@@ -571,7 +808,9 @@ public:
                     rgb[2] += delta.b;
                 }
                 if (s[0] != 5.0f) {
-                    if (modules & 3) for (auto& v : rgb) v = std::max(v, 0.0f);
+                    const auto finished = response_finish({rgb[0],rgb[1],rgb[2]}, modules, responseParameters);
+                    rgb = {finished.r,finished.g,finished.b};
+                    if (response_clamps_negative(modules, responseParameters)) for (auto& v : rgb) v = std::max(v, 0.0f);
                     const bool unchanged = identity || (!(modules & 3) && rgb[0] == work.r && rgb[1] == work.g && rgb[2] == work.b);
                     const auto encoded = unchanged ? original : color_from_work({rgb[0], rgb[1], rgb[2]}, colorParameters);
                     rgb = {encoded.r, encoded.g, encoded.b};
@@ -580,8 +819,8 @@ public:
                     const float expected = channel < 3 ? rgb[channel] : input[i + channel];
                     const float tolerance = 3e-5f * std::max(1.0f, std::abs(expected));
                     if (!std::isfinite(output[i + channel]) || std::abs(output[i + channel] - expected) >= tolerance) {
-                        std::fprintf(stderr, "Mismatch at (%d,%d), channel %d, source %.0f, mode %.0f, mask %.0f, style %.0f, time %.2f: GPU %.8f, CPU %.8f\n",
-                                     x, y, channel, s[26], s[0], s[19], s[3], time, output[i + channel], expected);
+                        std::fprintf(stderr, "Mismatch at (%d,%d), channel %d, source %.0f, mode %.0f, mask %.0f, style %.0f, time %.2f, strengths %.2f/%.2f/%.2f/%.2f: GPU %.8f, CPU %.8f\n",
+                                     x, y, channel, s[26], s[0], s[19], s[3], time, s[41], s[42], s[43], s[44], output[i + channel], expected);
                         require(false, "CPU/GPU mismatch or broken mode/alpha");
                     }
                 }
@@ -589,6 +828,60 @@ public:
         }
         releaseMem(src);
         releaseMem(dst);
+    }
+
+    void writeTexturePreview(const char* path, bool monochrome = false)
+    {
+        const int panelWidth = 256, height = 640, width = panelWidth * 5, rowBytes = width * 3;
+        std::vector<float> input(panelWidth * height * 4, 1.0f);
+        for (int y = 0; y < height; ++y) for (int x = 0; x < panelWidth; ++x) {
+            const bool light = (x-128)*(x-128) + (y-150)*(y-150) < 64 ||
+                               (x >= 120 && x < 136 && y >= 315 && y < 365);
+            const float value = y < 440 ? (light ? 1.4f : 0.025f) : (y < 540 ? 0.30f : 0.60f);
+            const size_t i = (static_cast<size_t>(y) * panelWidth + x) * 4;
+            input[i] = input[i+1] = input[i+2] = value;
+        }
+        const auto grainInput = input;
+        for (int y = 440; y < height; ++y) for (int x = 0; x < panelWidth; ++x) {
+            const size_t i = (static_cast<size_t>(y) * panelWidth + x) * 4;
+            input[i] = input[i+1] = input[i+2] = 0.025f;
+        }
+        std::array<std::vector<float>, 5> columns;
+        for (int format = 0; format < 5; ++format) {
+            auto s = settings(1.2f,1.2f,0.6f,2);
+            s[film::FilmGauge] = static_cast<float>(format);
+            if (monochrome) { s[0] = 0; s[1] = 4; }
+            s[film::AuraRadius] = 1.3f;
+            columns[format] = render(input,panelWidth,height,s);
+            s[0] = monochrome ? 0 : 3; s[16] = 0.70f; s[17] = 0.65f; s[3] = 1;
+            if (monochrome) s[19] = film::Negative | film::Print | film::Grain;
+            s[21] = monochrome ? 1 : 0; s[22] = s[24] = 0; s[23] = 1;
+            const auto grain = render(grainInput,panelWidth,height,s);
+            const size_t begin = static_cast<size_t>(440) * panelWidth * 4;
+            std::copy(grain.begin()+begin,grain.end(),columns[format].begin()+begin);
+        }
+        std::array<unsigned char, 54> header {};
+        header[0] = 'B'; header[1] = 'M'; header[10] = 54; header[14] = 40; header[26] = 1; header[28] = 24;
+        auto putInt = [&](int offset, unsigned value) {
+            for (int byte = 0; byte < 4; ++byte) header[offset + byte] = static_cast<unsigned char>(value >> (8 * byte));
+        };
+        putInt(2,54+rowBytes*height); putInt(18,width); putInt(22,height);
+        std::ofstream file(path,std::ios::binary);
+        require(file.good(),"Cannot write texture preview");
+        file.write(reinterpret_cast<const char*>(header.data()),header.size());
+        std::vector<unsigned char> row(rowBytes);
+        for (int y = height-1; y >= 0; --y) {
+            for (int x = 0; x < width; ++x) {
+                const auto& column = columns[x/panelWidth];
+                const size_t i = (static_cast<size_t>(y)*panelWidth + x%panelWidth)*4;
+                for (int channel = 0; channel < 3; ++channel)
+                    row[x*3+channel] = static_cast<unsigned char>(std::clamp(column[i+2-channel],0.0f,1.0f)*255.0f+0.5f);
+                if (x%panelWidth == 0 || y == 440 || y == 540) row[x*3] = row[x*3+1] = row[x*3+2] = 32;
+            }
+            file.write(reinterpret_cast<const char*>(row.data()),row.size());
+        }
+        require(file.good(),"Texture preview write failed");
+        std::printf("Texture preview: %s (columns Custom/8mm/16mm/35mm/65mm; bands lights/grain).\n",path);
     }
 
     void benchmark()
@@ -608,8 +901,23 @@ public:
                 s[0] = static_cast<float>(mode); s[26] = static_cast<float>(source);
                 s[27] = mode == 0 || mode == 1 ? 1.0f : 0.0f;
                 s[13] = mode == 3 ? 0.0f : 1.0f; s[14] = 2.0f; s[15] = s[13];
+                s[film::AuraRadius] = 2.0f;
                 cases.push_back(s);
             }
+        }
+        for (int format : {1,2,4}) {
+            auto s = filmSettings();
+            s[0] = 0; s[26] = color::AlexaLogC3; s[27] = 1;
+            s[13] = s[15] = 1; s[14] = s[film::AuraRadius] = 2;
+            s[film::FilmGauge] = static_cast<float>(format);
+            cases.push_back(s);
+        }
+        for (int mode : {0,1}) {
+            auto s = filmSettings();
+            s[0] = static_cast<float>(mode); s[1] = 4;
+            s[26] = color::AlexaLogC3; s[27] = 1;
+            s[13] = s[15] = 1; s[14] = s[film::AuraRadius] = 2;
+            cases.push_back(s);
         }
         for (auto s : cases) {
             s[16] = 0.16f;
@@ -622,7 +930,7 @@ public:
                 require(RunOpenEmulsionOpenCL(queue, width, height, static_cast<float>(frame), s.data(), reinterpret_cast<const float*>(src), reinterpret_cast<float*>(dst)), "Benchmark render failed");
             require(finish(queue) == 0, "Benchmark execution failed");
             const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() / 12.0;
-            std::printf("4K %s, mode %.0f, radius %.1f, aura %.1f: %.2f ms/frame (GPU resident, excludes Resolve/transfers).\n", color::spaces()[static_cast<int>(s[26])].label, s[0], s[14], s[15], ms);
+            std::printf("4K %s, mode %.0f, film %.0f, gauge %s, radius %.1f, aura %.1f/radius %.1f: %.2f ms/frame (GPU resident, excludes Resolve/transfers).\n", color::spaces()[static_cast<int>(s[26])].label, s[0], s[1], gauge::prepare(s.data()).label, s[14], s[15], s[film::AuraRadius], ms);
         }
         releaseMem(src);
         releaseMem(dst);
@@ -751,6 +1059,203 @@ public:
         std::puts("OpenCL: all input/output spaces, independent film stages, managed halation/grain, exact bypass/zero-grain, alpha, and texture-only output preservation pass.");
     }
 
+    void testPrintPresetTransitions()
+    {
+        const int width = 33, height = 31;
+        std::vector<float> work(width*height*4,0.5f);
+        for (size_t i = 0; i < work.size(); i += 4) {
+            work[i] = static_cast<float>(i%131)/100.0f-0.15f;
+            work[i+1] = static_cast<float>(i%79)/75.0f-0.05f;
+            work[i+2] = static_cast<float>(i%107)/60.0f;
+            work[i+3] = static_cast<float>(i%17)/16.0f;
+        }
+        for (int source = 0; source < color::SpaceCount; ++source) {
+            auto input = work;
+            for (size_t i = 0; i < input.size(); i += 4) {
+                const auto encoded = color_from_work({work[i],work[i+1],work[i+2]},color::prepare(source,0,true));
+                input[i] = encoded.r; input[i+1] = encoded.g; input[i+2] = encoded.b;
+            }
+            for (int style = printstyle::Full; style < printstyle::Custom; ++style) {
+                for (int mode : {0,1,2,3,4,5}) {
+                    auto s = filmSettings();
+                    s[0] = static_cast<float>(mode); s[2] = static_cast<float>(style);
+                    s[26] = static_cast<float>(source); s[27] = 1;
+                    s[13] = 0.7f; s[15] = 0.3f; s[16] = 0.3f;
+                    s[37] = 0.2f; s[38] = -0.1f;
+                    s[film::PrintColorStrength] = 0.71f; s[film::PrintToneStrength] = 0.83f;
+                    const auto fixed = render(input,width,height,s);
+                    auto dirty = s;
+                    for (int control = 0; control < printstyle::ControlCount; ++control)
+                        dirty[printstyle::Parameters[control].setting] = control % 2 ? 1.8f : -1;
+                    require(fixed == render(input,width,height,dirty), "GPU named preset accepts stored recipe changes");
+                    printstyle::applyPreset(style, [&](int control, double value) {
+                        s[printstyle::Parameters[control].setting] = static_cast<float>(value);
+                    });
+                    s[2] = printstyle::Custom;
+                    require(fixed == render(input,width,height,s), "GPU preset-to-Custom transition changes pixels");
+                    if (mode == 4) require(fixed == input, "Print presets break exact bypass");
+                }
+            }
+        }
+        // Exercise actual Custom tuning across every space, not just inherited endpoints.
+        for (int source = 0; source < color::SpaceCount; ++source) {
+            auto s = filmSettings();
+            s[2] = printstyle::Custom; s[26] = static_cast<float>(source); s[27] = 5;
+            s[32] = -0.37f; s[33] = 1.26f; s[34] = 0.83f;
+            s[11] = 0.61f; s[35] = 0.43f; s[36] = 1.35f; s[12] = 0.72f;
+            test(width,height,s,false,37);
+        }
+        std::puts("OpenCL: exact preset-to-Custom transitions in all spaces/modes, locked recipe immunity, Custom tuning parity, and bypass pass.");
+    }
+
+    void testMonochromeOutput()
+    {
+        const int width = 33, height = 31;
+        std::vector<float> work(width*height*4);
+        for (int y = 0; y < height; ++y) for (int x = 0; x < width; ++x) {
+            const size_t i = (static_cast<size_t>(y)*width+x)*4;
+            work[i] = 0.05f + x / 100.0f;
+            work[i+1] = 0.10f + y / 80.0f;
+            work[i+2] = 0.15f + (x+y) / 120.0f;
+            work[i+3] = static_cast<float>((x+y)%17)/16;
+            if (x >= 14 && x <= 18 && y >= 13 && y <= 17) {
+                work[i] = 3; work[i+1] = 2; work[i+2] = 1;
+            }
+        }
+        auto bright = filmSettings();
+        bright[0] = 0; bright[1] = 4;
+        bright[13] = 2; bright[14] = 2; bright[15] = 1; bright[film::AuraRadius] = 2;
+        bright[16] = 0.7f; bright[21] = 1;
+        bright[37] = 0.25f; bright[38] = 0.6f; bright[39] = -0.3f; bright[40] = 0.4f;
+        for (int source = 0; source < color::SpaceCount; ++source) {
+            auto input = work;
+            for (size_t i = 0; i < input.size(); i += 4) {
+                const auto encoded = color_from_work({work[i],work[i+1],work[i+2]},color::prepare(source,0,true));
+                input[i] = encoded.r; input[i+1] = encoded.g; input[i+2] = encoded.b;
+            }
+            for (int output = 0; output < static_cast<int>(color::OutputSpaces.size()); ++output) {
+                for (int style = 0; style < 4; ++style) {
+                    auto s = bright;
+                    s[26] = static_cast<float>(source); s[27] = static_cast<float>(output);
+                    s[2] = static_cast<float>(style); s[3] = static_cast<float>(style);
+                    s[film::FilmGauge] = static_cast<float>(style+1);
+                    s[film::HalationColor] = style % 2 ? 1 : 0;
+                    for (int mode : {0,1}) {
+                        s[0] = static_cast<float>(mode);
+                        const auto result = render(input,width,height,s);
+                        for (size_t i = 0; i < result.size(); i += 4) {
+                            const float tolerance = 3e-5f * std::max(1.0f,std::abs(result[i]));
+                            requireNear(result[i],result[i+1],tolerance,"GPU Mono output R/G");
+                            requireNear(result[i+1],result[i+2],tolerance,"GPU Mono output G/B");
+                            require(result[i+3] == input[i+3],"Mono changes alpha");
+                        }
+                    }
+                }
+            }
+            for (float strength : {0.0f,0.37f,0.99f,1.0f}) {
+                auto s = bright; s[26] = static_cast<float>(source); s[27] = 5;
+                s[film::NegativeColorStrength] = strength;
+                test(width,height,s,false,37);
+            }
+        }
+        for (int mode : {0,1,2,3,4,5}) {
+            auto s = bright; s[0] = static_cast<float>(mode);
+            if (mode < 2) s[19] = film::All & ~film::Negative;
+            const auto reference = render(work,width,height,s);
+            s[1] = 0;
+            require(reference == render(work,width,height,s),"Mono selection leaks into disabled-negative/texture/matte/bypass modes");
+        }
+        // Verify that neutrality retains the effects, not just their absence.
+        auto s = bright;
+        s[19] = film::Negative | film::Halation | film::Aura;
+        s[13] = s[15] = 0;
+        const auto withoutHalo = render(work,width,height,s);
+        s[13] = 2; s[15] = 1;
+        const auto withHalo = render(work,width,height,s);
+        double haloDifference = 0;
+        for (size_t i = 0; i < withHalo.size(); i += 4) haloDifference += std::abs(withHalo[i]-withoutHalo[i]);
+        require(haloDifference > 0.01,"Mono disables the halo instead of neutralizing it");
+        s[19] = film::Negative | film::Grain; s[21] = 1;
+        const auto monoGrain = render(work,width,height,s);
+        s[21] = 0;
+        require(monoGrain == render(work,width,height,s),"Grain Color changes active full Mono");
+        s[16] = 0;
+        const auto withoutGrain = render(work,width,height,s);
+        double grainDifference = 0;
+        for (size_t i = 0; i < monoGrain.size(); i += 4) grainDifference += std::abs(monoGrain[i]-withoutGrain[i]);
+        require(grainDifference > 0.01,"Mono suppresses grain");
+        std::puts("OpenCL: neutral Mono with print/halation/aura/grain across all input/output spaces, partial strengths, alpha, active effects, and exact mode/module isolation pass.");
+    }
+
+    void testUpgradeControls()
+    {
+        for (int source = 0; source < color::SpaceCount; ++source) {
+            for (float color : {0.0f,0.37f,1.0f}) for (float tone : {0.0f,0.63f,1.0f}) {
+                auto s = filmSettings();
+                // Linear output isolates response parity from Gamma 2.4's singular
+                // slope at zero when arbitrary wide-gamut inputs cancel to black.
+                s[26] = static_cast<float>(source); s[27] = 5;
+                s[film::NegativeColorStrength] = s[film::PrintColorStrength] = color;
+                s[film::NegativeToneStrength] = s[film::PrintToneStrength] = tone;
+                test(33,31,s,false,37);
+                s[0] = 0; s[13] = 1; s[15] = 0.5f; s[16] = 0.3f;
+                s[film::HalationThreshold] = 0.2f; s[film::HalationSoftness] = 0.7f;
+                test(33,31,s,false,37);
+            }
+        }
+        for (float color : {0.0f,0.37f,1.0f}) for (float tone : {0.0f,0.63f,1.0f}) {
+            auto s = filmSettings();
+            s[26] = color::SRGB; s[27] = 1;
+            s[film::NegativeColorStrength] = s[film::PrintColorStrength] = color;
+            s[film::NegativeToneStrength] = s[film::PrintToneStrength] = tone;
+            test(33,31,s,false,37);
+        }
+        for (int flags = 0; flags < 16; ++flags) {
+            auto s = filmSettings();
+            s[26] = color::AlexaLogC3; s[27] = 5;
+            for (int control = 0; control < 4; ++control)
+                s[film::NegativeColorStrength + control] = flags & (1 << control) ? 0.67f : 0.0f;
+            test(33,31,s,false,37);
+        }
+        for (bool outOfOrder : {false,true}) {
+            if (outOfOrder && !unordered) continue;
+            for (int format = 0; format < 5; ++format) {
+                for (int mode : {0,2,3,4,5}) {
+                    auto s = filmSettings();
+                    s[0] = static_cast<float>(mode); s[film::FilmGauge] = static_cast<float>(format);
+                    s[13] = 1; s[14] = 2; s[15] = 0.7f; s[16] = 0.3f;
+                    s[film::AuraRadius] = 2; s[film::HalationColor] = format / 4.0f;
+                    test(129,131,s,outOfOrder,37);
+                }
+            }
+            for (auto dimensions : std::array<std::array<int,2>,4>{{{33,1081},{35,1621},{65,2161},{17,4321}}}) {
+                auto s = settings(2);
+                s[film::FilmGauge] = 1; s[film::AuraRadius] = 2; s[film::HalationColor] = 1;
+                s[16] = 0.3f;
+                test(dimensions[0],dimensions[1],s,outOfOrder,37);
+            }
+        }
+        const int width = 17, height = 19;
+        std::vector<float> input(width*height*4,0.4f);
+        for (int mode : {2,3,4,5}) {
+            auto s = settings(1,1,0.5f,mode);
+            s[16] = 0.3f;
+            const auto reference = render(input,width,height,s);
+            s[film::NegativeColorStrength] = s[film::NegativeToneStrength] = 0;
+            s[film::PrintColorStrength] = s[film::PrintToneStrength] = 0;
+            require(reference == render(input,width,height,s), "Strengths leak into texture modes");
+        }
+        auto s = settings(1,0,0,3);
+        s[16] = 0.3f;
+        const auto reference = render(input,width,height,s);
+        s[film::HalationThreshold] = 2; s[film::HalationSoftness] = 0.01f;
+        s[film::HalationColor] = 1; s[film::AuraRadius] = 2;
+        require(reference == render(input,width,height,s), "Halation controls affect grain-only mode");
+        s[0] = 0; s[19] = 0; s[film::FilmGauge] = 1;
+        require(input == render(input,width,height,s), "Gauge breaks exact all-disabled identity");
+        std::puts("OpenCL: partial/zero color-tone parity in all spaces, all gauges/modes, enlarged/odd grids, and control isolation pass.");
+    }
+
     void testFilmResponse()
     {
         for (int source = 0; source < static_cast<int>(color::spaces().size()); ++source) {
@@ -820,6 +1325,10 @@ int main(int argc, char** argv)
         testGrain();
         testColorSpaces();
         testResponse();
+        testPrintPresets();
+        testMonochrome();
+        testStrengthControls();
+        testHalationControls();
         if (argc > 1) writePreview(argv[1]);
         if (argc > 2) writeResponsePreview(argv[2]);
         Gpu gpu;
@@ -875,6 +1384,11 @@ int main(int argc, char** argv)
         }
         gpu.testManagedColor();
         gpu.testFilmResponse();
+        gpu.testPrintPresetTransitions();
+        gpu.testMonochromeOutput();
+        gpu.testUpgradeControls();
+        if (argc > 3) gpu.writeTexturePreview(argv[3]);
+        if (argc > 4) gpu.writeTexturePreview(argv[4],true);
         gpu.benchmark();
         return 0;
     } catch (const std::exception& error) {

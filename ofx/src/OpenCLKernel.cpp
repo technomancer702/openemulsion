@@ -9,6 +9,8 @@
 #include <tuple>
 
 #include "HalationBlur.h"
+#include "HalationConfig.h"
+#include "HalationOpenCL.h"
 #include "GrainConfig.h"
 #include "GrainOpenCL.h"
 #include "ColorSpaceConfig.h"
@@ -76,11 +78,9 @@ float3 read_rgb(__global const float* input, int width, int height, int x, int y
     return (float3)(input[idx], input[idx + 1], input[idx + 2]);
 }
 
-float highlight_key(float3 c)
+float highlight_key(float3 c, HalationParameters p)
 {
-    float hot = fmax(fmax(c.x, c.y), c.z);
-    float y = lum(c);
-    return clamp01((fmax(hot, y * 1.20f) - 0.48f) / 0.52f);
+    return halation_key(c.x, c.y, c.z, p);
 }
 
 float3 to_work(float3 v, ColorParameters p)
@@ -97,17 +97,17 @@ float3 from_work(float3 v, ColorParameters p)
     return (float3)(rgb.r, rgb.g, rgb.b);
 }
 
-__kernel void ExtractHighlights(int width, int height, ColorParameters color,
+__kernel void ExtractHighlights(int width, int height, int step, ColorParameters color, HalationParameters halo,
                                 __global const float* input, __global float2* output)
 {
     int x = get_global_id(0), y = get_global_id(1);
-    int bw = (width + 1) / 2, bh = (height + 1) / 2;
+    int bw = (width + step - 1) / step, bh = (height + step - 1) / step;
     if (x >= bw || y >= bh) return;
     float sum = 0.0f;
     int count = 0;
-    for (int dy = 0; dy < 2 && 2 * y + dy < height; ++dy) {
-        for (int dx = 0; dx < 2 && 2 * x + dx < width; ++dx) {
-            sum += highlight_key(to_work(read_rgb(input, width, height, 2 * x + dx, 2 * y + dy), color));
+    for (int dy = 0; dy < step && step * y + dy < height; ++dy) {
+        for (int dx = 0; dx < step && step * x + dx < width; ++dx) {
+            sum += highlight_key(to_work(read_rgb(input, width, height, step * x + dx, step * y + dy), color), halo);
             ++count;
         }
     }
@@ -128,10 +128,10 @@ __kernel void BlurHighlights(int width, int height, int radius, int horizontal,
     output[y * width + x] = sum;
 }
 
-float2 sample_blur(__global const float2* image, int width, int height, int x, int y)
+float2 sample_blur(__global const float2* image, int width, int height, int x, int y, int step)
 {
-    float fx = clamp(((float)x - 0.5f) * 0.5f, 0.0f, (float)(width - 1));
-    float fy = clamp(((float)y - 0.5f) * 0.5f, 0.0f, (float)(height - 1));
+    float fx = clamp(((float)x - (step - 1) * 0.5f) / step, 0.0f, (float)(width - 1));
+    float fy = clamp(((float)y - (step - 1) * 0.5f) / step, 0.0f, (float)(height - 1));
     int x0 = (int)fx, y0 = (int)fy;
     int x1 = min(x0 + 1, width - 1), y1 = min(y0 + 1, height - 1);
     float2 top = mix(image[y0 * width + x0], image[y0 * width + x1], fx - x0);
@@ -153,6 +153,8 @@ __kernel void OpenEmulsionKernel(
     GrainParameters grainParameters,
     ColorParameters color,
     FilmResponseParameters response,
+    HalationParameters haloParameters,
+    int step,
     int identity,
     __global const float* input,
     __global float* output,
@@ -185,15 +187,14 @@ __kernel void OpenEmulsionKernel(
     }
 
     if (halation > 0.0f || aura > 0.0f) {
-        float2 halo = sample_blur(blurred, (width + 1) / 2, (height + 1) / 2, x, y);
-        float center = highlight_key(work);
-        float h = fmax(halo.x - center * 0.20f, 0.0f) * halation * 1.45f +
-                  fmax(halo.y - center * 0.08f, 0.0f) * aura * 0.85f;
+        float2 halo = sample_blur(blurred, (width + step - 1) / step, (height + step - 1) / step, x, y, step);
+        float center = highlight_key(work, haloParameters);
+        float h = halation_signal(halo.x, halo.y, center, halation, aura);
         if (mode == 5) {
             h = clamp(h * 2.0f, 0.0f, 1.0f);
             c = (float3)(h, h * 0.55f, h * 0.10f);
         } else {
-            c += (float3)(h * 0.55f, h * 0.24f, h * 0.045f);
+            c += (float3)(h * haloParameters.red, h * haloParameters.green, h * haloParameters.blue);
         }
     } else if (mode == 5) {
         c = (float3)(0.0f);
@@ -204,7 +205,9 @@ __kernel void OpenEmulsionKernel(
         c += (float3)(delta.r, delta.g, delta.b);
     }
 
-    if (modules & 3) c = fmax(c, (float3)(0.0f));
+    ColorRgb finished = response_finish((ColorRgb){c.x, c.y, c.z}, modules, response);
+    c = (float3)(finished.r, finished.g, finished.b);
+    if (response_clamps_negative(modules, response)) c = fmax(c, (float3)(0.0f));
     if (mode != 5) c = !(modules & 3) && all(c == work) ? original : from_work(c, color);
     output[idx] = c.x;
     output[idx + 1] = c.y;
@@ -310,8 +313,8 @@ bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, c
     const Key key(context, device, queue);
     if (resources.find(key) == resources.end()) {
         auto created = std::make_unique<OpenCLResources>(cl);
-        const char* sources[] = {GrainOpenCLSource, ColorOpenCLSource, FilmResponseOpenCLSource, KernelSource};
-        created->program = cl->clCreateProgramWithSource(context, 4, sources, nullptr, &error);
+        const char* sources[] = {GrainOpenCLSource, ColorOpenCLSource, FilmResponseOpenCLSource, HalationOpenCLSource, KernelSource};
+        created->program = cl->clCreateProgramWithSource(context, 5, sources, nullptr, &error);
         if (!check(error, "Unable to create OpenCL program")) return false;
         error = cl->clBuildProgram(created->program, 1, &device, nullptr, nullptr, nullptr);
         if (error != CL_SUCCESS) {
@@ -343,13 +346,16 @@ bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, c
     const GrainParameters grainParameters = grain::prepare(settings, height, time);
     const ColorParameters colorParameters = color::prepare(settings);
     const FilmResponseParameters responseParameters = response::prepare(settings);
-    static_assert(sizeof(FilmResponseParameters) == 152, "OpenCL response structure layout mismatch");
+    static_assert(sizeof(FilmResponseParameters) == 168, "OpenCL response structure layout mismatch");
+    const auto haloConfig = halation::prepare(settings, height);
+    const int step = haloConfig.downsample;
+    static_assert(sizeof(HalationParameters) == 20, "OpenCL halation structure layout mismatch");
     const int identity = film::isIdentity(mode, modules, halation, aura, settings[16]);
     static_assert(sizeof(ColorParameters) == 88, "OpenCL color structure layout mismatch");
     static_assert(sizeof(GrainParameters) == 40, "OpenCL grain structure layout mismatch");
     cl_mem blurMem = inputMem;
     if (halation > 0.0f || aura > 0.0f) {
-        const int bw = (width + 1) / 2, bh = (height + 1) / 2;
+        const int bw = (width + step - 1) / step, bh = (height + step - 1) / step;
         const size_t bytes = static_cast<size_t>(bw) * bh * sizeof(halation::Pair);
         if (state.capacity < bytes) {
             OpenCLBuffer highlights {cl, cl->clCreateBuffer(context, CL_MEM_READ_WRITE, bytes, nullptr, &error)};
@@ -363,16 +369,18 @@ bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, c
             highlights.mem = temporary.mem = nullptr;
             state.capacity = bytes;
         }
-        const halation::Filter filter(halation, settings[14], aura);
+        const halation::Filter filter(halation, settings[14], aura, haloConfig.auraRadius, haloConfig.radiusScale);
         static_assert(sizeof(halation::Pair) == 2 * sizeof(float), "OpenCL float2 layout mismatch");
         OpenCLBuffer weights {cl, cl->clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                               filter.weights.size() * sizeof(halation::Pair), const_cast<halation::Pair*>(filter.weights.data()), &error)};
         if (!check(error, "Unable to upload halation weights")) return false;
         error  = cl->clSetKernelArg(state.extract, 0, sizeof(int), &width);
         error |= cl->clSetKernelArg(state.extract, 1, sizeof(int), &height);
-        error |= cl->clSetKernelArg(state.extract, 2, sizeof(ColorParameters), &colorParameters);
-        error |= cl->clSetKernelArg(state.extract, 3, sizeof(cl_mem), &inputMem);
-        error |= cl->clSetKernelArg(state.extract, 4, sizeof(cl_mem), &state.highlights);
+        error |= cl->clSetKernelArg(state.extract, 2, sizeof(int), &step);
+        error |= cl->clSetKernelArg(state.extract, 3, sizeof(ColorParameters), &colorParameters);
+        error |= cl->clSetKernelArg(state.extract, 4, sizeof(HalationParameters), &haloConfig.key);
+        error |= cl->clSetKernelArg(state.extract, 5, sizeof(cl_mem), &inputMem);
+        error |= cl->clSetKernelArg(state.extract, 6, sizeof(cl_mem), &state.highlights);
         if (!check(error, "Unable to set highlight arguments") || !state.enqueue(queue, state.extract, bw, bh)) return false;
         for (int horizontal = 1; horizontal >= 0; --horizontal) {
             cl_mem src = horizontal ? state.highlights : state.temporary;
@@ -404,6 +412,8 @@ bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, c
     error |= cl->clSetKernelArg(kernel, arg++, sizeof(GrainParameters), &grainParameters);
     error |= cl->clSetKernelArg(kernel, arg++, sizeof(ColorParameters), &colorParameters);
     error |= cl->clSetKernelArg(kernel, arg++, sizeof(FilmResponseParameters), &responseParameters);
+    error |= cl->clSetKernelArg(kernel, arg++, sizeof(HalationParameters), &haloConfig.key);
+    error |= cl->clSetKernelArg(kernel, arg++, sizeof(int), &step);
     error |= cl->clSetKernelArg(kernel, arg++, sizeof(int), &identity);
     error |= cl->clSetKernelArg(kernel, arg++, sizeof(cl_mem), &inputMem);
     error |= cl->clSetKernelArg(kernel, arg++, sizeof(cl_mem), &outputMem);

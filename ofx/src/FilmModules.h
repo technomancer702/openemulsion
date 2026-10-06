@@ -2,13 +2,20 @@
 
 #pragma once
 
+#include <algorithm>
+
 namespace film {
 
 enum Module {
     Negative = 1, Print = 2, Halation = 4, Aura = 8, Grain = 16, All = 31
 };
 
-constexpr int SettingsCount = 41;
+enum SettingIndex {
+    NegativeColorStrength = 41, NegativeToneStrength,
+    PrintColorStrength, PrintToneStrength, FilmGauge,
+    HalationThreshold, HalationSoftness, HalationColor, AuraRadius,
+    SettingsCount
+};
 constexpr int ModuleIndex = 19;
 
 inline int modulesForMode(int mode, int enabled)
@@ -21,6 +28,13 @@ inline int modulesForMode(int mode, int enabled)
     case 5: return enabled & (Halation | Aura);
     default: return 0;
     }
+}
+
+inline float monochromeStrength(const float* settings)
+{
+    const int modules = modulesForMode(static_cast<int>(settings[0]), static_cast<int>(settings[ModuleIndex]));
+    return (modules & Negative) && static_cast<int>(settings[1]) == 4 ?
+        std::clamp(settings[NegativeColorStrength], 0.0f, 1.0f) : 0.0f;
 }
 
 inline bool isIdentity(int mode, int modules, float halation, float aura, float grain)

@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <vector>
+#include "HalationMath.h"
 
 namespace halation {
 
@@ -13,22 +14,15 @@ struct Pair {
     float aura = 0.0f;
 };
 
-inline float highlight(float r, float g, float b)
-{
-    const float hot = std::max({r, g, b});
-    const float luma = r * 0.2126f + g * 0.7152f + b * 0.0722f;
-    return std::clamp((std::max(hot, luma * 1.20f) - 0.48f) / 0.52f, 0.0f, 1.0f);
-}
-
 struct Filter {
     int radius;
     std::vector<Pair> weights;
 
-    Filter(float amount, float size, float aura)
+    Filter(float amount, float size, float aura, float auraSize = 1.0f, float scale = 1.0f)
     {
         size = std::clamp(size, 0.0f, 2.0f);
-        const float localSigma = 1.0f + size * 2.0f;
-        const float auraSigma = 2.5f + size * 4.0f;
+        const float localSigma = std::max(0.5f, (1.0f + size * 2.0f) * scale);
+        const float auraSigma = std::max(0.5f, (2.5f + std::clamp(auraSize, 0.0f, 2.0f) * 4.0f) * scale);
         const int localRadius = amount > 0.0f ? static_cast<int>(std::ceil(3.0f * localSigma)) : 0;
         const int auraRadius = aura > 0.0f ? static_cast<int>(std::ceil(3.0f * auraSigma)) : 0;
         radius = std::max(localRadius, auraRadius);
@@ -50,12 +44,12 @@ struct Filter {
     }
 };
 
-// Half-resolution highlight extraction preserves small lights; dense separable
+// Area-averaged highlight extraction preserves small lights; dense separable
 // filtering and bilinear reconstruction prevent displaced copies of them.
 class Blur {
 public:
-    Blur(int sourceWidth, int sourceHeight, const Filter& filter)
-        : width((sourceWidth + 1) / 2), height((sourceHeight + 1) / 2), filter_(filter),
+    Blur(int sourceWidth, int sourceHeight, const Filter& filter, int step = 2)
+        : width((sourceWidth + step - 1) / step), height((sourceHeight + step - 1) / step), filter_(filter), step_(step),
           sourceWidth_(sourceWidth), sourceHeight_(sourceHeight),
           image_(static_cast<size_t>(width) * height), temporary_(image_.size()) {}
 
@@ -66,9 +60,9 @@ public:
             for (int x = 0; x < width; ++x) {
                 float sum = 0.0f;
                 int count = 0;
-                for (int dy = 0; dy < 2 && 2 * y + dy < sourceHeight_; ++dy) {
-                    for (int dx = 0; dx < 2 && 2 * x + dx < sourceWidth_; ++dx) {
-                        sum += readHighlight(2 * x + dx, 2 * y + dy);
+                for (int dy = 0; dy < step_ && step_ * y + dy < sourceHeight_; ++dy) {
+                    for (int dx = 0; dx < step_ && step_ * x + dx < sourceWidth_; ++dx) {
+                        sum += readHighlight(step_ * x + dx, step_ * y + dy);
                         ++count;
                     }
                 }
@@ -99,8 +93,8 @@ public:
 
     Pair sample(int x, int y) const
     {
-        const float fx = std::clamp((x - 0.5f) * 0.5f, 0.0f, static_cast<float>(width - 1));
-        const float fy = std::clamp((y - 0.5f) * 0.5f, 0.0f, static_cast<float>(height - 1));
+        const float fx = std::clamp((x - (step_ - 1) * 0.5f) / step_, 0.0f, static_cast<float>(width - 1));
+        const float fy = std::clamp((y - (step_ - 1) * 0.5f) / step_, 0.0f, static_cast<float>(height - 1));
         const int x0 = static_cast<int>(fx), y0 = static_cast<int>(fy);
         const int x1 = std::min(x0 + 1, width - 1), y1 = std::min(y0 + 1, height - 1);
         const Pair& a = image_[static_cast<size_t>(y0) * width + x0];
@@ -119,14 +113,14 @@ public:
 
 private:
     Filter filter_;
+    int step_;
     int sourceWidth_, sourceHeight_;
     std::vector<Pair> image_, temporary_;
 };
 
 inline float signal(Pair blurred, float center, float amount, float aura)
 {
-    return std::max(blurred.local - center * 0.20f, 0.0f) * amount * 1.45f +
-           std::max(blurred.aura - center * 0.08f, 0.0f) * aura * 0.85f;
+    return halation_signal(blurred.local, blurred.aura, center, amount, aura);
 }
 
 } // namespace halation

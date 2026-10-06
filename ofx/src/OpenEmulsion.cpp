@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <memory>
@@ -11,6 +12,7 @@
 #include "ofxsProcessing.h"
 #include "ofxsSupportPrivate.h"
 #include "HalationBlur.h"
+#include "HalationConfig.h"
 #include "GrainConfig.h"
 #include "ColorSpaceConfig.h"
 #include "FilmResponseConfig.h"
@@ -20,7 +22,7 @@
 #define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, and smooth halation, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 12
+#define kPluginVersionMinor 15
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -47,7 +49,7 @@ struct Settings {
     double saturation = 0.95;
     double toe = 0.16;
     double contrast = 1.08;
-    double printColor = 0.25;
+    double printColor = printstyle::Presets[printstyle::Standard][printstyle::Color];
     double blackPoint = 0.45;
     double negativeShoulder = 0.50;
     double negativeCrosstalk = 0.35;
@@ -73,6 +75,15 @@ struct Settings {
     double grainShadows = 1.15;
     double grainMidtones = 0.80;
     double grainHighlights = 0.42;
+    double negativeColorStrength = 1;
+    double negativeToneStrength = 1;
+    double printColorStrength = 1;
+    double printToneStrength = 1;
+    int filmGauge = 0;
+    double halationThreshold = 0.48;
+    double halationSoftness = 0.52;
+    double halationColor = 0.5;
+    double auraRadius = 1;
     int grainSeed = 0;
     float gainR = 1.0f;
     float gainG = 1.0f;
@@ -145,15 +156,15 @@ Rgb cameraStage(Rgb c, const Settings& s)
     return color_balance(c, {s.gainR, s.gainG, s.gainB});
 }
 
-float highlightKey(Rgb c)
+float highlightKey(Rgb c, HalationParameters p)
 {
-    return halation::highlight(c.r, c.g, c.b);
+    return halation_key(c.r, c.g, c.b, p);
 }
 
 class HalationProcessor : public OFX::MultiThread::Processor {
 public:
-    HalationProcessor(OFX::ImageEffect& effect, OFX::Image* src, halation::Blur& blur, ColorParameters color)
-        : effect_(effect), src_(src), blur_(blur), color_(color) {}
+    HalationProcessor(OFX::ImageEffect& effect, OFX::Image* src, halation::Blur& blur, ColorParameters color, HalationParameters halo)
+        : effect_(effect), src_(src), blur_(blur), color_(color), halo_(halo) {}
 
     void run()
     {
@@ -169,7 +180,7 @@ public:
         for (int y = begin; y < end && !effect_.abort(); ++y) {
             if (phase_ == 0) {
                 blur_.extractRows(y, y + 1, [&](int x, int sy) {
-                    return highlightKey(color_to_work(readPixel(src_, x + bounds.x1, sy + bounds.y1), color_));
+                    return highlightKey(color_to_work(readPixel(src_, x + bounds.x1, sy + bounds.y1), color_), halo_);
                 });
             } else {
                 blur_.blurRows(y, y + 1, phase_ == 1);
@@ -182,6 +193,7 @@ private:
     OFX::Image* src_;
     halation::Blur& blur_;
     ColorParameters color_;
+    HalationParameters halo_;
     int phase_ = 0;
 };
 
@@ -201,11 +213,13 @@ public:
         grainParameters_ = grain::prepare(packed.data(), bounds.y2 - bounds.y1, time_);
         colorParameters_ = color::prepare(packed.data());
         responseParameters_ = response::prepare(packed.data());
+        haloConfig_ = halation::prepare(packed.data(), bounds.y2 - bounds.y1);
         if (_isEnabledOpenCLRender || !spatialEnabled(settings_)) return;
         const OfxRectI& b = src_->getBounds();
-        const halation::Filter filter(halationAmount(settings_), static_cast<float>(settings_.halationRadius), auraAmount(settings_));
-        blur_ = std::make_unique<halation::Blur>(b.x2 - b.x1, b.y2 - b.y1, filter);
-        HalationProcessor(_effect, src_, *blur_, colorParameters_).run();
+        const halation::Filter filter(halationAmount(settings_), static_cast<float>(settings_.halationRadius), auraAmount(settings_),
+                                      haloConfig_.auraRadius, haloConfig_.radiusScale);
+        blur_ = std::make_unique<halation::Blur>(b.x2 - b.x1, b.y2 - b.y1, filter, haloConfig_.downsample);
+        HalationProcessor(_effect, src_, *blur_, colorParameters_, haloConfig_.key).run();
     }
 
     void processImagesOpenCL() override
@@ -231,7 +245,8 @@ public:
     void multiThreadProcessImages(OfxRectI window) override
     {
         const bool identity = isIdentitySettings(settings_);
-        const bool clampOutput = colorEnabled(settings_) || printEnabled(settings_);
+        const int modules = film::modulesForMode(settings_.mode, moduleMask(settings_));
+        const bool clampOutput = response_clamps_negative(modules, responseParameters_);
         for (int y = window.y1; y < window.y2; ++y) {
             if (_effect.abort()) break;
             float* dstPix = static_cast<float*>(_dstImg->getPixelAddress(window.x1, y));
@@ -255,15 +270,15 @@ public:
                     }
                     if (spatialEnabled(settings_)) {
                         const OfxRectI& b = src_->getBounds();
-                        const float signal = halation::signal(blur_->sample(x - b.x1, y - b.y1), highlightKey(work),
+                        const float signal = halation::signal(blur_->sample(x - b.x1, y - b.y1), highlightKey(work, haloConfig_.key),
                                                               halationAmount(settings_), auraAmount(settings_));
                         if (settings_.mode == 5) {
                             const float h = clampf(signal * 2.0f, 0.0f, 1.0f);
                             c = {h, h * 0.55f, h * 0.10f};
                         } else {
-                            c.r += signal * 0.55f;
-                            c.g += signal * 0.24f;
-                            c.b += signal * 0.045f;
+                            c.r += signal * haloConfig_.key.red;
+                            c.g += signal * haloConfig_.key.green;
+                            c.b += signal * haloConfig_.key.blue;
                         }
                     } else if (settings_.mode == 5) {
                         c = {0.0f, 0.0f, 0.0f};
@@ -275,9 +290,10 @@ public:
                         c.g += delta.g;
                         c.b += delta.b;
                     }
+                    c = response_finish(c, modules, responseParameters_);
                     if (clampOutput) c = {std::max(c.r, 0.0f), std::max(c.g, 0.0f), std::max(c.b, 0.0f)};
                     if (settings_.mode != 5) {
-                        const bool unchanged = !clampOutput && c.r == work.r && c.g == work.g && c.b == work.b;
+                        const bool unchanged = !(modules & (film::Negative | film::Print)) && c.r == work.r && c.g == work.g && c.b == work.b;
                         c = unchanged ? original : color_from_work(c, colorParameters_);
                     }
                     dstPix[0] = c.r;
@@ -336,6 +352,15 @@ private:
         out[38] = static_cast<float>(s.printRed);
         out[39] = static_cast<float>(s.printGreen);
         out[40] = static_cast<float>(s.printBlue);
+        out[film::NegativeColorStrength] = static_cast<float>(s.negativeColorStrength);
+        out[film::NegativeToneStrength] = static_cast<float>(s.negativeToneStrength);
+        out[film::PrintColorStrength] = static_cast<float>(s.printColorStrength);
+        out[film::PrintToneStrength] = static_cast<float>(s.printToneStrength);
+        out[film::FilmGauge] = static_cast<float>(s.filmGauge);
+        out[film::HalationThreshold] = static_cast<float>(s.halationThreshold);
+        out[film::HalationSoftness] = static_cast<float>(s.halationSoftness);
+        out[film::HalationColor] = static_cast<float>(s.halationColor);
+        out[film::AuraRadius] = static_cast<float>(s.auraRadius);
     }
 
     OFX::Image* src_ = nullptr;
@@ -345,6 +370,7 @@ private:
     GrainParameters grainParameters_ {};
     ColorParameters colorParameters_ {};
     FilmResponseParameters responseParameters_ {};
+    halation::Configuration haloConfig_ {};
 };
 
 class OpenEmulsionPlugin : public OFX::ImageEffect {
@@ -399,6 +425,45 @@ public:
         grainMidtones_ = fetchDoubleParam("grainMidtones");
         grainHighlights_ = fetchDoubleParam("grainHighlights");
         grainSeed_ = fetchIntParam("grainSeed");
+        negativeColorStrength_ = fetchDoubleParam("negativeColorStrength");
+        negativeToneStrength_ = fetchDoubleParam("negativeToneStrength");
+        printColorStrength_ = fetchDoubleParam("printColorStrength");
+        printToneStrength_ = fetchDoubleParam("printToneStrength");
+        filmGauge_ = fetchChoiceParam("filmGauge");
+        halationThreshold_ = fetchDoubleParam("halationThreshold");
+        halationSoftness_ = fetchDoubleParam("halationSoftness");
+        halationColor_ = fetchDoubleParam("halationColor");
+        auraRadius_ = fetchDoubleParam("auraRadius");
+        for (int control = 0; control < printstyle::ControlCount; ++control)
+            printRecipeControls_[control] = fetchDoubleParam(printstyle::Parameters[control].name);
+        printStyle_->getValue(printStyleForUI_);
+        updatePrintControlState(printStyleForUI_);
+    }
+
+    void changedParam(const OFX::InstanceChangedArgs& args, const std::string& name) override
+    {
+        if (name != "printStyle") return;
+        int style = printstyle::Standard;
+        printStyle_->getValue(style);
+        const int previousStyle = printStyleForUI_;
+        printStyleForUI_ = style;
+        updatePrintControlState(style);
+        // Undo/redo and time notifications must not rewrite restored parameters.
+        if (args.reason != OFX::eChangeUserEdit) return;
+        const int recipeStyle = printstyle::isCustom(style) ? previousStyle : style;
+        if (printstyle::isCustom(recipeStyle)) return;
+        beginEditBlock("Apply print style");
+        try {
+            printstyle::applyPreset(recipeStyle, [&](int control, double value) {
+                // A fixed recipe replaces Custom tuning, including its animation.
+                printRecipeControls_[control]->deleteAllKeys();
+                printRecipeControls_[control]->setValue(value);
+            });
+        } catch (...) {
+            endEditBlock();
+            throw;
+        }
+        endEditBlock();
     }
 
     void render(const OFX::RenderArguments& args) override
@@ -438,6 +503,12 @@ public:
     }
 
 private:
+    void updatePrintControlState(int style)
+    {
+        for (auto* parameter : printRecipeControls_)
+            parameter->setEnabled(printstyle::isCustom(style));
+    }
+
     Settings settingsAt(double time) const
     {
         Settings s;
@@ -486,6 +557,15 @@ private:
         s.grainMidtones = grainMidtones_->getValueAtTime(time);
         s.grainHighlights = grainHighlights_->getValueAtTime(time);
         s.grainSeed = grainSeed_->getValueAtTime(time);
+        s.negativeColorStrength = negativeColorStrength_->getValueAtTime(time);
+        s.negativeToneStrength = negativeToneStrength_->getValueAtTime(time);
+        s.printColorStrength = printColorStrength_->getValueAtTime(time);
+        s.printToneStrength = printToneStrength_->getValueAtTime(time);
+        filmGauge_->getValueAtTime(time, s.filmGauge);
+        s.halationThreshold = halationThreshold_->getValueAtTime(time);
+        s.halationSoftness = halationSoftness_->getValueAtTime(time);
+        s.halationColor = halationColor_->getValueAtTime(time);
+        s.auraRadius = auraRadius_->getValueAtTime(time);
         const float gain = std::pow(2.0f, static_cast<float>(s.exposure));
         const float warm = static_cast<float>(s.temperature) * 0.085f;
         const float green = static_cast<float>(s.tint) * 0.065f;
@@ -502,6 +582,8 @@ private:
     OFX::ChoiceParam* outputSpace_ = nullptr;
     OFX::ChoiceParam* system_ = nullptr;
     OFX::ChoiceParam* printStyle_ = nullptr;
+    std::array<OFX::DoubleParam*, printstyle::ControlCount> printRecipeControls_ {};
+    int printStyleForUI_ = printstyle::Standard;
     OFX::ChoiceParam* grainStyle_ = nullptr;
     OFX::BooleanParam* enableNegative_ = nullptr;
     OFX::BooleanParam* enablePrint_ = nullptr;
@@ -542,6 +624,15 @@ private:
     OFX::DoubleParam* grainMidtones_ = nullptr;
     OFX::DoubleParam* grainHighlights_ = nullptr;
     OFX::IntParam* grainSeed_ = nullptr;
+    OFX::DoubleParam* negativeColorStrength_ = nullptr;
+    OFX::DoubleParam* negativeToneStrength_ = nullptr;
+    OFX::DoubleParam* printColorStrength_ = nullptr;
+    OFX::DoubleParam* printToneStrength_ = nullptr;
+    OFX::ChoiceParam* filmGauge_ = nullptr;
+    OFX::DoubleParam* halationThreshold_ = nullptr;
+    OFX::DoubleParam* halationSoftness_ = nullptr;
+    OFX::DoubleParam* halationColor_ = nullptr;
+    OFX::DoubleParam* auraRadius_ = nullptr;
 };
 
 class OpenEmulsionFactory : public OFX::PluginFactoryHelper<OpenEmulsionFactory> {
@@ -612,6 +703,13 @@ public:
         choice->setDefault(0);
         page->addChild(*choice);
 
+        choice = desc.defineChoiceParam("filmGauge");
+        choice->setLabels("Film Gauge", "Film Gauge", "Film Gauge");
+        for (const auto& profile : gauge::Profiles) choice->appendOption(profile.label);
+        choice->setDefault(0);
+        choice->setHint("Creative format presets scale grain size/strength and halation/aura spread together. Sliders remain independent; zero strength stays zero.");
+        page->addChild(*choice);
+
         GroupParamDescriptor* modules = addGroup(desc, page, "modules", "Modules", true);
         addToggle(desc, page, modules, "enableNegative", "Film Color");
         addToggle(desc, page, modules, "enablePrint", "Print");
@@ -638,11 +736,10 @@ public:
 
         choice = desc.defineChoiceParam("printStyle");
         choice->setLabels("Print Style", "Print Style", "Print Style");
-        choice->appendOption("Contact");
-        choice->appendOption("Standard");
-        choice->appendOption("Telecine");
-        choice->appendOption("Custom");
-        choice->setDefault(1);
+        for (const auto* label : printstyle::Labels) choice->appendOption(label);
+        choice->setDefault(printstyle::Standard);
+        choice->setAnimates(false);
+        choice->setHint("Full, Standard, and Extended load fixed print recipes. Custom unlocks the last recipe without changing its look. Selecting a named recipe replaces Custom tuning and its keyframes; strength and exposure/balance remain independent.");
         choice->setParent(*print);
         page->addChild(*choice);
 
@@ -656,6 +753,10 @@ public:
         choice->setParent(*grain);
         page->addChild(*choice);
 
+        addDouble(desc, page, "negativeColorStrength", "Film Color Strength", 1.0, 0.0, 1.0, 0.01, negative, "Scales the film palette, monochrome conversion, skin hue, saturation, density, and gamut compression. Zero removes these; camera balance and Film Tone remain independent.");
+        addDouble(desc, page, "negativeToneStrength", "Film Tone Strength", 1.0, 0.0, 1.0, 0.01, negative, "Scales film contrast, toe, and shoulder. Zero removes tone shaping; Film Color and camera balance remain independent.");
+        addDouble(desc, page, "printColorStrength", "Print Color Strength", 1.0, 0.0, 1.0, 0.01, print, "Scales print palette, saturation, cast, and gamut compression. Zero removes these; print exposure, balance, and tone remain independent.");
+        addDouble(desc, page, "printToneStrength", "Print Tone Strength", 1.0, 0.0, 1.0, 0.01, print, "Scales print contrast, toe, rolloff, and black lift. Zero removes these; print color, exposure, and balance remain independent.");
         addDouble(desc, page, "exposure", "Exposure", 0.0, -4.0, 4.0, 0.01, negative);
         addDouble(desc, page, "temperature", "Temperature", 0.0, -1.0, 1.0, 0.01, negative);
         addDouble(desc, page, "tint", "Tint", 0.0, -1.0, 1.0, 0.01, negative);
@@ -670,7 +771,7 @@ public:
         addDouble(desc, page, "printTone", "Print Tone", 0.0, -1.0, 1.0, 0.01, print);
         addDouble(desc, page, "printContrast", "Print Contrast", 1.0, 0.5, 2.0, 0.01, print);
         addDouble(desc, page, "printRolloff", "Highlight Rolloff", 0.55, 0.0, 1.0, 0.01, print);
-        addDouble(desc, page, "printColor", "Print Color", 0.25, 0.0, 1.0, 0.01, print);
+        addDouble(desc, page, "printColor", "Print Color", printstyle::Presets[printstyle::Standard][printstyle::Color], 0.0, 1.0, 0.01, print);
         addDouble(desc, page, "printNeutralize", "Neutralize Print", 0.0, 0.0, 1.0, 0.01, print);
         addDouble(desc, page, "printSaturation", "Print Saturation", 1.0, 0.0, 2.0, 0.01, print);
         addDouble(desc, page, "blackPoint", "Black Point", 0.45, 0.0, 1.0, 0.01, print);
@@ -679,13 +780,17 @@ public:
         addDouble(desc, page, "printGreen", "Print Green", 0.0, -2.0, 2.0, 0.01, print);
         addDouble(desc, page, "printBlue", "Print Blue", 0.0, -2.0, 2.0, 0.01, print);
         addDouble(desc, page, "halation", "Halation", 0.0, 0.0, 2.0, 0.01, halation);
-        addDouble(desc, page, "halationRadius", "Halation Radius", 1.0, 0.0, 2.0, 0.01, halation);
+        addDouble(desc, page, "halationRadius", "Halation Radius", 1.0, 0.0, 2.0, 0.01, halation, "Scales the tight halo independently of Aura Radius. Uses a 1080-line reference and the selected Film Gauge.");
+        addDouble(desc, page, "halationThreshold", "Highlight Threshold", 0.48, 0.0, 2.0, 0.01, halation, "Source-highlight cutoff in the managed perceptual working space, not camera log code values or stops. Lower values include darker sources. Also affects Aura.");
+        addDouble(desc, page, "halationSoftness", "Highlight Transition", 0.52, 0.01, 2.0, 0.01, halation, "Width of the smooth transition from no highlight contribution to full contribution. Smaller values isolate a narrower brightness range. Also affects Aura.");
+        addDouble(desc, page, "halationColor", "Red / Amber", 0.50, 0.0, 1.0, 0.01, halation, "Zero is redder; one is more amber. Maintains halo luminance as the tint changes. Also affects Aura; does not recolor the diagnostic matte.");
+        addDouble(desc, page, "auraRadius", "Aura Radius", 1.0, 0.0, 2.0, 0.01, aura, "Scales the broad aura independently of Halation Radius. Uses a 1080-line reference and the selected Film Gauge.");
         addDouble(desc, page, "aura", "Aura", 0.0, 0.0, 1.0, 0.01, aura);
         addDouble(desc, page, "grain", "Grain", 0.16, 0.0, 2.0, 0.01, grain);
         addDouble(desc, page, "grainSize", "Grain Size", 0.45, 0.0, 1.0, 0.01, grain);
         addDouble(desc, page, "grainSoftness", "Grain Softness", 0.25, 0.0, 1.0, 0.01, grain);
         addDouble(desc, page, "grainRoughness", "Grain Roughness", 0.32, 0.0, 1.0, 0.01, grain);
-        addDouble(desc, page, "grainColor", "Grain Color", 0.25, 0.0, 1.0, 0.01, grain);
+        addDouble(desc, page, "grainColor", "Grain Color", 0.25, 0.0, 1.0, 0.01, grain, "Zero gives monochrome grain. Active full-strength Mono Negative automatically uses monochrome grain; texture-only modes retain this setting.");
         addDouble(desc, page, "grainShadows", "Shadow Grain", 1.15, 0.0, 2.0, 0.01, grain);
         addDouble(desc, page, "grainMidtones", "Midtone Grain", 0.80, 0.0, 2.0, 0.01, grain);
         addDouble(desc, page, "grainHighlights", "Highlight Grain", 0.42, 0.0, 2.0, 0.01, grain);
@@ -725,7 +830,8 @@ private:
     }
 
     static void addDouble(OFX::ImageEffectDescriptor& desc, OFX::PageParamDescriptor* page, const std::string& name,
-                          const std::string& label, double def, double min, double max, double increment, OFX::GroupParamDescriptor* parent)
+                          const std::string& label, double def, double min, double max, double increment, OFX::GroupParamDescriptor* parent,
+                          const char* hint = nullptr)
     {
         OFX::DoubleParamDescriptor* param = desc.defineDoubleParam(name);
         param->setLabels(label, label, label);
@@ -735,6 +841,13 @@ private:
         param->setDisplayRange(min, max);
         param->setIncrement(increment);
         param->setDoubleType(OFX::eDoubleTypePlain);
+        if (hint) param->setHint(hint);
+        for (int control = 0; control < printstyle::ControlCount; ++control) {
+            if (name == printstyle::Parameters[control].name) {
+                param->setDefault(printstyle::Presets[printstyle::Standard][control]);
+                param->setEnabled(false);
+            }
+        }
         param->setParent(*parent);
         page->addChild(*param);
     }

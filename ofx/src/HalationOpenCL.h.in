@@ -1,0 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
+static const char* HalationOpenCLSource = R"HALATIONCL(
+@HALATION_MATH_SOURCE@
+)HALATIONCL";
