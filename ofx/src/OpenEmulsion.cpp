@@ -17,13 +17,14 @@
 #include "GrainConfig.h"
 #include "ColorSpaceConfig.h"
 #include "FilmResponseConfig.h"
+#include "ModuleControlState.h"
 
 #define kPluginName "OpenEmulsion"
 #define kPluginGrouping "OpenEmulsion"
 #define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, halation, aura, and linear-light bloom, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 19
+#define kPluginVersionMinor 20
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -507,18 +508,46 @@ public:
         bloomProtection_ = fetchDoubleParam("bloomProtection");
         for (int control = 0; control < printstyle::ControlCount; ++control)
             printRecipeControls_[control] = fetchDoubleParam(printstyle::Parameters[control].name);
+        moduleToggles_ = {{enableNegative_, enableDevelopment_, enablePrint_, enableHalation_,
+                          enableAura_, enableBloom_, enableGrain_}};
+        for (size_t i = 0; i < std::size(moduleui::Controls); ++i)
+            moduleControls_[i] = getParam(moduleui::Controls[i].name);
         printStyle_->getValue(printStyleForUI_);
-        updatePrintControlState(printStyleForUI_);
+        updateControlState();
     }
 
     void changedParam(const OFX::InstanceChangedArgs& args, const std::string& name) override
     {
+        if (applyingMode_) return;
+        const bool affectsControls = name == "mode" || name == "printStyle" || args.reason == OFX::eChangeTime ||
+            std::any_of(moduleui::Toggles.begin(), moduleui::Toggles.end(), [&](const auto& toggle) { return name == toggle.name; });
+        if (!affectsControls) return;
+        if (name == "mode" && args.reason == OFX::eChangeUserEdit) {
+            int mode = 0;
+            mode_->getValueAtTime(args.time, mode);
+            beginEditBlock("Apply processing mode");
+            applyingMode_ = true;
+            try {
+                moduleui::applyMode(mode, [&](size_t i, bool enabled) {
+                    auto* toggle = moduleToggles_[i];
+                    if (toggle->getValueAtTime(args.time) == enabled) return;
+                    if (toggle->getNumKeys() != 0) toggle->setValueAtTime(args.time, enabled);
+                    else toggle->setValue(enabled);
+                });
+            } catch (...) {
+                applyingMode_ = false;
+                endEditBlock();
+                throw;
+            }
+            applyingMode_ = false;
+            endEditBlock();
+        }
+        updateControlState();
         if (name != "printStyle") return;
         int style = printstyle::Standard;
         printStyle_->getValue(style);
         const int previousStyle = printStyleForUI_;
         printStyleForUI_ = style;
-        updatePrintControlState(style);
         // Undo/redo and time notifications must not rewrite restored parameters.
         if (args.reason != OFX::eChangeUserEdit) return;
         const int recipeStyle = printstyle::isCustom(style) ? previousStyle : style;
@@ -574,10 +603,19 @@ public:
     }
 
 private:
-    void updatePrintControlState(int style)
+    void updateControlState()
     {
+        int mode = 0, style = printstyle::Standard, enabled = 0;
+        mode_->getValue(mode);
+        printStyle_->getValue(style);
+        for (size_t i = 0; i < moduleToggles_.size(); ++i) {
+            if (moduleToggles_[i]->getValue()) enabled |= moduleui::Toggles[i].module;
+            moduleToggles_[i]->setEnabled(moduleui::controlEnabled(mode, film::All, moduleui::Toggles[i].module));
+        }
+        for (size_t i = 0; i < moduleControls_.size(); ++i)
+            moduleControls_[i]->setEnabled(moduleui::controlEnabled(mode, enabled, moduleui::Controls[i].modules));
         for (auto* parameter : printRecipeControls_)
-            parameter->setEnabled(printstyle::isCustom(style));
+            parameter->setEnabled(moduleui::printRecipeEnabled(mode, enabled, style));
     }
 
     Settings settingsAt(double time) const
@@ -675,6 +713,9 @@ private:
     OFX::ChoiceParam* printStyle_ = nullptr;
     std::array<OFX::DoubleParam*, printstyle::ControlCount> printRecipeControls_ {};
     int printStyleForUI_ = printstyle::Standard;
+    std::array<OFX::BooleanParam*, moduleui::Toggles.size()> moduleToggles_ {};
+    std::array<OFX::Param*, std::size(moduleui::Controls)> moduleControls_ {};
+    bool applyingMode_ = false;
     OFX::ChoiceParam* grainStyle_ = nullptr;
     OFX::BooleanParam* enableNegative_ = nullptr;
     OFX::BooleanParam* enableDevelopment_ = nullptr;

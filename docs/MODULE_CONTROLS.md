@@ -1,0 +1,35 @@
+# Module Controls (v0.20)
+
+Disabled modules retain their settings but grey out every option inside the module. The Enable toggle remains editable if the current mode permits that module. Modules excluded by the mode have unavailable toggles and controls, regardless of any stored Enable value.
+
+A user edit to Mode sets the Enable toggles as follows:
+
+| Mode | Enabled modules |
+| --- | --- |
+| Full | Film Color, Film Development, Print, Halation, Aura, Bloom, Grain |
+| Color Only | Film Color, Film Development, Print |
+| Halation, Bloom & Grain Only | Halation, Aura, Bloom, Grain |
+| Grain Only | Grain |
+| Bypass | None |
+| Halation Matte | Halation, Aura |
+| Bloom Matte | Bloom |
+
+Selecting a different mode replaces manual Enable choices with that mode's module set. Returning to Full enables all modules; individual modules can then be disabled again. The operation does not alter strengths, numeric controls, seeds, selected styles, or print recipes. An enabled effect with zero strength stays at zero; mode selection does not invent an effect amount.
+
+Print's recipe controls require both an active Print module and Custom style. Re-enabling Print does not unlock a named preset, and selecting Custom does not unlock a disabled Print module. Strength and exposure/balance controls remain subject only to the Print module's state.
+
+Input Color Space is unavailable when no module applies. Output Color Space is unavailable without an enabled color-processing module. Film Gauge is unavailable without enabled Halation, Aura, or Grain; Bloom is independent of gauge. Neutral Film Development remains editable even though rendering skips its neutral math. These UI rules use the configured module switches, not effect strengths.
+
+Halation's highlight threshold, transition, and tint still also influence Aura. Disabling Halation greys out those controls with the rest of that module; Aura retains their stored values and its own editable strength/radius.
+
+## Notifications and Animation
+
+Mode changes are grouped into an OFX edit block. Existing Enable animation is preserved: a mode edit changes the current-time key when that toggle already has keys, otherwise it changes the constant value. Other keys are not deleted. Plugin-generated callbacks are guarded against recursive mode updates.
+
+Construction, plugin-edit notifications, and timeline notifications refresh control availability without reapplying mode presets or changing stored values. Animated Mode values still mask the stored Enable values during rendering; moving the playhead is not treated as a fresh mode-preset selection. To configure different module sets over time, animate the Enable toggles as well.
+
+## Verification
+
+The standalone ModuleControlState regression checks all seven modes, all 128 Enable masks, toggle synchronization, control mappings, global-selector availability, neutral Development, print locking, and sequential mode transitions. The CPU/OpenCL rendering regression remains unchanged and passes with the new UI policy.
+
+Actual greying, edit-block undo/redo, animated controls, and save/reload still require checks inside Resolve. No processing kernels or per-frame rendering work were added.

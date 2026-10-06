@@ -6,7 +6,7 @@ Film Color, Film Development, Print, Halation, Aura, Bloom, and Grain can be ena
 
 ## Status
 
-Experimental, Windows x64. Current development version: **v0.19**. The current implementation supports OpenCL acceleration and a multithreaded CPU fallback. CUDA, Metal, macOS, and Linux builds are not implemented.
+Experimental, Windows x64. Current development version: **v0.20**. The current implementation supports OpenCL acceleration and a multithreaded CPU fallback. CUDA, Metal, macOS, and Linux builds are not implemented.
 
 OpenEmulsion is an original artistic approximation, not a measured film-stock calibration or a complete HDR rendering transform. There is no DCTL dependency. Rendering has been tested in Resolve, but this is not yet a stable production release.
 
@@ -73,6 +73,8 @@ See [Color Spaces](docs/COLOR_SPACES.md) for exact gamut pairs, workflow details
 Modes: **Full**, **Color Only**, **Halation, Bloom & Grain Only**, **Grain Only**, **Bypass**, **Halation Matte**, and **Bloom Matte**.
 
 Each module's first control is an **Enable** toggle that independently bypasses that stage without resetting its settings. In Full mode, disabling Film Color, Film Development, and Print leaves texture only. Bypass and all-disabled processing preserve RGBA exactly, including negative RGB and values above 1.
+
+Selecting a mode switches its applicable modules on and the others off, without resetting sliders or print recipes. Disabled modules grey out their options; toggles excluded by the mode are also unavailable. Returning to Full enables all modules, after which you can disable individual ones again. Print recipe knobs require both an enabled Print module and Custom style. See [Module Controls](docs/MODULE_CONTROLS.md) for the mode mapping and animation limitations.
 
 - **Film Color:** independent color/tone strengths, six creative families, linear-light exposure/balance, density, saturation, toe, contrast, shoulder, crosstalk, gamut compression, and Skin Hue.
 - **Film Development:** Push/Pull changes tone and grain strength without moving or resizing the grain pattern; Color Richness favors muted colors; Split Tone has hue, pivot, neutral width, and separate shadow/highlight intensities. Neutral defaults preserve the previous look.
