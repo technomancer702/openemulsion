@@ -4,7 +4,7 @@
 
 Film Response is the only negative/print engine. There is no response-model selector, unmanaged input, or compatibility path. Film controls are available immediately; print-recipe controls are editable in Custom. New instances default to input `Rec.709 / Gamma 2.4` and output `Same as Input`; select the actual space entering the node before grading. Earlier development builds changed input choice indices; check stored input/output selections when using old test nodes. Recreate pre-v0.14 print test nodes or reselect a named print style to populate its displayed recipe under the new workflow.
 
-Film Color and Print remain independent. Full can use both, either, or neither. Grain Only, Halation & Grain Only, Bypass, and Halation Matte never use the negative/print response controls. Disabling Film Color also disables camera exposure/white balance; disabling Print disables all its tone and balance adjustments. With Film Development also disabled or neutral, turning both off retains the texture-only input/output behavior documented in [Color Spaces](COLOR_SPACES.md).
+Film Color and Print remain independent. Full can use both, either, or neither. Grain Only, Halation, Bloom & Grain Only, Bypass, Halation Matte, and Bloom Matte never use the negative/print response controls. Disabling Film Color also disables camera exposure/white balance; disabling Print disables all its tone and balance adjustments. With Film Development also disabled or neutral, turning both off retains the texture-only input/output behavior documented in [Color Spaces](COLOR_SPACES.md).
 
 The engine is an original artistic model, not a measured stock calibration, physical emulsion simulation, or reproduction of Filmbox's private implementation. The six film families are creative profiles. There is no new LUT, reference-image dependency, extra image pass, GPU readback, or per-frame texture allocation.
 
@@ -28,7 +28,7 @@ The negative uses a shared luminance response, palette mixing, saturation/densit
 
 At Film Color Strength 1, Mono Negative now finishes the entire print/texture composite on the neutral axis before output encoding. Halation and Aura become neutral glow rather than red/amber tint. Grain automatically uses monochrome noise, retaining its amplitude rather than averaging away colored noise. Print color and RGB balance can change brightness but cannot leave a colored final image.
 
-Lower Film Color Strength progressively restores color both in the negative and in the final composite; it is not a single global crossfade between two fully rendered endpoints. At zero, the extra monochrome finishing is disabled. The Mono system choice has no effect when Film Color is disabled or in Grain Only, Halation & Grain Only, Bypass, or Halation Matte. The diagnostic matte remains orange.
+Lower Film Color Strength progressively restores color both in the negative and in the final composite; it is not a single global crossfade between two fully rendered endpoints. At zero, the extra monochrome finishing is disabled. The Mono system choice has no effect when Film Color is disabled or in Grain Only, Halation, Bloom & Grain Only, Bypass, or Halation Matte. The diagnostic matte remains orange.
 
 The finishing calculation is shared by C++ and OpenCL and runs inside the existing image pass. Tests cover strong halation, Aura, colored-grain settings, every print style, all input/output spaces, partial strengths, alpha, preserved texture activity, and exact disabled-stage isolation.
 

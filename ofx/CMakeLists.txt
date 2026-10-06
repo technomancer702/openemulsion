@@ -36,6 +36,9 @@ configure_file(src/FilmResponseOpenCL.h.in "${CMAKE_CURRENT_BINARY_DIR}/FilmResp
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/HalationMath.h")
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/src/HalationMath.h" HALATION_MATH_SOURCE)
 configure_file(src/HalationOpenCL.h.in "${CMAKE_CURRENT_BINARY_DIR}/HalationOpenCL.h" @ONLY)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/BloomMath.h")
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/src/BloomMath.h" BLOOM_MATH_SOURCE)
+configure_file(src/BloomOpenCL.h.in "${CMAKE_CURRENT_BINARY_DIR}/BloomOpenCL.h" @ONLY)
 
 add_library(OpenEmulsion SHARED
     src/OpenEmulsion.cpp

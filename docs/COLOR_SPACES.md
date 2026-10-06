@@ -7,10 +7,10 @@
 - Unconverted Alexa LogC3 in a manually managed project: select `ARRI Alexa LogC3 / Wide Gamut 3 (EI 800)`. With Film Color/Print enabled, select output `Rec.709 / Gamma 2.4` for an SDR look. Do not apply another LogC3-to-709 conversion afterward.
 - Alexa already converted to DaVinci Wide Gamut/Intermediate by a CST or Resolve Color Management: select `DaVinci Wide Gamut / Intermediate` and output `Same as Input`. Keep the project's normal output transform.
 - ACEScct timeline: select `ACEScct / AP1` with output `Same as Input`. This effect is a look, not an ACES Input/Output Transform.
-- Your own camera LUT after this node: choose its camera input and `Halation & Grain Only` or `Grain Only`. Those modes retain the camera encoding for the LUT.
+- Your own camera LUT after this node: choose its camera input and `Halation, Bloom & Grain Only` or `Grain Only`. Those modes retain the camera encoding for the LUT.
 - Your own LUT before this node: select the LUT's output space, not the original camera space.
 
-Texture-only processing always returns the input gamut and encoding, regardless of the output dropdown. This also applies to Full mode with Film Color, Film Development, and Print disabled. Texture still changes pixels, but no film color or print curves are applied. Bypass, all-disabled processing, and zero-strength texture preserve incoming RGBA exactly. Halation Matte is a direct diagnostic image, not a camera-log image.
+Texture-only processing always returns the input gamut and encoding, regardless of the output dropdown. This also applies to Full mode with Film Color, Film Development, and Print disabled. Texture still changes pixels, but no film color or print curves are applied. Bypass, all-disabled processing, and zero-strength texture preserve incoming RGBA exactly. Halation Matte and Bloom Matte are direct diagnostic images, not camera-log images.
 
 New instances default to input `Rec.709 / Gamma 2.4` and output `Same as Input`. Select the actual space entering the node; the plugin does not auto-detect it. There is no unmanaged input path. Input choice indices changed in this development update: recreate older test instances and select their input explicitly.
 

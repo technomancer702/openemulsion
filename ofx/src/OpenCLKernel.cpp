@@ -9,6 +9,8 @@
 #include <tuple>
 
 #include "HalationBlur.h"
+#include "BloomBlur.h"
+#include "BloomOpenCL.h"
 #include "HalationConfig.h"
 #include "HalationOpenCL.h"
 #include "GrainConfig.h"
@@ -139,6 +141,47 @@ float2 sample_blur(__global const float2* image, int width, int height, int x, i
     return mix(top, bottom, fy - y0);
 }
 
+__kernel void ExtractBloom(int width, int height, int step, ColorParameters color, BloomParameters parameters,
+                           __global const float* input, __global float4* output)
+{
+    int x = get_global_id(0), y = get_global_id(1);
+    int bw = (width + step - 1) / step, bh = (height + step - 1) / step;
+    if (x >= bw || y >= bh) return;
+    float4 sum = (float4)(0.0f); int count = 0;
+    for (int dy = 0; dy < step && y * step + dy < height; ++dy)
+        for (int dx = 0; dx < step && x * step + dx < width; ++dx) {
+            float3 rgb = read_rgb(input,width,height,x*step+dx,y*step+dy);
+            ColorRgb c = bloom_extract((ColorRgb){rgb.x,rgb.y,rgb.z},color,parameters);
+            sum += (float4)(c.r,c.g,c.b,0.0f); ++count;
+        }
+    output[y * bw + x] = sum / (float)count;
+}
+
+__kernel void BlurBloom(int width, int height, int radius, int horizontal,
+                        __constant const float* weights, __global const float4* input, __global float4* output)
+{
+    int x = get_global_id(0), y = get_global_id(1);
+    if (x >= width || y >= height) return;
+    float4 sum = (float4)(0.0f);
+    for (int i = -radius; i <= radius; ++i) {
+        int sx = horizontal ? clamp(x+i,0,width-1) : x;
+        int sy = horizontal ? y : clamp(y+i,0,height-1);
+        sum += input[sy*width+sx] * weights[i+radius];
+    }
+    output[y*width+x] = sum;
+}
+
+float4 sample_bloom(__global const float4* image, int width, int height, int x, int y, int step)
+{
+    float fx = clamp(((float)x - (step-1)*0.5f)/step,0.0f,(float)(width-1));
+    float fy = clamp(((float)y - (step-1)*0.5f)/step,0.0f,(float)(height-1));
+    int x0 = (int)fx, y0 = (int)fy;
+    int x1 = min(x0+1,width-1), y1 = min(y0+1,height-1);
+    float4 top = mix(image[y0*width+x0],image[y0*width+x1],fx-x0);
+    float4 bottom = mix(image[y1*width+x0],image[y1*width+x1],fx-x0);
+    return mix(top,bottom,fy-y0);
+}
+
 __kernel void OpenEmulsionKernel(
     int width,
     int height,
@@ -154,11 +197,14 @@ __kernel void OpenEmulsionKernel(
     ColorParameters color,
     FilmResponseParameters response,
     HalationParameters haloParameters,
+    BloomParameters bloomParameters,
+    int bloomStep,
     int step,
     int identity,
     __global const float* input,
     __global float* output,
-    __global const float2* blurred)
+    __global const float2* blurred,
+    __global const float4* bloomed)
 {
     int x = get_global_id(0);
     int y = get_global_id(1);
@@ -204,6 +250,12 @@ __kernel void OpenEmulsionKernel(
         c = (float3)(0.0f);
     }
 
+    if (bloomParameters.amount > 0.0f || mode == 6) {
+        float4 glow = bloomParameters.amount > 0.0f ?
+            sample_bloom(bloomed, (width + bloomStep - 1) / bloomStep, (height + bloomStep - 1) / bloomStep, x, y, bloomStep) : (float4)(0.0f);
+        ColorRgb rgb = bloom_composite((ColorRgb){c.x,c.y,c.z}, (ColorRgb){glow.x,glow.y,glow.z}, bloomParameters, mode == 6);
+        c = (float3)(rgb.r,rgb.g,rgb.b);
+    }
     if ((modules & 16) && grain > 0.0f) {
         GrainVector delta = grain_delta(x, y, lum(c), grainParameters);
         c += (float3)(delta.r, delta.g, delta.b);
@@ -212,7 +264,7 @@ __kernel void OpenEmulsionKernel(
     ColorRgb finished = response_finish((ColorRgb){c.x, c.y, c.z}, modules, response);
     c = (float3)(finished.r, finished.g, finished.b);
     if (response_clamps_negative(modules, response)) c = fmax(c, (float3)(0.0f));
-    if (mode != 5) c = !(modules & 35) && all(c == work) ? original : from_work(c, color);
+    if (mode != 5 && mode != 6) c = !(modules & 35) && all(c == work) ? original : from_work(c, color);
     output[idx] = c.x;
     output[idx + 1] = c.y;
     output[idx + 2] = c.z;
@@ -258,9 +310,10 @@ static OpenCLApi* api()
 struct OpenCLResources {
     OpenCLApi* cl;
     cl_program program = nullptr;
-    cl_kernel film = nullptr, extract = nullptr, blur = nullptr;
+    cl_kernel film = nullptr, extract = nullptr, blur = nullptr, extractBloom = nullptr, blurBloom = nullptr;
     cl_mem highlights = nullptr, temporary = nullptr;
-    size_t capacity = 0;
+    size_t capacity = 0, bloomCapacity = 0;
+    cl_mem bloomHighlights = nullptr, bloomTemporary = nullptr;
     cl_event tail = nullptr;
 
     explicit OpenCLResources(OpenCLApi* api) : cl(api) {}
@@ -269,6 +322,10 @@ struct OpenCLResources {
         if (tail) cl->clReleaseEvent(tail);
         if (highlights) cl->clReleaseMemObject(highlights);
         if (temporary) cl->clReleaseMemObject(temporary);
+        if (bloomHighlights) cl->clReleaseMemObject(bloomHighlights);
+        if (bloomTemporary) cl->clReleaseMemObject(bloomTemporary);
+        if (extractBloom) cl->clReleaseKernel(extractBloom);
+        if (blurBloom) cl->clReleaseKernel(blurBloom);
         if (film) cl->clReleaseKernel(film);
         if (extract) cl->clReleaseKernel(extract);
         if (blur) cl->clReleaseKernel(blur);
@@ -317,8 +374,8 @@ bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, c
     const Key key(context, device, queue);
     if (resources.find(key) == resources.end()) {
         auto created = std::make_unique<OpenCLResources>(cl);
-        const char* sources[] = {GrainOpenCLSource, ColorOpenCLSource, FilmResponseOpenCLSource, HalationOpenCLSource, KernelSource};
-        created->program = cl->clCreateProgramWithSource(context, 5, sources, nullptr, &error);
+        const char* sources[] = {GrainOpenCLSource, ColorOpenCLSource, FilmResponseOpenCLSource, HalationOpenCLSource, BloomOpenCLSource, KernelSource};
+        created->program = cl->clCreateProgramWithSource(context, 6, sources, nullptr, &error);
         if (!check(error, "Unable to create OpenCL program")) return false;
         error = cl->clBuildProgram(created->program, 1, &device, nullptr, nullptr, nullptr);
         if (error != CL_SUCCESS) {
@@ -336,6 +393,10 @@ bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, c
         if (!check(error, "Unable to create highlight kernel")) return false;
         created->blur = cl->clCreateKernel(created->program, "BlurHighlights", &error);
         if (!check(error, "Unable to create blur kernel")) return false;
+        created->extractBloom = cl->clCreateKernel(created->program, "ExtractBloom", &error);
+        if (!check(error, "Unable to create bloom extraction kernel")) return false;
+        created->blurBloom = cl->clCreateKernel(created->program, "BlurBloom", &error);
+        if (!check(error, "Unable to create bloom blur kernel")) return false;
         resources.emplace(key, std::move(created));
     }
     OpenCLResources& state = *resources.at(key);
@@ -354,7 +415,10 @@ bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, c
     const auto haloConfig = halation::prepare(settings, height);
     const int step = haloConfig.downsample;
     static_assert(sizeof(HalationParameters) == 20, "OpenCL halation structure layout mismatch");
-    const int identity = film::isIdentity(mode, modules, halation, aura, settings[16]);
+    const auto bloomConfig = bloom::prepare(settings, height);
+    static_assert(sizeof(BloomParameters) == 20, "OpenCL bloom structure layout mismatch");
+    static_assert(sizeof(bloom::Pixel) == 16, "OpenCL bloom float4 layout mismatch");
+    const int identity = film::isIdentity(mode, modules, halation, aura, settings[16], bloomConfig.parameters.amount);
     static_assert(sizeof(ColorParameters) == 88, "OpenCL color structure layout mismatch");
     static_assert(sizeof(GrainParameters) == 56, "OpenCL grain structure layout mismatch");
     cl_mem blurMem = inputMem;
@@ -401,6 +465,49 @@ bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, c
         blurMem = state.highlights;
     }
 
+    cl_mem bloomMem = inputMem;
+    if (bloomConfig.parameters.amount > 0.0f) {
+        const int bloomStep = bloomConfig.downsample;
+        const int bw = (width + bloomStep - 1) / bloomStep, bh = (height + bloomStep - 1) / bloomStep;
+        const size_t bytes = static_cast<size_t>(bw) * bh * sizeof(bloom::Pixel);
+        if (state.bloomCapacity < bytes) {
+            OpenCLBuffer highlights {cl, cl->clCreateBuffer(context, CL_MEM_READ_WRITE, bytes, nullptr, &error)};
+            if (!check(error, "Unable to allocate bloom buffer")) return false;
+            OpenCLBuffer temporary {cl, cl->clCreateBuffer(context, CL_MEM_READ_WRITE, bytes, nullptr, &error)};
+            if (!check(error, "Unable to allocate bloom temporary")) return false;
+            if (state.bloomHighlights) cl->clReleaseMemObject(state.bloomHighlights);
+            if (state.bloomTemporary) cl->clReleaseMemObject(state.bloomTemporary);
+            state.bloomHighlights = highlights.mem; state.bloomTemporary = temporary.mem;
+            highlights.mem = temporary.mem = nullptr;
+            state.bloomCapacity = bytes;
+        }
+        const bloom::Filter filter(bloomConfig.sigma);
+        OpenCLBuffer weights {cl, cl->clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+            filter.weights.size() * sizeof(float), const_cast<float*>(filter.weights.data()), &error)};
+        if (!check(error, "Unable to upload bloom weights")) return false;
+        error  = cl->clSetKernelArg(state.extractBloom, 0, sizeof(int), &width);
+        error |= cl->clSetKernelArg(state.extractBloom, 1, sizeof(int), &height);
+        error |= cl->clSetKernelArg(state.extractBloom, 2, sizeof(int), &bloomStep);
+        error |= cl->clSetKernelArg(state.extractBloom, 3, sizeof(ColorParameters), &colorParameters);
+        error |= cl->clSetKernelArg(state.extractBloom, 4, sizeof(BloomParameters), &bloomConfig.parameters);
+        error |= cl->clSetKernelArg(state.extractBloom, 5, sizeof(cl_mem), &inputMem);
+        error |= cl->clSetKernelArg(state.extractBloom, 6, sizeof(cl_mem), &state.bloomHighlights);
+        if (!check(error, "Unable to set bloom extraction arguments") || !state.enqueue(queue, state.extractBloom, bw, bh)) return false;
+        for (int horizontal = 1; horizontal >= 0; --horizontal) {
+            cl_mem src = horizontal ? state.bloomHighlights : state.bloomTemporary;
+            cl_mem dst = horizontal ? state.bloomTemporary : state.bloomHighlights;
+            error  = cl->clSetKernelArg(state.blurBloom, 0, sizeof(int), &bw);
+            error |= cl->clSetKernelArg(state.blurBloom, 1, sizeof(int), &bh);
+            error |= cl->clSetKernelArg(state.blurBloom, 2, sizeof(int), &filter.radius);
+            error |= cl->clSetKernelArg(state.blurBloom, 3, sizeof(int), &horizontal);
+            error |= cl->clSetKernelArg(state.blurBloom, 4, sizeof(cl_mem), &weights.mem);
+            error |= cl->clSetKernelArg(state.blurBloom, 5, sizeof(cl_mem), &src);
+            error |= cl->clSetKernelArg(state.blurBloom, 6, sizeof(cl_mem), &dst);
+            if (!check(error, "Unable to set bloom blur arguments") || !state.enqueue(queue, state.blurBloom, bw, bh)) return false;
+        }
+        bloomMem = state.bloomHighlights;
+    }
+
     int arg = 0;
     error  = cl->clSetKernelArg(kernel, arg++, sizeof(int), &width);
     error |= cl->clSetKernelArg(kernel, arg++, sizeof(int), &height);
@@ -417,11 +524,14 @@ bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, c
     error |= cl->clSetKernelArg(kernel, arg++, sizeof(ColorParameters), &colorParameters);
     error |= cl->clSetKernelArg(kernel, arg++, sizeof(FilmResponseParameters), &responseParameters);
     error |= cl->clSetKernelArg(kernel, arg++, sizeof(HalationParameters), &haloConfig.key);
+    error |= cl->clSetKernelArg(kernel, arg++, sizeof(BloomParameters), &bloomConfig.parameters);
+    error |= cl->clSetKernelArg(kernel, arg++, sizeof(int), &bloomConfig.downsample);
     error |= cl->clSetKernelArg(kernel, arg++, sizeof(int), &step);
     error |= cl->clSetKernelArg(kernel, arg++, sizeof(int), &identity);
     error |= cl->clSetKernelArg(kernel, arg++, sizeof(cl_mem), &inputMem);
     error |= cl->clSetKernelArg(kernel, arg++, sizeof(cl_mem), &outputMem);
     error |= cl->clSetKernelArg(kernel, arg++, sizeof(cl_mem), &blurMem);
+    error |= cl->clSetKernelArg(kernel, arg++, sizeof(cl_mem), &bloomMem);
     if (!check(error, "Unable to set OpenCL kernel arguments")) return false;
 
     return state.enqueue(queue, kernel, width, height);

@@ -12,6 +12,8 @@
 #include <vector>
 
 #include "HalationBlur.h"
+#include "BloomBlur.h"
+#include <memory>
 #include "HalationConfig.h"
 #include "GrainConfig.h"
 #include "ColorSpaceConfig.h"
@@ -36,6 +38,20 @@ static halation::Blur cpuBlur(const std::vector<float>& input, int width, int he
     });
     blur.blurRows(0, blur.height, true);
     blur.blurRows(0, blur.height, false);
+    return blur;
+}
+
+static std::unique_ptr<bloom::Blur> cpuBloom(const std::vector<float>& input, int width, int height, const grain::PackedSettings& s)
+{
+    const auto config = bloom::prepare(s.data(),height);
+    if (config.parameters.amount <= 0) return nullptr;
+    auto blur = std::make_unique<bloom::Blur>(width,height,config);
+    const auto color = color::prepare(s.data());
+    blur->extractRows(0,blur->height,[&](int x,int y) {
+        const size_t i = (static_cast<size_t>(y)*width+x)*4;
+        return bloom_extract({input[i],input[i+1],input[i+2]},color,config.parameters);
+    });
+    blur->blurRows(0,blur->height,true); blur->blurRows(0,blur->height,false);
     return blur;
 }
 
@@ -67,6 +83,8 @@ static grain::PackedSettings settings(float radius, float amount = 1.0f, float a
     s[film::GrainRed] = 1.0f;
     s[film::GrainGreen] = 1.0f;
     s[film::GrainBlue] = 1.0f;
+    s[film::BloomRadius] = 1; s[film::BloomThreshold] = 0.65f; s[film::BloomSoftness] = 0.35f;
+    s[film::BloomColor] = 1; s[film::BloomProtection] = 0.8f;
     return s;
 }
 
@@ -700,6 +718,111 @@ static void testDevelopmentAndGrain()
     std::puts("Development/grain: neutral defaults, monotonic HDR, gray pivot, richness, split isolation, Push/Pull texture coupling, stretch variance, and channel gains pass.");
 }
 
+static void testBloom()
+{
+    auto s = settings(0,0,0,2); s[film::BloomAmount] = 1;
+    auto config = bloom::prepare(s.data(),1080);
+    const auto color = color::prepare(s.data());
+    auto p = config.parameters;
+    requireRgbNear(bloom_extract({0.2f,0.2f,0.2f},color,p),{0,0,0},0,"Bloom includes sources below threshold");
+    auto white = bloom_extract({1,1,1},color,p);
+    requireRgbNear(white,{0.5f,0.5f,0.5f},2e-7f,"Bloom white extraction");
+    auto red = bloom_extract({1,0,0},color,p);
+    require(red.r > 0.49f && std::abs(red.g)+std::abs(red.b) < 1e-7,"Bloom loses source hue");
+    auto neutral = p; neutral.color = 0;
+    auto gray = bloom_extract({1,0,0},color,neutral);
+    require(gray.r == gray.g && gray.g == gray.b,"Neutral bloom has chroma");
+    requireNear(response_luma(gray),response_luma(red),1e-7f,"Bloom color mix changes luminance");
+    for (float v : {-1.0f,0.0f,0.65f,0.8f,1.0f,10.0f,1000.0f}) {
+        auto c = bloom_extract({v,v*0.5f,v*0.1f},color,p);
+        require(c.r >= 0 && c.g >= 0 && c.b >= 0 && c.r <= 1 && std::isfinite(c.r),"Bloom key/energy is not bounded");
+    }
+    float previousKey = 0;
+    for (int i = 0; i <= 2000; ++i) {
+        const float v = i/1000.0f;
+        auto c = bloom_extract({v,0,0},color,p);
+        require(c.r >= previousKey,"Bloom extraction folds with increasing source brightness");
+        previousKey = c.r;
+    }
+    const ColorRgb original {-0.1f,0.4f,2};
+    requireRgbNear(bloom_composite(original,{0,0,0},p,0),original,0,"Zero bloom signal changes pixels");
+    neutral.amount = 0;
+    requireRgbNear(bloom_composite(original,white,neutral,0),original,0,"Zero bloom amount changes pixels");
+    auto protectedP = p; protectedP.protection = 1;
+    requireRgbNear(bloom_composite({1,1,1},white,protectedP,0),{1,1,1},0,"Bloom highlight protection not exact at white");
+    protectedP.protection = 0;
+    require(bloom_composite({1,1,1},white,protectedP,0).r > 1,"Unprotected bloom has no effect");
+    protectedP.protection = 1;
+    require(bloom_composite({0.1f,0.1f,0.1f},white,protectedP,0).r > 0.1f,"Protection removes shadow bloom");
+
+    const int width = 512, height = 512;
+    std::vector<float> input(width*height*4,0);
+    for (int y = 252; y < 256; ++y) for (int x = 252; x < 256; ++x) {
+        const size_t i = (static_cast<size_t>(y)*width+x)*4;
+        input[i] = input[i+1] = input[i+2] = 1;
+    }
+    double previousSpread = 0;
+    for (float radius : {0.0f,0.25f,1.0f,2.0f}) {
+        s[film::BloomRadius] = radius;
+        config = bloom::prepare(s.data(),1080);
+        bloom::Blur blur(width,height,config);
+        blur.extractRows(0,blur.height,[&](int x,int y) {
+            const size_t i = (static_cast<size_t>(y)*width+x)*4;
+            return bloom_extract({input[i],input[i+1],input[i+2]},color,config.parameters);
+        });
+        blur.blurRows(0,blur.height,true); blur.blurRows(0,blur.height,false);
+        double energy = 0, moment = 0;
+        for (int y = 0; y < height; ++y) for (int x = 0; x < width; ++x) {
+            auto c = blur.sample(x,y); energy += c.r;
+            const double dx = x-253.5, dy = y-253.5;
+            moment += c.r*(dx*dx+dy*dy);
+            require(c.r >= 0 && c.r == c.g && c.g == c.b,"White bloom has negative/chromatic spread");
+        }
+        requireNear(static_cast<float>(energy),8,2e-5f,"Bloom radius changes isolated-light energy");
+        require(moment/energy > previousSpread,"Bloom radius does not enlarge spread"); previousSpread = moment/energy;
+        float previous = blur.sample(254,254).r;
+        for (int d = 1; d < 150; ++d) {
+            const auto a = blur.sample(254+d,254), b = blur.sample(253-d,254);
+            requireNear(a.r,b.r,2e-7f,"Bloom impulse is asymmetric");
+            require(a.r <= previous+1e-7f,"Bloom has repeated displaced light peaks"); previous = a.r;
+        }
+    }
+    for (auto dimensions : std::array<std::array<int,2>,4>{{{1,1},{3,5},{65,63},{129,131}}}) {
+        auto c = bloom::prepare(s.data(),dimensions[1]);
+        bloom::Blur blur(dimensions[0],dimensions[1],c);
+        blur.extractRows(0,blur.height,[](int,int)->ColorRgb {return {0.2f,0.4f,0.7f};});
+        blur.blurRows(0,blur.height,true); blur.blurRows(0,blur.height,false);
+        for (int y = 0; y < dimensions[1]; ++y) for (int x = 0; x < dimensions[0]; ++x)
+            requireRgbNear(blur.sample(x,y),{0.2f,0.4f,0.7f},5e-7f,"Bloom edge/odd-grid normalization fails");
+    }
+    auto hd = bloom::prepare(s.data(),1080), uhd = bloom::prepare(s.data(),2160);
+    require(hd.downsample == 4 && uhd.downsample == 8 && hd.sigma == uhd.sigma,"Bloom resolution scaling inconsistent");
+    std::array<double,2> normalizedSpread {};
+    for (int index = 0; index < 2; ++index) {
+        const int scale = index+1, w = 512*scale, h = 1080*scale;
+        bloom::Blur blur(w,h,bloom::prepare(s.data(),h));
+        blur.extractRows(0,blur.height,[&](int x,int y)->ColorRgb {
+            const float v = x >= 252*scale && x < 256*scale && y >= 536*scale && y < 540*scale ? 0.5f : 0;
+            return {v,v,v};
+        });
+        blur.blurRows(0,blur.height,true); blur.blurRows(0,blur.height,false);
+        double energy = 0, moment = 0;
+        for (int y = 0; y < h; ++y) for (int x = 0; x < w; ++x) {
+            const double value = blur.sample(x,y).r;
+            const double dx = x-(254.0*scale-0.5), dy = y-(538.0*scale-0.5);
+            energy += value; moment += value*(dx*dx+dy*dy);
+        }
+        normalizedSpread[index] = std::sqrt(moment/energy)/scale;
+    }
+    require(std::abs(normalizedSpread[0]-normalizedSpread[1])/normalizedSpread[0] < 0.005,"Bloom HD/4K normalized spread differs");
+    s[film::FilmGauge] = 1;
+    require(bloom::prepare(s.data(),1080).sigma == hd.sigma,"Film Gauge changes independent optical bloom");
+    for (int mode : {1,3,4,5}) require(!(film::modulesForMode(mode,film::All)&film::Bloom),"Bloom active in excluded mode");
+    require(film::modulesForMode(6,film::All) == film::Bloom,"Bloom Matte includes other effects");
+    require(!film::isIdentity(6,0,0,0,0,0),"Empty Bloom Matte treated as source identity");
+    std::puts("Bloom: bounded RGB extraction, source/neutral hue, exact zero/protection, conserved continuous symmetric spread, odd edges, and resolution/mode isolation pass.");
+}
+
 static void writePreview(const char* path)
 {
     const int width = 960, height = 540, rowBytes = width * 3;
@@ -884,6 +1007,7 @@ public:
         // Queue several renders before reading to exercise scratch reuse and mode switching.
         for (int render = 0; render < 3; ++render) {
             auto current = render == 2 ? s : settings(2.0f, 1.0f, 1.0f, render == 0 ? 2 : 4);
+            if (render == 0 && s[film::BloomAmount] > 0) current[film::BloomAmount] = 1;
             require(RunOpenEmulsionOpenCL(q, width, height, time, current.data(),
                                           reinterpret_cast<const float*>(src), reinterpret_cast<float*>(dst)), "GPU render failed");
         }
@@ -894,11 +1018,13 @@ public:
         if (!(modules & film::Halation)) effective[13] = 0.0f;
         if (!(modules & film::Aura)) effective[15] = 0.0f;
         const auto blur = cpuBlur(input, width, height, effective);
+        const auto bloomBlur = cpuBloom(input, width, height, s);
         const auto grainParameters = grain::prepare(s.data(), height, time);
         const auto colorParameters = color::prepare(s.data());
         const auto responseParameters = response::prepare(s.data());
         const auto halo = halation::prepare(s.data(), height);
-        const bool identity = film::isIdentity(static_cast<int>(s[0]), modules, effective[13], effective[15], s[16]);
+        const auto bloomConfig = bloom::prepare(s.data(),height);
+        const bool identity = film::isIdentity(static_cast<int>(s[0]), modules, effective[13], effective[15], s[16], bloomConfig.parameters.amount);
         for (int y = 0; y < height; ++y) {
             for (int x = 0; x < width; ++x) {
                 const size_t i = (static_cast<size_t>(y) * width + x) * 4;
@@ -917,6 +1043,11 @@ public:
                     const float matte = std::clamp(h * 2.0f, 0.0f, 1.0f);
                     rgb = {matte, matte * 0.55f, matte * 0.10f};
                 }
+                if (bloomConfig.parameters.amount > 0 || s[0] == 6) {
+                    const auto glow = bloomBlur ? bloomBlur->sample(x,y) : ColorRgb{0,0,0};
+                    const auto c = bloom_composite({rgb[0],rgb[1],rgb[2]},glow,bloomConfig.parameters,s[0] == 6);
+                    rgb = {c.r,c.g,c.b};
+                }
                 if ((modules & film::Grain) && s[16] > 0.0f) {
                     const float luma = rgb[0] * 0.2126f + rgb[1] * 0.7152f + rgb[2] * 0.0722f;
                     const auto delta = grain_delta(x, y, luma, grainParameters);
@@ -924,7 +1055,7 @@ public:
                     rgb[1] += delta.g;
                     rgb[2] += delta.b;
                 }
-                if (s[0] != 5.0f) {
+                if (s[0] != 5.0f && s[0] != 6.0f) {
                     const auto finished = response_finish({rgb[0],rgb[1],rgb[2]}, modules, responseParameters);
                     rgb = {finished.r,finished.g,finished.b};
                     if (response_clamps_negative(modules, responseParameters)) for (auto& v : rgb) v = std::max(v, 0.0f);
@@ -1045,6 +1176,14 @@ public:
             }
             cases.push_back(s);
         }
+        for (int source : {color::AlexaLogC3,color::DaVinciIntermediate}) {
+            for (int mode : {0,2}) for (float radius : {-1.0f,1.0f,2.0f}) {
+                auto s = filmSettings(); s[0] = static_cast<float>(mode); s[26] = static_cast<float>(source); s[27] = 1;
+                s[13] = s[15] = 1; s[14] = s[film::AuraRadius] = 2;
+                s[film::BloomAmount] = radius < 0 ? 0 : 1; s[film::BloomRadius] = std::max(radius,0.0f);
+                cases.push_back(s);
+            }
+        }
         for (auto s : cases) {
             s[16] = 0.16f;
             s[17] = 0.45f;
@@ -1056,7 +1195,7 @@ public:
                 require(RunOpenEmulsionOpenCL(queue, width, height, static_cast<float>(frame), s.data(), reinterpret_cast<const float*>(src), reinterpret_cast<float*>(dst)), "Benchmark render failed");
             require(finish(queue) == 0, "Benchmark execution failed");
             const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() / 12.0;
-            std::printf("4K %s, mode %.0f, film %.0f, gauge %s, radius %.1f, aura %.1f/radius %.1f, development %.1f/%.1f/%.1f: %.2f ms/frame (GPU resident, excludes Resolve/transfers).\n", color::spaces()[static_cast<int>(s[26])].label, s[0], s[1], gauge::prepare(s.data()).label, s[14], s[15], s[film::AuraRadius], s[film::PushPull],s[film::ColorRichness],s[film::SplitTone],ms);
+            std::printf("4K %s, mode %.0f, film %.0f, gauge %s, radius %.1f, aura %.1f/radius %.1f, development %.1f/%.1f/%.1f, bloom %.1f/radius %.1f: %.2f ms/frame (GPU resident, excludes Resolve/transfers).\n", color::spaces()[static_cast<int>(s[26])].label, s[0], s[1], gauge::prepare(s.data()).label, s[14], s[15], s[film::AuraRadius], s[film::PushPull],s[film::ColorRichness],s[film::SplitTone],s[film::BloomAmount],s[film::BloomRadius],ms);
         }
         releaseMem(src);
         releaseMem(dst);
@@ -1313,6 +1452,128 @@ public:
         std::puts("OpenCL: neutral Mono with print/halation/aura/grain across all input/output spaces, partial strengths, alpha, active effects, and exact mode/module isolation pass.");
     }
 
+    void testBloomControls()
+    {
+        for (int source = 0; source < color::SpaceCount; ++source) for (int mode = 0; mode <= 6; ++mode) {
+            for (float hue : {0.0f,0.5f,1.0f}) {
+                auto s = filmSettings(); s[0] = static_cast<float>(mode); s[26] = static_cast<float>(source); s[27] = 5;
+                s[film::BloomAmount] = 1.5f; s[film::BloomColor] = hue; s[film::BloomRadius] = hue*2;
+                s[film::BloomProtection] = hue; s[13] = 1; s[15] = 0.5f; s[16] = 0.4f;
+                s[film::PushPull] = 1; s[film::SplitTone] = 0.5f;
+                test(33,31,s,false,37);
+                if (mode == 0) { s[1] = 4; test(33,31,s,false,37); }
+            }
+        }
+        for (bool outOfOrder : {false,true}) {
+            if (outOfOrder && !unordered) continue;
+            for (auto dim : std::array<std::array<int,2>,7>{{{1,1},{3,5},{129,131},{257,255},{33,1081},{35,2161},{17,4321}}}) {
+                auto s = settings(2,1,1,2); s[film::BloomAmount] = 2; s[film::BloomRadius] = 2;
+                test(dim[0],dim[1],s,outOfOrder);
+                s[0] = 6; test(dim[0],dim[1],s,outOfOrder);
+                s[film::BloomAmount] = 0; test(dim[0],dim[1],s,outOfOrder);
+            }
+        }
+        for (int mask = 0; mask <= film::All; ++mask) {
+            auto s = filmSettings(); s[0] = 0; s[19] = static_cast<float>(mask); s[27] = 5;
+            s[13] = 1; s[15] = 0.5f; s[16] = 0.3f; s[film::BloomAmount] = 1;
+            test(17,19,s,false,37);
+        }
+        for (int source : {color::SRGB,color::AlexaLogC3,color::DaVinciIntermediate})
+            for (float threshold : {0.0f,0.65f,2.0f}) for (float transition : {0.01f,0.35f,2.0f}) {
+                auto s = settings(0,0,0,2); s[19] = film::Bloom;
+                s[26] = static_cast<float>(source); s[film::BloomAmount] = 1;
+                s[film::BloomThreshold] = threshold; s[film::BloomSoftness] = transition;
+                test(65,63,s,false);
+                s[0] = 6; test(65,63,s,false);
+            }
+        const int width = 129, height = 131;
+        std::vector<float> input(width*height*4,0);
+        for (int y = 0; y < height; ++y) for (int x = 0; x < width; ++x) {
+            size_t i = (static_cast<size_t>(y)*width+x)*4;
+            input[i+3] = (x+y)%17/16.0f;
+            if (x >= 59 && x < 70 && y >= 60 && y < 71) input[i+2] = 1.4f;
+        }
+        auto s = settings(0,0,0,2); s[19] = film::Bloom; s[film::BloomAmount] = 1;
+        const auto colored = render(input,width,height,s);
+        for (auto control : std::array<std::array<float,2>,5>{{{film::BloomAmount,2},{film::BloomRadius,2},
+            {film::BloomThreshold,2},{film::BloomSoftness,2},{film::BloomProtection,0}}}) {
+            auto adjusted = s; adjusted[static_cast<int>(control[0])] = control[1];
+            require(colored != render(input,width,height,adjusted),"Bloom control has no rendered effect");
+        }
+        const size_t beside = (65*width+74)*4;
+        require(colored[beside+2] > 0.05f && colored[beside] == 0 && colored[beside+1] == 0,"Blue bloom is missing or tinted warm");
+        s[film::BloomColor] = 0;
+        const auto neutral = render(input,width,height,s);
+        require(neutral[beside] > 0.005f,"Neutral bloom invisible");
+        requireNear(neutral[beside],neutral[beside+2],2e-7f,"Neutral bloom tints dark surroundings");
+        for (size_t i = 3; i < input.size(); i+=4) require(neutral[i] == input[i],"Bloom changes alpha");
+        for (int mode : {1,3,4,5}) {
+            s[0] = static_cast<float>(mode);
+            const auto before = render(input,width,height,s);
+            s[film::BloomAmount] = 2; s[film::BloomRadius] = 2; s[film::BloomThreshold] = 0;
+            s[film::BloomSoftness] = 0.01f; s[film::BloomColor] = 1; s[film::BloomProtection] = 0;
+            require(before == render(input,width,height,s),"Bloom leaks into excluded mode");
+        }
+        s = settings(1,1,1,0); s[16] = 0.3f; s[19] = film::All & ~film::Bloom;
+        const auto disabled = render(input,width,height,s);
+        s[film::BloomAmount] = 2; s[film::BloomRadius] = 2; s[film::BloomThreshold] = 0;
+        require(disabled == render(input,width,height,s),"Disabled Bloom changes other modules");
+        s[19] = film::Bloom; s[film::BloomAmount] = 0; s[27] = 5;
+        require(input == render(input,width,height,s),"Zero Bloom-only changes encoding or pixels");
+        s[0] = 6;
+        const auto emptyMatte = render(input,width,height,s);
+        for (size_t i = 0; i < input.size(); i+=4) require(emptyMatte[i] == 0 && emptyMatte[i+1] == 0 && emptyMatte[i+2] == 0 && emptyMatte[i+3] == input[i+3],"Empty Bloom Matte not black with original alpha");
+        s = filmSettings(); s[0] = 0; s[1] = 4; s[19] = film::Negative | film::Bloom;
+        s[film::BloomAmount] = 2;
+        const auto mono = render(input,width,height,s);
+        s[film::BloomAmount] = 0;
+        const auto noBloom = render(input,width,height,s);
+        require(mono != noBloom,"Mono disables Bloom rather than neutralizing it");
+        for (size_t i = 0; i < mono.size(); i+=4) requireNear(mono[i],mono[i+2],2e-6f,"Bloom recolors Mono");
+        s[0] = 6; s[19] = film::All; s[film::BloomAmount] = 1;
+        const auto matte = render(input,width,height,s);
+        s[4] = s[5] = s[6] = 2; s[13] = s[15] = s[16] = 2; s[film::PushPull] = 3; s[film::SplitTone] = 1;
+        s[film::BloomProtection] = 0; s[27] = 5;
+        require(matte == render(input,width,height,s),"Bloom Matte includes grade, texture, protection, or output transform");
+        std::puts("OpenCL: Bloom RGB/matte CPU parity, all inputs/modes/masks, resizing/bypass, alpha, blue/neutral diffusion, exact isolation, and Mono preservation pass.");
+    }
+
+    void writeBloomPreview(const char* path)
+    {
+        const int panel = 256, height = 512, width = panel*5, rowBytes = width*3;
+        std::vector<float> input(panel*height*4,0.035f);
+        for (int y = 0; y < height; ++y) for (int x = 0; x < panel; ++x) {
+            const size_t i = (static_cast<size_t>(y)*panel+x)*4;
+            input[i+3] = 1;
+            if ((x-128)*(x-128)+(y-85)*(y-85) < 100) input[i] = input[i+1] = input[i+2] = 1.4f;
+            if (x >= 115 && x < 140 && y >= 195 && y < 225) { input[i] = 1.4f; input[i+1] = 0.15f; input[i+2] = 0.05f; }
+            if (x >= 100 && x < 156 && y >= 345 && y < 360) { input[i] = 0.05f; input[i+1] = 0.3f; input[i+2] = 1.4f; }
+        }
+        std::array<std::vector<float>,5> columns;
+        for (int col = 0; col < 5; ++col) {
+            auto s = settings(0,0,0,col == 4 ? 6 : 2); s[19] = film::Bloom;
+            s[film::BloomAmount] = col == 0 ? 0 : 1.5f;
+            s[film::BloomRadius] = col == 1 ? 0.3f : 1.5f;
+            s[film::BloomColor] = col == 3 ? 0 : 1;
+            columns[col] = render(input,panel,height,s);
+        }
+        std::array<unsigned char,54> header {};
+        header[0] = 'B'; header[1] = 'M'; header[10] = 54; header[14] = 40; header[26] = 1; header[28] = 24;
+        auto putInt = [&](int offset,unsigned value) { for (int b = 0; b < 4; ++b) header[offset+b] = static_cast<unsigned char>(value>>(8*b)); };
+        putInt(2,54+rowBytes*height); putInt(18,width); putInt(22,height);
+        std::ofstream file(path,std::ios::binary); require(file.good(),"Cannot write Bloom preview");
+        file.write(reinterpret_cast<const char*>(header.data()),header.size());
+        std::vector<unsigned char> row(rowBytes);
+        for (int y = height-1; y >= 0; --y) {
+            for (int x = 0; x < width; ++x) {
+                const auto& pixels = columns[x/panel]; const size_t i = (static_cast<size_t>(y)*panel+x%panel)*4;
+                for (int c = 0; c < 3; ++c) row[x*3+c] = static_cast<unsigned char>(std::clamp(pixels[i+2-c],0.0f,1.0f)*255+0.5f);
+            }
+            file.write(reinterpret_cast<const char*>(row.data()),row.size());
+        }
+        std::printf("Bloom preview: %s (columns Original/Tight/Broad/Neutral/Matte).\n",path);
+    }
+
     void testDevelopmentControls()
     {
         for (int source = 0; source < color::SpaceCount; ++source) {
@@ -1521,6 +1782,7 @@ int main(int argc, char** argv)
         testStrengthControls();
         testHalationControls();
         testDevelopmentAndGrain();
+        testBloom();
         if (argc > 1) writePreview(argv[1]);
         if (argc > 2) writeResponsePreview(argv[2]);
         if (argc > 5) writeResponsePreview(argv[5],true);
@@ -1581,8 +1843,10 @@ int main(int argc, char** argv)
         gpu.testMonochromeOutput();
         gpu.testUpgradeControls();
         gpu.testDevelopmentControls();
+        gpu.testBloomControls();
         if (argc > 3) gpu.writeTexturePreview(argv[3]);
         if (argc > 4) gpu.writeTexturePreview(argv[4],true);
+        if (argc > 6) gpu.writeBloomPreview(argv[6]);
         gpu.benchmark();
         return 0;
     } catch (const std::exception& error) {

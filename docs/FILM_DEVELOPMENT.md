@@ -20,7 +20,7 @@ Print response runs afterward and may compress or modify the final appearance. F
 
 Push/Pull changes enabled grain size by `2^(0.12 * amount)` and grain strength by `2^(0.22 * amount)` in Full mode. Positive amounts make grain coarser/stronger; negative amounts make it finer/gentler. It never enables zero-strength or disabled grain. It does not alter halation selection/spread, Aura, or the original source-highlight key.
 
-Grain Only, Halation & Grain Only, Halation Matte, and Bypass ignore all Development controls, including grain coupling. For your own LUT in Full mode, disable Film Color, Film Development, and Print. Texture-only output preserves the input encoding. Non-neutral Development on its own counts as a color stage and honors the Output Color Space selector.
+Grain Only, Halation, Bloom & Grain Only, Halation Matte, Bloom Matte, and Bypass ignore all Development controls, including grain coupling. For your own LUT in Full mode, disable Film Color, Film Development, and Print. Texture-only output preserves the input encoding. Non-neutral Development on its own counts as a color stage and honors the Output Color Space selector.
 
 ## Original Math and Limits
 

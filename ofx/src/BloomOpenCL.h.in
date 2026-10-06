@@ -1,0 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
+static const char* BloomOpenCLSource = R"BLOOMCL(
+@BLOOM_MATH_SOURCE@
+)BLOOMCL";

@@ -12,6 +12,7 @@
 #include "ofxsProcessing.h"
 #include "ofxsSupportPrivate.h"
 #include "HalationBlur.h"
+#include "BloomBlur.h"
 #include "HalationConfig.h"
 #include "GrainConfig.h"
 #include "ColorSpaceConfig.h"
@@ -19,10 +20,10 @@
 
 #define kPluginName "OpenEmulsion"
 #define kPluginGrouping "OpenEmulsion"
-#define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, and smooth halation, with OpenCL acceleration."
+#define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, halation, aura, and linear-light bloom, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 17
+#define kPluginVersionMinor 18
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -42,6 +43,7 @@ struct Settings {
     bool enablePrint = true;
     bool enableHalation = true;
     bool enableAura = true;
+    bool enableBloom = true;
     bool enableGrain = true;
     double exposure = 0.0;
     double temperature = 0.0;
@@ -97,6 +99,12 @@ struct Settings {
     double grainRed = 1;
     double grainGreen = 1;
     double grainBlue = 1;
+    double bloom = 0;
+    double bloomRadius = 1;
+    double bloomThreshold = 0.65;
+    double bloomSoftness = 0.35;
+    double bloomColor = 1;
+    double bloomProtection = 0.8;
     int grainSeed = 0;
     float gainR = 1.0f;
     float gainG = 1.0f;
@@ -107,7 +115,7 @@ int moduleMask(const Settings& s)
 {
     return (s.enableNegative ? film::Negative : 0) | (s.enablePrint ? film::Print : 0) |
            (s.enableDevelopment && (s.pushPull != 0 || s.colorRichness != 0 || s.splitTone != 0) ? film::Development : 0) |
-           (s.enableHalation ? film::Halation : 0) | (s.enableAura ? film::Aura : 0) | (s.enableGrain ? film::Grain : 0);
+           (s.enableHalation ? film::Halation : 0) | (s.enableAura ? film::Aura : 0) | (s.enableGrain ? film::Grain : 0) | (s.enableBloom ? film::Bloom : 0);
 }
 
 bool colorEnabled(const Settings& s)
@@ -142,7 +150,7 @@ bool grainEnabled(const Settings& s)
 
 bool isIdentitySettings(const Settings& s)
 {
-    return film::isIdentity(s.mode, moduleMask(s), static_cast<float>(s.halation), static_cast<float>(s.aura), static_cast<float>(s.grain));
+    return film::isIdentity(s.mode, moduleMask(s), static_cast<float>(s.halation), static_cast<float>(s.aura), static_cast<float>(s.grain), static_cast<float>(s.bloom));
 }
 
 float clampf(float v, float lo, float hi)
@@ -175,10 +183,11 @@ float highlightKey(Rgb c, HalationParameters p)
     return halation_key(c.r, c.g, c.b, p);
 }
 
-class HalationProcessor : public OFX::MultiThread::Processor {
+template<class Blur, class Reader>
+class SpatialProcessor : public OFX::MultiThread::Processor {
 public:
-    HalationProcessor(OFX::ImageEffect& effect, OFX::Image* src, halation::Blur& blur, ColorParameters color, HalationParameters halo)
-        : effect_(effect), src_(src), blur_(blur), color_(color), halo_(halo) {}
+    SpatialProcessor(OFX::ImageEffect& effect, Blur& blur, Reader reader)
+        : effect_(effect), blur_(blur), reader_(reader) {}
 
     void run()
     {
@@ -190,24 +199,16 @@ public:
     {
         const int begin = static_cast<int>(thread * blur_.height / threads);
         const int end = static_cast<int>((thread + 1) * blur_.height / threads);
-        const OfxRectI& bounds = src_->getBounds();
         for (int y = begin; y < end && !effect_.abort(); ++y) {
-            if (phase_ == 0) {
-                blur_.extractRows(y, y + 1, [&](int x, int sy) {
-                    return highlightKey(color_to_work(readPixel(src_, x + bounds.x1, sy + bounds.y1), color_), halo_);
-                });
-            } else {
-                blur_.blurRows(y, y + 1, phase_ == 1);
-            }
+            if (phase_ == 0) blur_.extractRows(y, y + 1, reader_);
+            else blur_.blurRows(y, y + 1, phase_ == 1);
         }
     }
 
 private:
     OFX::ImageEffect& effect_;
-    OFX::Image* src_;
-    halation::Blur& blur_;
-    ColorParameters color_;
-    HalationParameters halo_;
+    Blur& blur_;
+    Reader reader_;
     int phase_ = 0;
 };
 
@@ -228,12 +229,22 @@ public:
         colorParameters_ = color::prepare(packed.data());
         responseParameters_ = response::prepare(packed.data());
         haloConfig_ = halation::prepare(packed.data(), bounds.y2 - bounds.y1);
-        if (_isEnabledOpenCLRender || !spatialEnabled(settings_)) return;
-        const OfxRectI& b = src_->getBounds();
-        const halation::Filter filter(halationAmount(settings_), static_cast<float>(settings_.halationRadius), auraAmount(settings_),
-                                      haloConfig_.auraRadius, haloConfig_.radiusScale);
-        blur_ = std::make_unique<halation::Blur>(b.x2 - b.x1, b.y2 - b.y1, filter, haloConfig_.downsample);
-        HalationProcessor(_effect, src_, *blur_, colorParameters_, haloConfig_.key).run();
+        bloomConfig_ = bloom::prepare(packed.data(), bounds.y2 - bounds.y1);
+        if (_isEnabledOpenCLRender) return;
+        if (spatialEnabled(settings_)) {
+            const halation::Filter filter(halationAmount(settings_), static_cast<float>(settings_.halationRadius), auraAmount(settings_),
+                                          haloConfig_.auraRadius, haloConfig_.radiusScale);
+            blur_ = std::make_unique<halation::Blur>(bounds.x2 - bounds.x1, bounds.y2 - bounds.y1, filter, haloConfig_.downsample);
+            SpatialProcessor(_effect, *blur_, [&](int x, int y) {
+                return highlightKey(color_to_work(readPixel(src_, x + bounds.x1, y + bounds.y1), colorParameters_), haloConfig_.key);
+            }).run();
+        }
+        if (bloomConfig_.parameters.amount > 0) {
+            bloomBlur_ = std::make_unique<bloom::Blur>(bounds.x2 - bounds.x1, bounds.y2 - bounds.y1, bloomConfig_);
+            SpatialProcessor(_effect, *bloomBlur_, [&](int x, int y) {
+                return bloom_extract(readPixel(src_, x + bounds.x1, y + bounds.y1), colorParameters_, bloomConfig_.parameters);
+            }).run();
+        }
     }
 
     void processImagesOpenCL() override
@@ -298,6 +309,11 @@ public:
                     } else if (settings_.mode == 5) {
                         c = {0.0f, 0.0f, 0.0f};
                     }
+                    if (bloomConfig_.parameters.amount > 0 || settings_.mode == 6) {
+                        const OfxRectI& b = src_->getBounds();
+                        const Rgb glow = bloomBlur_ ? bloomBlur_->sample(x - b.x1, y - b.y1) : Rgb{0,0,0};
+                        c = bloom_composite(c, glow, bloomConfig_.parameters, settings_.mode == 6);
+                    }
                     if (grainEnabled(settings_)) {
                         const OfxRectI& b = src_->getBounds();
                         const GrainVector delta = grain_delta(x - b.x1, y - b.y1, luma(c), grainParameters_);
@@ -307,7 +323,7 @@ public:
                     }
                     c = response_finish(c, modules, responseParameters_);
                     if (clampOutput) c = {std::max(c.r, 0.0f), std::max(c.g, 0.0f), std::max(c.b, 0.0f)};
-                    if (settings_.mode != 5) {
+                    if (settings_.mode != 5 && settings_.mode != 6) {
                         const bool unchanged = !(modules & (film::Negative | film::Development | film::Print)) && c.r == work.r && c.g == work.g && c.b == work.b;
                         c = unchanged ? original : color_from_work(c, colorParameters_);
                     }
@@ -388,6 +404,12 @@ private:
         out[film::GrainRed] = static_cast<float>(s.grainRed);
         out[film::GrainGreen] = static_cast<float>(s.grainGreen);
         out[film::GrainBlue] = static_cast<float>(s.grainBlue);
+        out[film::BloomAmount] = static_cast<float>(s.bloom);
+        out[film::BloomRadius] = static_cast<float>(s.bloomRadius);
+        out[film::BloomThreshold] = static_cast<float>(s.bloomThreshold);
+        out[film::BloomSoftness] = static_cast<float>(s.bloomSoftness);
+        out[film::BloomColor] = static_cast<float>(s.bloomColor);
+        out[film::BloomProtection] = static_cast<float>(s.bloomProtection);
     }
 
     OFX::Image* src_ = nullptr;
@@ -398,6 +420,8 @@ private:
     ColorParameters colorParameters_ {};
     FilmResponseParameters responseParameters_ {};
     halation::Configuration haloConfig_ {};
+    bloom::Configuration bloomConfig_ {};
+    std::unique_ptr<bloom::Blur> bloomBlur_;
 };
 
 class OpenEmulsionPlugin : public OFX::ImageEffect {
@@ -418,6 +442,7 @@ public:
         enablePrint_ = fetchBooleanParam("enablePrint");
         enableHalation_ = fetchBooleanParam("enableHalation");
         enableAura_ = fetchBooleanParam("enableAura");
+        enableBloom_ = fetchBooleanParam("enableBloom");
         enableGrain_ = fetchBooleanParam("enableGrain");
         exposure_ = fetchDoubleParam("exposure");
         temperature_ = fetchDoubleParam("temperature");
@@ -474,6 +499,12 @@ public:
         grainRed_ = fetchDoubleParam("grainRed");
         grainGreen_ = fetchDoubleParam("grainGreen");
         grainBlue_ = fetchDoubleParam("grainBlue");
+        bloom_ = fetchDoubleParam("bloom");
+        bloomRadius_ = fetchDoubleParam("bloomRadius");
+        bloomThreshold_ = fetchDoubleParam("bloomThreshold");
+        bloomSoftness_ = fetchDoubleParam("bloomSoftness");
+        bloomColor_ = fetchDoubleParam("bloomColor");
+        bloomProtection_ = fetchDoubleParam("bloomProtection");
         for (int control = 0; control < printstyle::ControlCount; ++control)
             printRecipeControls_[control] = fetchDoubleParam(printstyle::Parameters[control].name);
         printStyle_->getValue(printStyleForUI_);
@@ -563,6 +594,7 @@ private:
         s.enablePrint = enablePrint_->getValueAtTime(time);
         s.enableHalation = enableHalation_->getValueAtTime(time);
         s.enableAura = enableAura_->getValueAtTime(time);
+        s.enableBloom = enableBloom_->getValueAtTime(time);
         s.enableGrain = enableGrain_->getValueAtTime(time);
         s.exposure = exposure_->getValueAtTime(time);
         s.temperature = temperature_->getValueAtTime(time);
@@ -619,6 +651,12 @@ private:
         s.grainRed = grainRed_->getValueAtTime(time);
         s.grainGreen = grainGreen_->getValueAtTime(time);
         s.grainBlue = grainBlue_->getValueAtTime(time);
+        s.bloom = bloom_->getValueAtTime(time);
+        s.bloomRadius = bloomRadius_->getValueAtTime(time);
+        s.bloomThreshold = bloomThreshold_->getValueAtTime(time);
+        s.bloomSoftness = bloomSoftness_->getValueAtTime(time);
+        s.bloomColor = bloomColor_->getValueAtTime(time);
+        s.bloomProtection = bloomProtection_->getValueAtTime(time);
         const float gain = std::pow(2.0f, static_cast<float>(s.exposure));
         const float warm = static_cast<float>(s.temperature) * 0.085f;
         const float green = static_cast<float>(s.tint) * 0.065f;
@@ -643,6 +681,7 @@ private:
     OFX::BooleanParam* enablePrint_ = nullptr;
     OFX::BooleanParam* enableHalation_ = nullptr;
     OFX::BooleanParam* enableAura_ = nullptr;
+    OFX::BooleanParam* enableBloom_ = nullptr;
     OFX::BooleanParam* enableGrain_ = nullptr;
     OFX::DoubleParam* exposure_ = nullptr;
     OFX::DoubleParam* temperature_ = nullptr;
@@ -699,6 +738,12 @@ private:
     OFX::DoubleParam* grainRed_ = nullptr;
     OFX::DoubleParam* grainGreen_ = nullptr;
     OFX::DoubleParam* grainBlue_ = nullptr;
+    OFX::DoubleParam* bloom_ = nullptr;
+    OFX::DoubleParam* bloomRadius_ = nullptr;
+    OFX::DoubleParam* bloomThreshold_ = nullptr;
+    OFX::DoubleParam* bloomSoftness_ = nullptr;
+    OFX::DoubleParam* bloomColor_ = nullptr;
+    OFX::DoubleParam* bloomProtection_ = nullptr;
 };
 
 class OpenEmulsionFactory : public OFX::PluginFactoryHelper<OpenEmulsionFactory> {
@@ -748,10 +793,11 @@ public:
         choice->setLabels("Mode", "Mode", "Mode");
         choice->appendOption("Full");
         choice->appendOption("Color Only");
-        choice->appendOption("Halation & Grain Only");
+        choice->appendOption("Halation, Bloom & Grain Only");
         choice->appendOption("Grain Only");
         choice->appendOption("Bypass");
         choice->appendOption("Halation Matte");
+        choice->appendOption("Bloom Matte");
         choice->setDefault(0);
         page->addChild(*choice);
 
@@ -786,6 +832,8 @@ public:
         addToggle(desc, page, halation, "enableHalation", "Enable");
         GroupParamDescriptor* aura = addGroup(desc, page, "auraControls", "Aura", false);
         addToggle(desc, page, aura, "enableAura", "Enable");
+        GroupParamDescriptor* bloom = addGroup(desc, page, "bloomControls", "Bloom", false);
+        addToggle(desc, page, bloom, "enableBloom", "Enable");
         GroupParamDescriptor* grain = addGroup(desc, page, "grainControls", "Grain", true);
         addToggle(desc, page, grain, "enableGrain", "Enable");
 
@@ -873,6 +921,12 @@ public:
         addDouble(desc, page, "grainRed", "Red Grain", 1, 0, 2, 0.01, grain, "Scales red-channel grain intensity; zero removes it. Full-strength Mono Negative still finishes the composite monochrome.");
         addDouble(desc, page, "grainGreen", "Green Grain", 1, 0, 2, 0.01, grain, "Scales green-channel grain intensity independently.");
         addDouble(desc, page, "grainBlue", "Blue Grain", 1, 0, 2, 0.01, grain, "Scales blue-channel grain intensity independently.");
+        addDouble(desc, page, "bloom", "Bloom", 0, 0, 2, 0.01, bloom, "Strength of independent linear-light highlight diffusion. Zero skips all bloom work.");
+        addDouble(desc, page, "bloomRadius", "Bloom Radius", 1, 0, 2, 0.01, bloom, "Spread uses a 1080-line reference; independent of Film Gauge, Halation Radius, and Aura Radius.");
+        addDouble(desc, page, "bloomThreshold", "Highlight Threshold", 0.65, 0, 2, 0.01, bloom, "Source highlight cutoff, expressed in the perceptual Rec.709 working domain and converted to linear light for extraction.");
+        addDouble(desc, page, "bloomSoftness", "Highlight Transition", 0.35, 0.01, 2, 0.01, bloom, "Width above the threshold over which source contribution rises smoothly.");
+        addDouble(desc, page, "bloomColor", "Source Color", 1, 0, 1, 0.01, bloom, "One retains source-highlight color. Zero makes diffusion neutral at the same linear luminance. Mono Negative still finishes monochrome.");
+        addDouble(desc, page, "bloomProtection", "Protect Highlights", 0.8, 0, 1, 0.01, bloom, "Reduces bloom added to already bright destination pixels; does not reduce its spread into nearby shadows. One fully protects linear peaks at or above one.");
         IntParamDescriptor* seed = desc.defineIntParam("grainSeed");
         seed->setLabels("Grain Seed", "Grain Seed", "Grain Seed");
         seed->setDefault(0);

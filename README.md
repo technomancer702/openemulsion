@@ -1,12 +1,12 @@
 # OpenEmulsion
 
-Free, open-source film emulation for DaVinci Resolve: adjustable negative and print response, procedural grain, smooth halation, and aura in a native OpenFX plugin.
+Free, open-source film emulation for DaVinci Resolve: adjustable negative and print response, procedural grain, smooth halation, aura, and bloom in a native OpenFX plugin.
 
-Film Color, Film Development, Print, Halation, Aura, and Grain can be enabled independently. Use the whole pipeline or keep your own grade and LUTs with texture-only processing.
+Film Color, Film Development, Print, Halation, Aura, Bloom, and Grain can be enabled independently. Use the whole pipeline or keep your own grade and LUTs with texture-only processing.
 
 ## Status
 
-Experimental, Windows x64. Current development version: **v0.17**. The current implementation supports OpenCL acceleration and a multithreaded CPU fallback. CUDA, Metal, macOS, and Linux builds are not implemented.
+Experimental, Windows x64. Current development version: **v0.18**. The current implementation supports OpenCL acceleration and a multithreaded CPU fallback. CUDA, Metal, macOS, and Linux builds are not implemented.
 
 OpenEmulsion is an original artistic approximation, not a measured film-stock calibration or a complete HDR rendering transform. There is no DCTL dependency. Rendering has been tested in Resolve, but this is not yet a stable production release.
 
@@ -62,7 +62,7 @@ Set **Input Color Space** to the RGB space entering the node, which may differ f
 
 - Unconverted Alexa footage: choose **ARRI Alexa LogC3 / Wide Gamut 3 (EI 800)**. For an SDR look with Film Color or Print enabled, choose **Rec.709 / Gamma 2.4** output.
 - A DaVinci Wide Gamut/Intermediate timeline: choose that input and **Same as Input** output, keeping the project's normal output transform.
-- Your own LUT: use **Grain Only** or **Halation & Grain Only** and select the space entering this node. Texture-only processing preserves its input encoding for a downstream LUT.
+- Your own LUT: use **Grain Only** or **Halation, Bloom & Grain Only** and select the space entering this node. Texture-only processing preserves its input encoding for a downstream LUT.
 
 New instances default to Rec.709/Gamma 2.4 input and Same as Input output. Supported choices also include ARRI LogC4, Sony S-Log3, Blackmagic Film Gen 5, RED Log3G10, Canon Log 2/3, Panasonic V-Log, ACEScct, ACEScg, sRGB, and linear Rec.709.
 
@@ -70,7 +70,7 @@ See [Color Spaces](docs/COLOR_SPACES.md) for exact gamut pairs, workflow details
 
 ## Modes and Controls
 
-Modes: **Full**, **Color Only**, **Halation & Grain Only**, **Grain Only**, **Bypass**, and **Halation Matte**.
+Modes: **Full**, **Color Only**, **Halation, Bloom & Grain Only**, **Grain Only**, **Bypass**, **Halation Matte**, and **Bloom Matte**.
 
 Each module's first control is an **Enable** toggle that independently bypasses that stage without resetting its settings. In Full mode, disabling Film Color, Film Development, and Print leaves texture only. Bypass and all-disabled processing preserve RGBA exactly, including negative RGB and values above 1.
 
@@ -79,9 +79,10 @@ Each module's first control is an **Enable** toggle that independently bypasses 
 - **Print:** Full (Film Print), Standard, Extended (Telecine), and Custom. Named presets load and lock their tone/color recipe; Custom unlocks the last recipe without changing its look. Color/tone strengths, exposure, and RGB balance remain editable in every style.
 - **Grain:** Fine, Classic, Rough, and Debug styles; strength, size, softness, roughness, color, horizontal stretch, independent RGB intensity, tonal weighting, and repeatable frame/seed variation.
 - **Halation and Aura:** smooth source-highlight selection with adjustable threshold/transition, red-to-amber tint, independent tight-halo and broad-aura radii, and resolution-aware continuous Gaussian spread. Matte mode exposes the signal.
+- **Bloom:** separate neutral/source-colored linear-light diffusion with its own strength, radius, threshold/transition, highlight protection, and Bloom Matte. It defaults to zero and is independent of Aura and Film Gauge.
 - **Film Gauge:** Custom, 8 mm, 16 mm, 35 mm, and 65 mm creative presets coordinate grain size/strength and halo spread without resetting sliders. Custom and 35 mm use the unscaled settings.
 
-With **Mono Negative** and Film Color Strength at 1, the final print and texture composite stays monochrome. Halation/Aura remain visible as neutral glow, and grain automatically becomes monochrome. This does not affect texture-only modes, bypass, or a disabled Film Color module.
+With **Mono Negative** and Film Color Strength at 1, the final print and texture composite stays monochrome, including source-colored bloom. Halation/Aura remain visible as neutral glow, and grain automatically becomes monochrome. This does not affect texture-only modes, bypass, or a disabled Film Color module.
 
 Grain Size uses a 1080-line reference, scaling granules with image height. Grain Color at zero uses one monochrome noise field; RGB intensity controls at equal values give equal RGB grain. Horizontal Stretch uses a 0.5-2.0 desqueeze ratio and does not resize the image. Grain is procedural, not sampled from film scans.
 
@@ -89,15 +90,15 @@ Strengths default to 1 (full response). Zero Color Strength removes that stage's
 
 Selecting a named print preset replaces Custom recipe adjustments and their keyframes. Print strength, exposure/balance, and other modules are not reset. The style selector itself is not animated; recipe knobs can be animated in Custom.
 
-See [Negative and Print Response](docs/FILM_RESPONSE.md), [Film Development](docs/FILM_DEVELOPMENT.md), and [Texture Controls](docs/TEXTURE_CONTROLS.md) for exact semantics and limitations.
+See [Negative and Print Response](docs/FILM_RESPONSE.md), [Film Development](docs/FILM_DEVELOPMENT.md), [Texture Controls](docs/TEXTURE_CONTROLS.md), and [Bloom](docs/BLOOM.md) for exact semantics and limitations.
 
 ## Performance and Tests
 
 OpenCL runs when Resolve supplies OpenCL image buffers. Otherwise the plugin uses CPU rendering; a machine's general GPU capability alone does not guarantee OpenCL execution in the host.
 
-Working buffers are reused on the GPU. The highlight blur uses a resolution-scaled work grid with dense filtering and area-averaged source extraction. Disabled texture stages skip their work. Keep Halation and Aura at zero when unused; Grain Only skips the blur entirely.
+Working buffers are reused on the GPU. The highlight blur uses a resolution-scaled work grid with dense filtering and area-averaged source extraction. Disabled texture stages skip their work. Keep Halation, Aura, and Bloom at zero when unused; Grain Only skips the blur entirely.
 
-The regression harness covers color-space reference values, tone curves, grain statistics, continuous halation, module isolation, partial/zero color-tone strengths, gauge presets, HD/4K halo scaling, odd-sized higher-resolution grids, bypass, alpha, development tone/split isolation, grain stretch/channel gains, and CPU/OpenCL parity. GPU checks are skipped explicitly when no device is available. GPU-resident 4K timings exclude Resolve, transfers, and other effects; they are not timeline playback guarantees.
+The regression harness covers color-space reference values, tone curves, grain statistics, continuous halation, module isolation, partial/zero color-tone strengths, gauge presets, HD/4K halo scaling, odd-sized higher-resolution grids, bypass, alpha, development tone/split isolation, grain stretch/channel gains, linear bloom extraction/spread/protection, and CPU/OpenCL parity. GPU checks are skipped explicitly when no device is available. GPU-resident 4K timings exclude Resolve, transfers, and other effects; they are not timeline playback guarantees.
 
 Optional synthetic previews:
 
@@ -106,7 +107,7 @@ New-Item -ItemType Directory -Path analysis -Force
 .\build\ofx\HalationTests.exe analysis\grain-preview.bmp analysis\response-preview.bmp analysis\texture-preview.bmp
 ```
 
-The optional third preview uses OpenCL and compares Custom/8/16/35/65 mm gauges across isolated lights and grain-only patches; it is skipped when no OpenCL device is available.
+The optional sixth preview path produces a five-panel bloom comparison; see [Bloom](docs/BLOOM.md). The optional third preview uses OpenCL and compares Custom/8/16/35/65 mm gauges across isolated lights and grain-only patches; it is skipped when no OpenCL device is available.
 
 Optional Resolve test charts:
 

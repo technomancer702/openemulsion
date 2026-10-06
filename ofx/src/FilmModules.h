@@ -7,7 +7,7 @@
 namespace film {
 
 enum Module {
-    Negative = 1, Print = 2, Halation = 4, Aura = 8, Grain = 16, Development = 32, All = 63
+    Negative = 1, Print = 2, Halation = 4, Aura = 8, Grain = 16, Development = 32, Bloom = 64, All = 127
 };
 
 enum SettingIndex {
@@ -16,6 +16,7 @@ enum SettingIndex {
     HalationThreshold, HalationSoftness, HalationColor, AuraRadius,
     PushPull, ColorRichness, SplitTone, SplitHue, SplitPivot, SplitWidth,
     SplitShadows, SplitHighlights, GrainStretch, GrainRed, GrainGreen, GrainBlue,
+    BloomAmount, BloomRadius, BloomThreshold, BloomSoftness, BloomColor, BloomProtection,
     SettingsCount
 };
 constexpr int ModuleIndex = 19;
@@ -25,9 +26,10 @@ inline int modulesForMode(int mode, int enabled)
     switch (mode) {
     case 0: return enabled & All;
     case 1: return enabled & (Negative | Development | Print);
-    case 2: return enabled & (Halation | Aura | Grain);
+    case 2: return enabled & (Halation | Aura | Bloom | Grain);
     case 3: return enabled & Grain;
     case 5: return enabled & (Halation | Aura);
+    case 6: return enabled & Bloom;
     default: return 0;
     }
 }
@@ -46,13 +48,14 @@ inline float monochromeStrength(const float* settings)
         std::clamp(settings[NegativeColorStrength], 0.0f, 1.0f) : 0.0f;
 }
 
-inline bool isIdentity(int mode, int modules, float halation, float aura, float grain)
+inline bool isIdentity(int mode, int modules, float halation, float aura, float grain, float bloom = 0.0f)
 {
-    if (mode == 5) return false;
+    if (mode == 5 || mode == 6) return false;
     const int active = modulesForMode(mode, modules);
     return !(active & (Negative | Development | Print)) &&
            (!(active & Halation) || halation <= 0.0f) &&
            (!(active & Aura) || aura <= 0.0f) &&
+           (!(active & Bloom) || bloom <= 0.0f) &&
            (!(active & Grain) || grain <= 0.0f);
 }
 

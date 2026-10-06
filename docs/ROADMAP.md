@@ -1,6 +1,6 @@
 # Upgrade Roadmap
 
-## Completed Through v0.17
+## Completed Through v0.18
 
 - Independent film/print color and tone strengths and in-module Enable toggles.
 - Resolution-aware smooth halation, refined highlight selection, tint, and independent Aura radius.
@@ -10,9 +10,11 @@
 - Independently enabled Film Development: Push/Pull with grain coupling, Color Richness, and Split Tone.
 - Advanced grain: horizontal desqueeze and independent RGB intensity.
 
-## Next: Separate Bloom
+## Bloom Added in v0.18
 
-Implement neutral/source-colored highlight diffusion, independently enabled and distinct from warm Aura. Reuse the established resolution-aware filtering patterns, but budget and benchmark its additional spatial work. Check isolated highlights, colored sources, edge normalization, exact zero/disabled isolation, Mono, CPU/OpenCL parity, and combined 4K playback cost before installing.
+Separate neutral/source-colored linear-light diffusion with an in-module Enable toggle, independent source selection/radius/protection, and Bloom Matte. Bloom is off by default (strength zero), uses cached OpenCL working buffers, and retains Mono finishing and texture-only encoding.
+
+Synthetic checks cover bounded extraction, colored/white sources, continuous conserved spread, HD/4K scaling, edge normalization, every mode/mask/input, exact zero/disabled isolation, bypass/resizing, and CPU/OpenCL parity. Appearance and host workflow still need real-footage validation in Resolve.
 
 ## Further Work
 

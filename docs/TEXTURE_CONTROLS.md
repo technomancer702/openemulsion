@@ -1,4 +1,4 @@
-# Texture Controls (v0.17)
+# Texture Controls (v0.18)
 
 ## Film Gauge
 
@@ -20,7 +20,7 @@ Custom and 35 mm currently render identically. Larger-format settings give finer
 
 `Red Grain`, `Green Grain`, and `Blue Grain` multiply each channel's noise delta by 0-2, default 1. Zero removes grain from that working-space channel; source color is not multiplied. Grain Color at zero uses a shared monochrome noise field, but unequal channel multipliers can tint that field. Active full-strength Mono Negative still finishes the final composite monochrome, including unequal channel gains. The channel controls operate in the managed Rec.709-primary working space, not individual camera-gamut channels.
 
-Enabled Film Development in Full mode scales grain size by `2^(0.12 * Push/Pull)` and strength by `2^(0.22 * Push/Pull)`. Zero Grain and the Grain Enable toggle still win. Grain Only and Halation & Grain Only ignore development entirely, preserving their independent texture workflow. Grain remains additive after print/halo, keyed by final working luminance; negative-density-driven, pre-print grain is still future work.
+Enabled Film Development in Full mode scales grain size by `2^(0.12 * Push/Pull)` and strength by `2^(0.22 * Push/Pull)`. Zero Grain and the Grain Enable toggle still win. Grain Only and Halation, Bloom & Grain Only ignore development entirely, preserving their independent texture workflow. Grain remains additive after print/halo, keyed by final working luminance; negative-density-driven, pre-print grain is still future work.
 
 ## Highlight Selection
 
@@ -36,7 +36,7 @@ The source key is a bounded smoothstep of `max(max(R,G,B), 1.2*luminance)` in th
 
 ## Spread and Resolution
 
-`Halation Radius` controls the tight Gaussian spread. `Aura Radius` independently controls the broader Gaussian spread. Neither changes source selection or the other radius. The corresponding amounts control intensity; raising a radius spreads energy over a wider area rather than adding energy. Increasing radius can therefore lower the peak brightness around an isolated light. Aura is a shared-key broad halo, not a separate neutral bloom module.
+`Halation Radius` controls the tight Gaussian spread. `Aura Radius` independently controls the broader Gaussian spread. Neither changes source selection or the other radius. The corresponding amounts control intensity; raising a radius spreads energy over a wider area rather than adding energy. Increasing radius can therefore lower the peak brightness around an isolated light. Aura is a shared-key broad halo, not neutral/source-colored bloom. The independent [Bloom module](BLOOM.md) uses its own source selection, linear RGB spread, and destination highlight protection.
 
 Grain size and halo radii use a 1080-line reference and scale with rendered image height. The highlight working grid is area-averaged at 2-pixel steps for HD, 4-pixel steps for 4K, and 8-pixel steps for 8K. Dense separable Gaussian filtering and bilinear reconstruction avoid sparse rings of repeated light sources. The grid step is bounded between 2 and 16 pixels; very small images also use a minimum filter width.
 
@@ -44,7 +44,7 @@ Scaling preserves the approximate relative spread between HD and 4K, not identic
 
 ## Your Own LUT
 
-Use Grain Only or Halation & Grain Only, or disable Film Color, Film Development, and Print in Full mode. Choose the input color space actually entering this node. Texture-only rendering returns that same encoding, regardless of the output selector. Turning color/tone strengths to zero alone is not equivalent to disabling those modules: camera/print exposure and color-space conversion still operate.
+Use Grain Only or Halation, Bloom & Grain Only, or disable Film Color, Film Development, and Print in Full mode. Choose the input color space actually entering this node. Texture-only rendering returns that same encoding, regardless of the output selector. Turning color/tone strengths to zero alone is not equivalent to disabling those modules: camera/print exposure and color-space conversion still operate.
 
 ## Verification
 
