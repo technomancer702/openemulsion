@@ -26,7 +26,7 @@
 #define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, halation, aura, linear-light bloom, and selective color, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 40
+#define kPluginVersionMinor 41
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -1134,14 +1134,6 @@ public:
         addDouble(desc,page,"hdrWhite","HDR Reference White (nits)",203,80,300,1,nullptr,
                   "Linear white 1 maps to this luminance in PQ; default 203 nits. Active for PQ output, including Conversion Only. Peak Luminance remains higher across the allowed ranges. Creative tone/print can compress highlights before output; lower their tone strengths for more headroom.");
 
-        auto* sdr = addGroup(desc,page,"sdrViewing","SDR Viewing",false);
-        addDouble(desc,page,"sdrContrast","Viewing Contrast",0,-1,1,.01,sdr,
-                  "Adjusts the SDR viewing curve around fixed middle gray, before creative negative/print response. Negative softens contrast; positive deepens shadows and increases midtone separation. Zero preserves the v0.39 curve. Does not replace camera Exposure or recover clipped detail. Built-in looks preserve this output setting.");
-        addDouble(desc,page,"sdrRolloff","Highlight Rolloff",0,-1,1,.01,sdr,
-                  "Moves the SDR shoulder while preserving middle gray and its slope. Positive starts rolloff earlier for darker, softer highlights; negative delays rolloff for brighter highlights. Zero preserves v0.39. Negative and Print tone curves can add further compression. Inactive outside SDR rendering.");
-        addDouble(desc,page,"sdrGamut","Gamut Compression",0,-1,1,.01,sdr,
-                  "Adjusts the SDR display-gamut shoulder independently of Film Color Gamut Compression. Negative reduces in-gamut softening; positive starts compression earlier. Zero preserves v0.39. Minus one still limits out-of-gamut RGB to the display boundary; it does not disable gamut safety. Inactive outside SDR rendering.");
-
         choice = desc.defineChoiceParam("filmGauge");
         choice->setLabels("Film Gauge", "Film Gauge", "Film Gauge");
         for (const auto& profile : gauge::Profiles) choice->appendOption(profile.label);
@@ -1335,6 +1327,14 @@ public:
         seed->setDisplayRange(0, 1000);
         seed->setParent(*grain);
         page->addChild(*seed);
+
+        auto* sdr = addGroup(desc,page,"sdrViewing","SDR Viewing",false);
+        addDouble(desc,page,"sdrContrast","Viewing Contrast",0,-1,1,.01,sdr,
+                  "Adjusts the SDR viewing curve around fixed middle gray, before creative negative/print response. Negative softens contrast; positive deepens shadows and increases midtone separation. Zero preserves the v0.39 curve. Does not replace camera Exposure or recover clipped detail. Built-in looks preserve this output setting.");
+        addDouble(desc,page,"sdrRolloff","Highlight Rolloff",0,-1,1,.01,sdr,
+                  "Moves the SDR shoulder while preserving middle gray and its slope. Positive starts rolloff earlier for darker, softer highlights; negative delays rolloff for brighter highlights. Zero preserves v0.39. Negative and Print tone curves can add further compression. Inactive outside SDR rendering.");
+        addDouble(desc,page,"sdrGamut","Gamut Compression",0,-1,1,.01,sdr,
+                  "Adjusts the SDR display-gamut shoulder independently of Film Color Gamut Compression. Negative reduces in-gamut softening; positive starts compression earlier. Zero preserves v0.39. Minus one still limits out-of-gamut RGB to the display boundary; it does not disable gamut safety. Inactive outside SDR rendering.");
     }
 
     OFX::ImageEffect* createInstance(OfxImageEffectHandle handle, OFX::ContextEnum) override

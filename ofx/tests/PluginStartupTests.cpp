@@ -271,14 +271,25 @@ void testContext(OfxPlugin& plugin, const char* context)
         require(value<std::string>(it->second.properties, kOfxParamPropType) == kOfxParamTypeGroup, "Non-group parent");
     }
     auto& children = descriptor.parameters.at("Controls").properties.at(kOfxParamPropPageChild);
-    size_t peak = children.size(), white = children.size(), gauge = children.size();
+    size_t peak = children.size(), white = children.size(), gauge = children.size(), sdrGroup = children.size();
     for (size_t i = 0; i < children.size(); ++i) {
         auto name = std::get<std::string>(children[i]);
         if (name == "hdrPeak") peak = i;
         if (name == "hdrWhite") white = i;
         if (name == "filmGauge") gauge = i;
+        if (name == "sdrViewing") sdrGroup = i;
     }
     require(peak < white && white < gauge, "HDR sliders must precede Film Gauge");
+    require(sdrGroup < children.size() && sdrGroup+4==children.size(),"SDR Viewing must be the last group and controls");
+    const std::array<const char*,3> sdrNames {"sdrContrast","sdrRolloff","sdrGamut"};
+    for (size_t i=0; i<sdrNames.size(); ++i)
+        require(std::get<std::string>(children[sdrGroup+1+i])==sdrNames[i],"SDR slider order changed");
+    for (size_t i=0; i<children.size(); ++i) {
+        const auto name=std::get<std::string>(children[i]);
+        if (name=="selectiveColorControls" ||
+            value<std::string>(descriptor.parameters.at(name).properties,kOfxParamPropParent)=="selectiveColorControls")
+            require(i<sdrGroup,"SDR Viewing must follow Selective Color and its controls");
+    }
 
     for (int rendering : {0,1,2}) {
         const bool hdr=rendering==2, sdr=rendering==1;

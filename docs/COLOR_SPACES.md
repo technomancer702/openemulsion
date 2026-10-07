@@ -1,4 +1,4 @@
-# OFX Color Spaces (v0.40)
+# OFX Color Spaces (v0.41)
 
 ## Resolve Workflow
 
@@ -94,7 +94,8 @@ Source highlight extraction and selective-color keys still use the original conv
 
 ### SDR Viewing Controls
 
-The collapsed **SDR Viewing** group exposes three centered adjustments, each
+The collapsed **SDR Viewing** group sits at the bottom below Selective Color
+and exposes three centered adjustments, each
 from -1 to +1. Zero preserves v0.39, including its colored-emitter detail response.
 They are output context, not stock-recipe values: built-in looks preserve them,
 and user presets capture them in format 6. Preserve Color Spaces also preserves

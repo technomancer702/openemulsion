@@ -1,6 +1,11 @@
-# OpenEmulsion v0.40
+# OpenEmulsion v0.41
 
 Experimental Windows x64 film emulation with SDR and direct HDR PQ output. Stock and movie references remain artistic interpretations, not measured film profiles or exact movie grades. HDR monitor/host validation is still outstanding.
+
+## Changes in v0.41
+
+- Moved the collapsed SDR Viewing group to the bottom below Selective Color. Its controls, defaults, enabled-state policy, rendering math and preset format are unchanged.
+- Added shipping-plugin descriptor checks to keep the group and its three sliders last, after all Selective Color controls.
 
 ## Changes in v0.40
 

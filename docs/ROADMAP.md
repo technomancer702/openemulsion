@@ -1,6 +1,8 @@
 # Upgrade Roadmap
 
-## Completed Through v0.40
+## Completed Through v0.41
+
+- Moved the collapsed SDR Viewing group to the bottom below Selective Color, with shipping-plugin page-order regression checks. Rendering, defaults and preset format are unchanged.
 
 - Exposed SDR Viewing Contrast, Highlight Rolloff and Gamut Compression, with exact v0.39 zero defaults, fixed middle-gray placement, shared CPU/OpenCL math and inactive-path greying/isolation. Format-6 output-context capture and strict legacy zero migration. Stage-isolated exposure ramps and five-clip comparisons document combined SDR/negative/print compression without changing existing creative recipes. See [Color Spaces](COLOR_SPACES.md) and [Color Bench](COLOR_BENCH.md).
 

@@ -6,7 +6,7 @@ Film Color, Film Development, Print, Halation, Aura, Bloom, Grain, and Selective
 
 ## Status
 
-Experimental, Windows x64. Current development version: **v0.40**. The current implementation supports OpenCL acceleration and a multithreaded CPU fallback. CUDA, Metal, macOS, and Linux builds are not implemented.
+Experimental, Windows x64. Current development version: **v0.41**. The current implementation supports OpenCL acceleration and a multithreaded CPU fallback. CUDA, Metal, macOS, and Linux builds are not implemented.
 
 OpenEmulsion is an original artistic approximation, not a measured film-stock calibration. HDR PQ output is experimental; HLG and HDR metadata are not implemented. There is no DCTL dependency. Earlier rendering has been tested in Resolve, but this is not yet a stable production release and calibrated HDR monitoring still needs verification.
 
@@ -73,7 +73,7 @@ New instances default to Rec.709/Gamma 2.4 input and Same as Input output. Suppo
 
 **Output Rendering** defaults to Auto: an original neutral SDR viewing response for scene-log/linear input sent to Rec.709 or sRGB, before creative film/print processing. It improves shadow placement, highlight rolloff and bright-color gamut handling across all presets, including Clean Slate. Auto leaves display-ready input and managed log/linear output alone. Conversion Only retains the pre-v0.34 gamut/gamma conversion for another viewing transform; Standard SDR explicitly enables the response for display output. Texture-only modes and bypass ignore it. Built-in presets preserve this choice, and user files save it. Old format-1/2 user files migrate to Conversion Only; select Auto to adopt the new SDR foundation.
 
-**SDR Viewing** exposes the foundation's Viewing Contrast, Highlight Rolloff and Gamut Compression in a collapsed group. All three are centered adjustments: zero reproduces v0.39 exactly. Contrast keeps middle gray fixed; positive Rolloff starts the shoulder earlier, while negative delays it. Gamut Compression changes display-boundary softening, independently of the Film Color control; even at minus one it bounds out-of-gamut RGB. These controls grey out outside SDR rendering and are preserved by built-in looks. Format-6 user presets capture them; older files load with zero adjustments. Film and print tone can still add compression; these controls do not recover clipped source detail.
+**SDR Viewing** exposes the foundation's Viewing Contrast, Highlight Rolloff and Gamut Compression in a collapsed group at the bottom, below Selective Color. All three are centered adjustments: zero reproduces v0.39 exactly. Contrast keeps middle gray fixed; positive Rolloff starts the shoulder earlier, while negative delays it. Gamut Compression changes display-boundary softening, independently of the Film Color control; even at minus one it bounds out-of-gamut RGB. These controls grey out outside SDR rendering and are preserved by built-in looks. Format-6 user presets capture them; older files load with zero adjustments. Film and print tone can still add compression; these controls do not recover clipped source detail.
 
 See [Color Spaces](docs/COLOR_SPACES.md) for exact gamut pairs, workflow details, references, and limitations.
 
@@ -136,9 +136,9 @@ The optional sixth preview path produces a five-panel bloom comparison; see [Blo
 
 ## Release Packaging
 
-Commit release files first, then run `.\tools\package_release.ps1`. It builds and tests Release, verifies the supported compiler/runtime notices and imported DLLs, and creates `dist/releases/OpenEmulsion-v0.40-Windows-x64.zip` plus `.zip.sha256`. Use `-Force` only when deliberately replacing a generated archive. Release output is ignored by Git; upload the ZIP and checksum as release assets, not repository files.
+Commit release files first, then run `.\tools\package_release.ps1`. It builds and tests Release, verifies the supported compiler/runtime notices and imported DLLs, and creates `dist/releases/OpenEmulsion-v0.41-Windows-x64.zip` plus `.zip.sha256`. Use `-Force` only when deliberately replacing a generated archive. Release output is ignored by Git; upload the ZIP and checksum as release assets, not repository files.
 
-The packager includes only the bundle, release guides, documentation, licenses, and a `git archive` source snapshot of the exact revision in `manifest.json`. It validates the extracted files and hashes, loads the extracted OFX binary using only its directory and Windows system DLL search, and checks its exported identifier/version. To recheck an archive, run `.\tools\test_release.ps1 -Archive "dist/releases/OpenEmulsion-v0.40-Windows-x64.zip"` in 64-bit PowerShell. This is not a clean-machine Resolve installation test or a code-signing/security certification; separate-machine and other-GPU validation remain outstanding.
+The packager includes only the bundle, release guides, documentation, licenses, and a `git archive` source snapshot of the exact revision in `manifest.json`. It validates the extracted files and hashes, loads the extracted OFX binary using only its directory and Windows system DLL search, and checks its exported identifier/version. To recheck an archive, run `.\tools\test_release.ps1 -Archive "dist/releases/OpenEmulsion-v0.41-Windows-x64.zip"` in 64-bit PowerShell. This is not a clean-machine Resolve installation test or a code-signing/security certification; separate-machine and other-GPU validation remain outstanding.
 
 Optional Resolve test charts:
 
