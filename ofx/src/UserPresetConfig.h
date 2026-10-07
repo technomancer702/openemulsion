@@ -41,7 +41,8 @@ struct Snapshot {
     std::array<double, std::size(ContextControls)> context {};
     Snapshot() {
         for (size_t i = 0; i < controls.size(); ++i) controls[i] = look::Controls[i].initial;
-        modules.fill(true);
+        for (size_t i = 0; i < modules.size(); ++i)
+            modules[i] = (film::DefaultModules & moduleui::Toggles[i].module) != 0;
         for (size_t i = 0; i < context.size(); ++i) context[i] = ContextControls[i].initial;
     }
 };
@@ -100,7 +101,7 @@ inline Json toJson(const Snapshot& preset)
         const auto& c = ContextControls[i];
         context[c.name] = validateNumber(preset.context[i], c.minimum, c.maximum, c.kind != Number, c.name);
     }
-    return {{"formatVersion",FormatVersion}, {"plugin",Plugin}, {"createdWith","0.32"},
+    return {{"formatVersion",FormatVersion}, {"plugin",Plugin}, {"createdWith","0.33"},
             {"name",preset.name}, {"controls",controls}, {"modules",modules}, {"context",context}};
 }
 

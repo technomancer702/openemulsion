@@ -81,9 +81,11 @@ inline bool semanticControlEnabled(std::string_view name, int mode, int enabled,
 }
 
 template<class Writer>
-inline void applyMode(int mode, Writer write)
+inline void applyMode(int mode, Writer write, bool selectiveEnabled = false)
 {
-    const int modules = film::modulesForMode(mode, film::All);
+    // Modes opt into ordinary stages, but never opt into selective desaturation.
+    const int enabled = film::DefaultModules | (selectiveEnabled ? film::SelectiveColor : 0);
+    const int modules = film::modulesForMode(mode, enabled);
     for (size_t i = 0; i < Toggles.size(); ++i)
         write(i, (modules & Toggles[i].module) != 0);
 }

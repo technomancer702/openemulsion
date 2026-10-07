@@ -26,7 +26,7 @@
 #define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, halation, aura, linear-light bloom, and selective color, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 32
+#define kPluginVersionMinor 33
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -49,7 +49,7 @@ struct Settings {
     bool enableAura = true;
     bool enableBloom = true;
     bool enableGrain = true;
-    bool enableSelectiveColor = true;
+    bool enableSelectiveColor = false;
     double selectiveAmount = 0, selectiveHue = 0, selectiveRange = 15, selectiveSoftness = 15, selectiveSaturation = .25;
     int selectiveView = 0;
     double exposure = 0.0;
@@ -623,6 +623,7 @@ public:
         if (name == "mode" && args.reason == OFX::eChangeUserEdit) {
             int mode = 0;
             mode_->getValueAtTime(args.time, mode);
+            const bool selectiveEnabled = enableSelectiveColor_->getValueAtTime(args.time);
             beginEditBlock("Apply processing mode");
             applyingControls_ = true;
             try {
@@ -631,7 +632,7 @@ public:
                     if (toggle->getValueAtTime(args.time) == enabled) return;
                     if (toggle->getNumKeys() != 0) toggle->setValueAtTime(args.time, enabled);
                     else toggle->setValue(enabled);
-                });
+                }, selectiveEnabled);
             } catch (...) {
                 applyingControls_ = false;
                 endEditBlock();
@@ -1139,7 +1140,7 @@ public:
         GroupParamDescriptor* grain = addGroup(desc, page, "grainControls", "Grain", true);
         addToggle(desc, page, grain, "enableGrain", "Enable");
         GroupParamDescriptor* selective = addGroup(desc, page, "selectiveColorControls", "Selective Color", false);
-        addToggle(desc, page, selective, "enableSelectiveColor", "Enable");
+        addToggle(desc, page, selective, "enableSelectiveColor", "Enable", false);
 
         choice = desc.defineChoiceParam("system");
         choice->setLabels("Film System", "Film System", "Film System");
@@ -1277,11 +1278,11 @@ private:
     }
 
     static void addToggle(OFX::ImageEffectDescriptor& desc, OFX::PageParamDescriptor* page, OFX::GroupParamDescriptor* group,
-                          const std::string& name, const std::string& label)
+                          const std::string& name, const std::string& label, bool initial = true)
     {
         auto* param = desc.defineBooleanParam(name);
         param->setLabels(label, label, label);
-        param->setDefault(true);
+        param->setDefault(initial);
         param->setParent(*group);
         page->addChild(*param);
     }

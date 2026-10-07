@@ -1,4 +1,4 @@
-# Module Controls (v0.32)
+# Module Controls (v0.33)
 
 Disabled modules retain their settings but grey out every option inside the module. The Enable toggle remains editable if the current mode permits that module. Modules excluded by the mode have unavailable toggles and controls, regardless of any stored Enable value.
 
@@ -10,15 +10,15 @@ A user edit to Mode sets the Enable toggles as follows:
 
 | Mode | Enabled modules |
 | --- | --- |
-| Full | Film Color, Film Development, Print, Halation, Aura, Bloom, Grain, Selective Color |
-| Color Only | Film Color, Film Development, Print, Selective Color |
+| Full | Film Color, Film Development, Print, Halation, Aura, Bloom, Grain; retain Selective Color Enable choice |
+| Color Only | Film Color, Film Development, Print; retain Selective Color Enable choice |
 | Halation, Bloom & Grain Only | Halation, Aura, Bloom, Grain |
 | Grain Only | Grain |
 | Bypass | None |
 | Halation Matte | Halation, Aura |
 | Bloom Matte | Bloom |
 
-Selecting a different mode replaces manual Enable choices with that mode's module set. Returning to Full enables all modules; individual modules can then be disabled again. The operation does not alter strengths, numeric controls, seeds, selected styles, or print recipes. An enabled effect with zero strength stays at zero; mode selection does not invent an effect amount.
+Selecting a different mode replaces ordinary manual Enable choices with that mode's module set. Selective Color is an exception: Full/Color Only preserve its current Enable choice; every excluded mode disables it and returning does not re-enable it. New instances and all non-Graphic-Noir built-in presets leave it off. Existing projects and user files retain explicit stored choices. The operation does not alter strengths, numeric controls, seeds, selected styles, or print recipes. An enabled effect with zero strength stays at zero; mode selection does not invent an effect amount.
 
 Print's recipe controls require both an active Print module and Custom style. Re-enabling Print does not unlock a named preset, and selecting Custom does not unlock a disabled Print module. Strength and exposure/balance controls remain subject only to the Print module's state.
 

@@ -44,8 +44,9 @@ int main()
                     const int bit = moduleui::Toggles[i].module;
                     changedMask = on ? changedMask | bit : changedMask & ~bit;
                     ++writes;
-                });
-                require(writes == moduleui::Toggles.size() && changedMask == modeMasks[mode],"Mode does not synchronize all toggles");
+                }, (enabled & film::SelectiveColor) != 0);
+                const int expected = modeMasks[mode] & (film::DefaultModules | (enabled & film::SelectiveColor));
+                require(writes == moduleui::Toggles.size() && changedMask == expected,"Mode does not synchronize toggles or preserve selective opt-in");
                 const int active = modeMasks[mode] & enabled;
                 for (const auto& toggle : moduleui::Toggles) {
                     require(moduleui::controlEnabled(static_cast<int>(mode),film::All,toggle.module) ==
@@ -61,14 +62,23 @@ int main()
                             ((active & film::Print) != 0 && style == printstyle::Custom),"Print preset locking bypasses module enable");
             }
         }
-        // Re-entering Full restores every toggle, without changing print or numeric settings.
+        // Default mode edits never enable Selective Color, even with retained amounts.
         int enabled = film::All;
         for (int mode : {3,4,6,5,2,1,0}) {
             moduleui::applyMode(mode,[&](size_t i, bool on) {
                 const int bit = moduleui::Toggles[i].module;
                 enabled = on ? enabled | bit : enabled & ~bit;
             });
-            require(enabled == modeMasks[mode],"Mode sequence retains stale disabled toggles");
+            require(enabled == (modeMasks[mode] & film::DefaultModules),"Mode sequence opts into selective color");
+        }
+        enabled = film::SelectiveColor;
+        for (int mode : {0,1,0,2,0,1,4,0}) {
+            const int expected = modeMasks[mode] & (film::DefaultModules | (enabled & film::SelectiveColor));
+            moduleui::applyMode(mode,[&](size_t i, bool on) {
+                const int bit = moduleui::Toggles[i].module;
+                enabled = on ? enabled | bit : enabled & ~bit;
+            }, (enabled & film::SelectiveColor) != 0);
+            require(enabled == expected,"Mode transition loses explicit selective opt-in or restores it after exclusion");
         }
         require(moduleui::controlEnabled(0,film::Development,film::Development),"Neutral Development cannot be edited");
         require(!moduleui::controlEnabled(3,film::All,film::Negative | film::Development | film::Print),"Texture-only output selector remains enabled");

@@ -290,6 +290,10 @@ int main()
             }
             require(writes == std::size(look::Controls) && toggles == moduleui::Toggles.size(), "Incomplete recipe application");
             require(mask == static_cast<int>(look::recipe(preset)[film::ModuleIndex]), "Incorrect module switches");
+            const bool selectiveLook = preset == look::ComicRed || preset == look::ComicBlue || preset == look::ComicYellow;
+            require(((mask & film::SelectiveColor) != 0) == selectiveLook,"Ordinary preset enables Selective Color");
+            require(selectiveLook || (packed[film::SelectiveAmount] == 0 && packed[film::SelectiveView] == 0),
+                    "Ordinary preset retains selective amount or matte view");
             require(packed[0] == 0 && packed[2] == printstyle::Custom, "Preset is masked by mode or locked print");
             for (int preserved : {4,5,6,25,26,27})
                 require(packed[preserved] == before[preserved], "Preserved setting changed");

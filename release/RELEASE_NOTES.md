@@ -1,6 +1,13 @@
-# OpenEmulsion v0.32
+# OpenEmulsion v0.33
 
 Experimental Windows x64 genre presets and Selective Color. Stock and movie references are artistic interpretations, not measured film profiles or exact movie grades. Existing response math and recipe values are unchanged; the new finishing operation is neutral by default.
+
+## Changes in v0.33
+
+- Selective Color Enable now defaults to off in new instances and user-preset defaults. All built-in recipes disable it except the three Graphic Noir / Sin City accent recipes.
+- Full/Color Only mode edits preserve an explicit Selective Color choice instead of automatically enabling it. Texture-only, bypass and glow-matte modes disable it; returning does not restore it automatically.
+- Saved project values and user-preset snapshots retain their stored switch. Selecting Custom remains non-destructive. Rendering math, preset RGB values and file format are unchanged.
+- Added all-recipe opt-in, default-snapshot and exhaustive mode-mask/transition checks. CPU/OpenCL regression coverage remains unchanged.
 
 ## Changes in v0.32
 

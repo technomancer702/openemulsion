@@ -96,6 +96,9 @@ int main()
         using namespace userpreset;
         testCurrentCapture();
         Snapshot original;
+        for (size_t i = 0; i < original.modules.size(); ++i)
+            require(original.modules[i] == (moduleui::Toggles[i].module != film::SelectiveColor),
+                    "Default snapshot enables Selective Color or disables an ordinary module");
         original.name = "Night look \"A\" \n \u00e9";
         for (size_t i = 0; i < original.controls.size(); ++i) {
             const auto& c = look::Controls[i];

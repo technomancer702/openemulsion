@@ -1,9 +1,10 @@
 # Upgrade Roadmap
 
-## Completed Through v0.32
+## Completed Through v0.33
 
 - Independent film/print color and tone strengths and in-module Enable toggles.
 - Disabled-module control greying, mode-driven Enable toggles, and mode-aware print-preset locks.
+- Selective Color is explicitly disabled on new instances and all ordinary presets; only Graphic Noir opts in. Full/Color Only preserve an explicit choice instead of activating it, while excluded modes disable it. Saved projects and user-file switches remain authoritative.
 - Continuous negative gamut-compression amount, without the full-strength jump immediately above zero; consistent negative-channel flooring before later stages.
 - Original plugin icon with editable SVG, RGBA PNG, and incremental resource packaging checks.
 - Experimental Windows release ZIP packaging with instructions, matching source, compiler runtime notices, hashes, and extracted OFX load checks.

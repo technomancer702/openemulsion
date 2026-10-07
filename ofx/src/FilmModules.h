@@ -10,6 +10,7 @@ enum Module {
     Negative = 1, Print = 2, Halation = 4, Aura = 8, Grain = 16, Development = 32, Bloom = 64,
     SelectiveColor = 128, All = 255
 };
+constexpr int DefaultModules = All & ~SelectiveColor;
 
 enum SettingIndex {
     NegativeColorStrength = 41, NegativeToneStrength,

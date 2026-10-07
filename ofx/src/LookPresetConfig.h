@@ -190,7 +190,7 @@ inline Recipe recipe(int preset)
 {
     Recipe s {};
     for (const auto& control : Controls) s[control.setting] = control.initial;
-    s[film::ModuleIndex] = film::All;
+    s[film::ModuleIndex] = film::DefaultModules;
     // Original artistic recipes, not digitized stock measurements or movie grades.
     switch (preset) {
     case Daylight50:

@@ -1,9 +1,14 @@
-# Selective Color (v0.32)
+# Selective Color (v0.33)
 
 An independent finishing module for a monochrome image with one retained hue
 range. Available in Full and Color Only, disabled by texture-only and diagnostic
 glow modes. Enable is the first control; disabling it greys out its options and
-retains their values. Amount defaults to zero, so existing looks do not change.
+retains their values. Enable defaults to off and Amount to zero. Only the three
+Graphic Noir recipes enable it automatically; all other built-in recipes disable
+it and reset Amount/View. Switching Full/Color Only preserves an explicit Enable
+choice; texture-only, bypass and glow-matte modes disable it, without automatic
+re-enabling when returning. Saved projects and user preset files retain their
+stored Enable choice; the new defaults do not rewrite existing nodes.
 
 ## Controls
 
