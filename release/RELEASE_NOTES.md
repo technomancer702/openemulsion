@@ -1,6 +1,15 @@
-# OpenEmulsion v0.34
+# OpenEmulsion v0.35
 
-Experimental Windows x64 film emulation with an improved direct log-to-SDR foundation. Stock and movie references remain artistic interpretations, not measured film profiles or exact movie grades.
+Experimental Windows x64 film emulation with adjustable SDR highlight color retention. Stock and movie references remain artistic interpretations, not measured film profiles or exact movie grades.
+
+## Changes in v0.35
+
+- Added Highlight Color Retention inside Film Color below Gamut Compression. Zero/default retains v0.34 rendering. The 0-1 slider uses a deliberately restrained peak-channel blend, trading some highlight brightness for chroma without globally increasing saturation. Neutral grays and lower-intensity colors remain unchanged.
+- The control requires Film Color and active SDR rendering. Greys out and is ignored in Conversion Only, managed log/linear output, Auto with display input, disabled Film Color, texture/bypass, full-strength Mono Negative and Selection Matte. Independent of creative Film Color/Tone Strength; available on Clean Slate.
+- Uses shared CPU/OpenCL math in the existing composite pass, with no new image passes, buffers or readbacks. Source glow extraction, selection keys and grain coordinates stay unchanged. All built-in recipes retain zero retention and their previous appearance.
+- Portable preset format 4 captures the new control. Complete format-1/2/3 files migrate with retention zero; existing rendering policies and settings remain intact. Older plugin builds cannot read new format-4 files.
+- Added optional local original-footage bench tooling, precision/packing-level checks, source-hashed float comparisons, region statistics and tagged browser previews. Test footage and generated results are ignored, never uploaded or included in release ZIPs; Python/PyAV are developer-only dependencies.
+- Expanded tests cover neutral/below-threshold preservation, smooth amount/gate/channel transitions, bounded monotonic exposure ramps, UI/render enable policy, all-space/recipe CPU/OpenCL parity, preset capture/migration and comparative 4K GPU-resident timings. Native Resolve appearance and host workflow still need confirmation. See `docs/COLOR_SPACES.md` and `docs/COLOR_BENCH.md`.
 
 ## Changes in v0.34
 

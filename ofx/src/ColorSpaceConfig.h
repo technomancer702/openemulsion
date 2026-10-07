@@ -149,12 +149,22 @@ inline ColorParameters prepare(int source, int output, bool textureOnly, int ren
     return p;
 }
 
+inline bool highlightRetentionEnabled(const ColorParameters& p, int modules, int system, float colorStrength, int view)
+{
+    return p.renderSDR && (modules & film::Negative) && !(system == 4 && colorStrength >= 1) &&
+        !((modules & film::SelectiveColor) && view == 1);
+}
+
 inline ColorParameters prepare(const float* settings)
 {
     const int modules = film::modulesForSettings(settings);
-    return prepare(static_cast<int>(settings[26]), static_cast<int>(settings[27]),
+    auto p = prepare(static_cast<int>(settings[26]), static_cast<int>(settings[27]),
         !(modules & (film::Negative | film::Development | film::Print | film::SelectiveColor)),
         static_cast<int>(settings[film::OutputRendering]));
+    if (highlightRetentionEnabled(p,modules,static_cast<int>(settings[1]),settings[film::NegativeColorStrength],
+                                  static_cast<int>(settings[film::SelectiveView])))
+        p.highlightRetention = std::clamp(settings[film::HighlightRetention],0.0f,1.0f);
+    return p;
 }
 
 } // namespace color

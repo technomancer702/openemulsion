@@ -1,4 +1,4 @@
-# Installing OpenEmulsion v0.34
+# Installing OpenEmulsion v0.35
 
 This ZIP contains a prebuilt Windows x64 OFX plugin. No build tools or DCTL are needed. Development testing uses DaVinci Resolve 21.1.1 on Windows x64; other host versions and GPU vendors still need community testing.
 
@@ -22,6 +22,7 @@ Install only one copy. Developers already using `OFX_PLUGIN_PATH` should update 
 
 - For an unconverted Alexa LogC3 clip in a manually managed project, select **ARRI Alexa LogC3 / Wide Gamut 3 (EI 800)** input, **Rec.709 / Gamma 2.4** output and **Output Rendering: Auto**. Auto adds a neutral SDR viewing response before the creative film stages. Do not add a second LogC3-to-709 viewing transform afterward.
 - **Output Rendering: Conversion Only** retains pre-v0.34 gamut/gamma conversion when another stage provides display rendering. Auto leaves display-ready Rec.709/sRGB input and managed log/linear output alone. Standard SDR is an explicit override for display output; avoid it on already-rendered footage unless deliberate.
+- **Film Color > Highlight Color Retention** optionally keeps more color in bright lights during SDR rendering. Start at 0.5; zero/default preserves the previous response. More retention trades some highlight brightness for color, not a global saturation increase. The control greys out when the workflow cannot use it.
 - For a color-managed timeline, select the color space actually entering the effect, not necessarily the camera's recording space. For DaVinci Wide Gamut/Intermediate processing, choose that input and **Same as Input** output, leaving the project's output transform in place.
 - For your own LUT, use **Grain Only** or **Halation, Bloom & Grain Only**, or disable Film Color, Film Development, and Print in Full mode. Texture-only rendering returns the input encoding regardless of the output dropdown.
 - Mode selection switches ordinary module Enable toggles. Selective Color defaults to disabled; Full/Color Only retain its explicit choice, while excluded modes disable it without automatically restoring it later. Only Graphic Noir presets enable it automatically. Bloom strength defaults to zero.

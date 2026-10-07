@@ -24,9 +24,64 @@ static ColorRgb renderLinear(ColorRgb c)
     return color_curve_rgb(color_render_work(color_curve_rgb(c,ColorSRGB,1),p),ColorSRGB,0);
 }
 
+static ColorRgb renderRetained(ColorRgb c, float amount)
+{
+    auto p=color::prepare(color::LinearRec709,1,false,color::Automatic);
+    p.highlightRetention=amount;
+    return color_curve_rgb(color_render_work(color_curve_rgb(c,ColorSRGB,1),p),ColorSRGB,0);
+}
+
+static void testHighlightRetention()
+{
+    for (float y : {0.0f,.0001f,.01f,.18f,.6f,1.0f,4.0f,64.0f,10000.0f}) {
+        const auto baseline=renderRetained({y,y,y},0);
+        for (float amount : {.01f,.5f,1.0f}) {
+            const auto c=renderRetained({y,y,y},amount);
+            require(c.r==baseline.r && c.g==baseline.g && c.b==baseline.b,"Retention changes neutral gray");
+        }
+    }
+    for (const auto c : std::array<ColorRgb,4>{{{.38f,.2f,.12f},{.6f,.1f,.2f},{.1f,.2f,.6f},{.005f,.004f,.002f}}}) {
+        const auto a=renderRetained(c,0), b=renderRetained(c,1);
+        require(a.r==b.r && a.g==b.g && a.b==b.b,"Retention changes below-threshold color");
+    }
+    const auto baseline=renderRetained({32,.1f,.3f},0), retained=renderRetained({32,.1f,.3f},1);
+    require(retained.r>retained.g && retained.r>retained.b,"Retention reverses red emitter ordering");
+    require((retained.r-retained.g)/retained.r > (baseline.r-baseline.g)/baseline.r+.05f,"Retention has no visible highlight effect");
+    require(luma(retained)<luma(baseline) && luma(retained)>.6f*luma(baseline),"Retention brightness tradeoff exceeds restrained range");
+    for (const auto chip : std::array<ColorRgb,8>{{{1,.01f,.025f},{.01f,1,.02f},{.01f,.03f,1},{1,1,.01f},
+            {1,.01f,1},{.01f,1,1},{1,-.05f,.25f},{.38f,.2f,.12f}}}) {
+        for (float amount : {0.0f,.01f,.25f,.5f,1.0f}) {
+            float previous=-1;
+            for (int i=0; i<2400; ++i) {
+                const float exposure=std::exp2(-14.0f+i*.012f);
+                const auto c=renderRetained({chip.r*exposure,chip.g*exposure,chip.b*exposure},amount);
+                for (float value : {c.r,c.g,c.b}) require(std::isfinite(value) && value>=0 && value<=1.000001f,"Retained RGB boundary");
+                require(luma(c)+2e-6f>=previous,"Retention reverses exposure brightness");
+                previous=luma(c);
+            }
+        }
+    }
+    for (float peak : {.6f,2.0f}) {
+        const auto a=renderRetained({peak-1e-5f,.02f,.03f},1), b=renderRetained({peak+1e-5f,.02f,.03f},1);
+        near(a.r,b.r,1e-4f,"Retention gate has a discontinuity");
+        near(a.g,b.g,1e-4f,"Retention gate has a discontinuity");
+    }
+    const auto a=renderRetained({4,3.99999f,.1f},1), b=renderRetained({3.99999f,4,.1f},1);
+    near(a.r,b.r,1e-4f,"Peak-channel crossing is discontinuous");
+    near(a.g,b.g,1e-4f,"Peak-channel crossing is discontinuous");
+    // Every amount is an affine blend in display linear at a fixed source pixel.
+    for (int i=0; i<=100; ++i) {
+        const float amount=i/100.0f;
+        const auto c=renderRetained({32,.1f,.3f},amount);
+        near(c.r,baseline.r+(retained.r-baseline.r)*amount,2e-6f,"Retention slider is not smooth/linear");
+        near(c.g,baseline.g+(retained.g-baseline.g)*amount,2e-6f,"Retention slider is not smooth/linear");
+    }
+}
+
 int main()
 {
     try {
+        testHighlightRetention();
         near(color_sdr_tone(0),0,0,"SDR adds a black offset");
         near(color_sdr_tone(.18f),.12f,1e-7f,"SDR gray anchor");
         near(color_sdr_tone(.6f),.484f,1e-7f,"SDR shoulder anchor");
@@ -113,7 +168,7 @@ int main()
         std::printf("SDR Gamma 2.4 gray: old %.4f, new %.4f; 1%% scene shadow: old %.4f, new %.4f.\n",
             color_encode(.18f,ColorGamma24),color_encode(.12f,ColorGamma24),
             color_encode(.01f,ColorGamma24),color_encode(color_sdr_tone(.01f),ColorGamma24));
-        std::puts("SDR rendering: gray/white/black anchors, smooth monotonic HDR, preserved shadow gradation, gamut/luminance/chroma, skin/LEDs, all-space policies, all-recipe module isolation and exact disabled behavior pass.");
+        std::puts("SDR rendering: gray/white/black anchors, smooth monotonic HDR, preserved shadow gradation, gamut/luminance/chroma, skin/LEDs, all-space policies, all-recipe module isolation, exact disabled behavior and restrained highlight retention pass.");
         return 0;
     } catch (const std::exception& error) {
         std::fprintf(stderr,"FAILED: %s\n",error.what());

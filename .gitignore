@@ -3,6 +3,7 @@
 /dist/
 /analysis/
 /ofx-plugins/
+/test footage/
 
 # Local configuration and credentials
 .env

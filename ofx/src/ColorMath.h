@@ -38,6 +38,7 @@ typedef struct ColorParameters {
     int sourceCurve, outputCurve, sourceIsWork, outputIsWork, renderSDR;
     float to709[9];
     float from709[9];
+    float highlightRetention;
 } ColorParameters;
 
 static inline float color_signed_power(float x, float exponent)
@@ -186,15 +187,8 @@ static inline float color_sdr_tone(float x)
     return 1.0f - headroom * headroom / (headroom + slope * (x - 0.60f));
 }
 
-// Keep conversion math separate: textures and selection keys still see scene data.
-static inline ColorRgb color_render_work(ColorRgb work, ColorParameters p)
+static inline ColorRgb color_sdr_gamut(ColorRgb c, float mapped)
 {
-    if (!p.renderSDR) return work;
-    const ColorRgb linear = color_curve_rgb(work, ColorSRGB, 0);
-    const float y = linear.r * 0.2126f + linear.g * 0.7152f + linear.b * 0.0722f;
-    if (y <= 0.0f) { ColorRgb black = {0,0,0}; return black; }
-    const float mapped = color_sdr_tone(y), gain = mapped / y;
-    ColorRgb c = {linear.r * gain, linear.g * gain, linear.b * gain};
     const float hi = COLOR_MAX(c.r, COLOR_MAX(c.g,c.b)) - mapped;
     const float lo = mapped - COLOR_MIN(c.r, COLOR_MIN(c.g,c.b));
     const float distance = COLOR_MAX(hi / COLOR_MAX(1.0f-mapped,1e-7f), lo / COLOR_MAX(mapped,1e-7f));
@@ -209,6 +203,32 @@ static inline ColorRgb color_render_work(ColorRgb work, ColorParameters p)
     c.r = COLOR_MAX(0.0f,COLOR_MIN(1.0f,c.r));
     c.g = COLOR_MAX(0.0f,COLOR_MIN(1.0f,c.g));
     c.b = COLOR_MAX(0.0f,COLOR_MIN(1.0f,c.b));
+    return c;
+}
+
+// Keep conversion math separate: textures and selection keys still see scene data.
+static inline ColorRgb color_render_work(ColorRgb work, ColorParameters p)
+{
+    if (!p.renderSDR) return work;
+    const ColorRgb linear = color_curve_rgb(work, ColorSRGB, 0);
+    const float y = linear.r * 0.2126f + linear.g * 0.7152f + linear.b * 0.0722f;
+    if (y <= 0.0f) { ColorRgb black = {0,0,0}; return black; }
+    const float mapped = color_sdr_tone(y), gain = mapped / y;
+    ColorRgb c = {linear.r * gain, linear.g * gain, linear.b * gain};
+    c = color_sdr_gamut(c,mapped);
+    const float peak = COLOR_MAX(linear.r,COLOR_MAX(linear.g,linear.b));
+    const float low = COLOR_MIN(linear.r,COLOR_MIN(linear.g,linear.b));
+    if (p.highlightRetention > 0.0f && peak > 0.6f && peak-low > 1e-7f*COLOR_MAX(peak,1.0f)) {
+        // Retain emitter color with a restrained brightness tradeoff, not global saturation.
+        const float t = COLOR_MAX(0.0f,COLOR_MIN(1.0f,(peak-0.6f)/1.4f));
+        const float weight = 0.35f*p.highlightRetention*t*t*(3.0f-2.0f*t);
+        const float peakGain = color_sdr_tone(peak)/peak;
+        ColorRgb retained = {linear.r*peakGain,linear.g*peakGain,linear.b*peakGain};
+        retained = color_sdr_gamut(retained,y*peakGain);
+        c.r += (retained.r-c.r)*weight;
+        c.g += (retained.g-c.g)*weight;
+        c.b += (retained.b-c.b)*weight;
+    }
     return color_curve_rgb(c, ColorSRGB, 1);
 }
 

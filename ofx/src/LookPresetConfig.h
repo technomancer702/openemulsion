@@ -181,7 +181,8 @@ inline constexpr Control Controls[] {
     {"selectiveRange",film::SelectiveRange,Double,15,0,180},
     {"selectiveSoftness",film::SelectiveSoftness,Double,15,0,90},
     {"selectiveSaturation",film::SelectiveSaturation,Double,.25,0,1},
-    {"selectiveView",film::SelectiveView,Choice,0,0,1}
+    {"selectiveView",film::SelectiveView,Choice,0,0,1},
+    {"highlightRetention",film::HighlightRetention,Double,0,0,1}
 };
 
 using Recipe = std::array<double, film::SettingsCount>;

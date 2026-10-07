@@ -1,0 +1,5 @@
+# Optional offline footage analysis only; never required to build/install the OFX.
+av==19.0.1
+numpy>=1.26,<3
+Pillow>=10,<13
+matplotlib>=3.8,<4

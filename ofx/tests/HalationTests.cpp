@@ -1452,9 +1452,10 @@ public:
         Handle dst = createBuffer(context, 1, bytes, nullptr, &error);
         require(error == 0, "Cannot allocate benchmark output");
         std::vector<grain::PackedSettings> cases;
-        for (int mode : {0,1}) for (int rendering : {color::ConversionOnly,color::Automatic}) {
+        for (int mode : {0,1}) for (int rendering : {color::ConversionOnly,color::Automatic}) for (float retention : {0.0f,1.0f}) {
             auto s=filmSettings(); s[0]=static_cast<float>(mode); s[26]=color::AlexaLogC3; s[27]=1;
             s[film::OutputRendering]=static_cast<float>(rendering);
+            s[film::HighlightRetention]=retention;
             cases.push_back(s);
         }
         for (int source : {color::Rec709Gamma24, color::AlexaLogC3, color::DaVinciIntermediate, color::ACEScct}) {
@@ -1540,6 +1541,27 @@ public:
         }
         releaseMem(src);
         releaseMem(dst);
+        // Unlike the neutral timing field above, this activates retention on every pixel.
+        for (size_t i=0; i<input.size(); i+=4) {
+            input[i]=.85f; input[i+1]=.42f; input[i+2]=.51f; input[i+3]=1;
+        }
+        src=createBuffer(context,4|32,bytes,input.data(),&error);
+        require(error==0,"Cannot allocate colored timing input");
+        dst=createBuffer(context,1,bytes,nullptr,&error);
+        require(error==0,"Cannot allocate colored timing output");
+        for (int mode : {0,1}) for (float amount : {0.0f,.5f,1.0f}) {
+            auto s=filmSettings(); s[0]=static_cast<float>(mode); s[26]=color::AlexaLogC3; s[27]=1;
+            s[16]=.16f; s[film::HighlightRetention]=amount;
+            require(RunOpenEmulsionOpenCL(queue,width,height,0,s.data(),reinterpret_cast<const float*>(src),reinterpret_cast<float*>(dst)),"Retention timing warmup failed");
+            require(finish(queue)==0,"Retention timing warmup execution failed");
+            const auto start=std::chrono::steady_clock::now();
+            for (int frame=0; frame<12; ++frame)
+                require(RunOpenEmulsionOpenCL(queue,width,height,frame,s.data(),reinterpret_cast<const float*>(src),reinterpret_cast<float*>(dst)),"Retention timing render failed");
+            require(finish(queue)==0,"Retention timing execution failed");
+            const double ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count()/12;
+            std::printf("4K colored HDR LogC3, mode %d, highlight retention %.2f: %.2f ms/frame (GPU resident, every-pixel activation, excludes Resolve/transfers).\n",mode,amount,ms);
+        }
+        releaseMem(src); releaseMem(dst);
     }
 
     std::vector<float> render(const std::vector<float>& input, int width, int height, const grain::PackedSettings& s)
@@ -2086,9 +2108,10 @@ public:
     void testDisplayRendering()
     {
         for (int source=0; source<color::SpaceCount; ++source) for (int output=0; output<6; ++output)
-            for (int rendering=0; rendering<3; ++rendering) {
+            for (int rendering=0; rendering<3; ++rendering) for (float retention : {0.0f,.5f,1.0f}) {
                 auto s=filmSettings(); s[26]=static_cast<float>(source); s[27]=static_cast<float>(output);
                 s[film::OutputRendering]=static_cast<float>(rendering);
+                s[film::HighlightRetention]=retention;
                 s[4]=1.2f; s[5]=1.1f; s[6]=.9f;
                 test(17,19,s,false);
                 s[film::NegativeColorStrength]=s[film::NegativeToneStrength]=0;
@@ -2123,9 +2146,25 @@ public:
             s[13]=.4f; s[15]=.2f; s[16]=.2f; s[film::BloomAmount]=.2f;
             const auto off=render(input,9,1,s);
             s[film::OutputRendering]=color::StandardSDR;
+            s[film::HighlightRetention]=1;
             require(off==render(input,9,1,s),"Rendering changes texture/bypass/glow matte");
         }
-        std::puts("OpenCL SDR: all spaces/options, neutral and creative response, gray/gradation, exposure order, alpha, unchanged display-ready input, and texture/bypass/matte isolation match CPU.");
+        s=filmSettings(); s[0]=1; s[26]=color::LinearRec709; s[27]=1;
+        s[film::NegativeColorStrength]=s[film::NegativeToneStrength]=0; s[19]=film::Negative;
+        const std::vector<float> lights {32,.1f,.3f,.37f, .01f,.03f,32,.37f, .38f,.2f,.12f,.37f};
+        const auto baseline=render(lights,3,1,s);
+        s[film::HighlightRetention]=1;
+        const auto retained=render(lights,3,1,s);
+        require(retained[1]<baseline[1],"GPU retention does not restore red highlight color");
+        for (int i=8; i<12; ++i) require(retained[i]==baseline[i],"GPU retention changes below-threshold skin/alpha");
+        for (float amount : {0.0f,.5f,1.0f}) for (int preset=1; preset<look::Count; ++preset) {
+            const auto recipe=look::recipe(preset);
+            for (size_t i=0; i<s.size(); ++i) s[i]=static_cast<float>(recipe[i]);
+            s[26]=color::AlexaLogC3; s[27]=1; s[film::HighlightRetention]=amount;
+            test(17,19,s,false);
+            s[0]=1; test(17,19,s,false);
+        }
+        std::puts("OpenCL SDR: all spaces/options/retention amounts, all recipes, gray/gradation, exposure order, alpha, unchanged skin/display-ready input, and texture/bypass/matte isolation match CPU.");
     }
 
     void testUpgradeControls()

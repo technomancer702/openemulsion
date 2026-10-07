@@ -6,6 +6,8 @@
 #include <string>
 
 #include "ModuleControlState.h"
+#include "ColorSpaceConfig.h"
+#include "LookPresetConfig.h"
 
 static void require(bool value, const char* message)
 {
@@ -90,7 +92,7 @@ int main()
         for (int mode = 0; mode < 7; ++mode) for (int mask = 0; mask <= film::All; ++mask)
             for (int system = 0; system < 6; ++system) for (double strength : {0.0,0.5,0.999,1.0}) {
                 const bool mono = system == 4 && (mode == 0 || mode == 1) && (mask & film::Negative);
-                for (const char* name : {"saturation","density","gamutCompression","grainColor"})
+                for (const char* name : {"saturation","density","gamutCompression","grainColor","highlightRetention"})
                     require(moduleui::semanticControlEnabled(name,mode,mask,system,strength) == !(mono && strength >= 1),
                             "Mono semantic greying ignores mode/module/system/partial strength");
                 for (const char* name : {"negativeCrosstalk","skinHue"})
@@ -101,7 +103,26 @@ int main()
                     require(moduleui::semanticControlEnabled(name,mode,mask,system,strength),
                             "Mono semantic greying disables an effective or recovery control");
             }
-        std::puts("Module UI: every mode/mask, all control bindings, toggle synchronization, manual-disable policy, print locks, neutral Development, globals, and mode transitions pass.");
+        auto recipe=look::recipe(look::Neutral);
+        std::array<float,film::SettingsCount> s {};
+        for (size_t i=0; i<s.size(); ++i) s[i]=static_cast<float>(recipe[i]);
+        s[26]=color::AlexaLogC3; s[27]=1; s[film::HighlightRetention]=1;
+        for (int mode=0; mode<7; ++mode) for (int mask=0; mask<=film::All; ++mask)
+            for (int rendering=0; rendering<3; ++rendering) for (int system : {0,4}) for (float strength : {.5f,1.0f}) {
+                s[0]=static_cast<float>(mode); s[19]=static_cast<float>(mask); s[1]=static_cast<float>(system);
+                s[film::OutputRendering]=static_cast<float>(rendering); s[film::NegativeColorStrength]=strength;
+                const auto cp=color::prepare(s.data());
+                const bool expected=(mode==0 || mode==1) && (mask & film::Negative) && rendering!=color::ConversionOnly &&
+                    !(system==4 && strength==1);
+                require((cp.highlightRetention>0)==expected,"Retention rendering policy mismatch");
+                const auto view=color::prepare(color::AlexaLogC3,1,false,rendering);
+                require(color::highlightRetentionEnabled(view,film::modulesForMode(mode,mask),system,strength,0)==expected,
+                    "Retention UI disagrees with rendering");
+            }
+        s[0]=1; s[19]=film::Negative|film::SelectiveColor; s[1]=0;
+        s[film::OutputRendering]=color::Automatic; s[film::SelectiveView]=1;
+        require(color::prepare(s.data()).highlightRetention==0,"Retention affects selective matte");
+        std::puts("Module UI: every mode/mask, all control bindings, toggle synchronization, manual-disable policy, print locks, neutral Development, globals, mode transitions and retention UI/render policies pass.");
         return 0;
     } catch (const std::exception& error) {
         std::fprintf(stderr,"FAILED: %s\n",error.what());

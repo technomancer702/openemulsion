@@ -22,6 +22,7 @@ enum SettingIndex {
     GrainResponse,
     SelectiveAmount, SelectiveHue, SelectiveRange, SelectiveSoftness, SelectiveSaturation, SelectiveView,
     OutputRendering,
+    HighlightRetention,
     SettingsCount
 };
 constexpr int ModuleIndex = 19;

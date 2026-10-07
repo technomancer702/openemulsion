@@ -1,4 +1,4 @@
-OpenEmulsion v0.34 - Windows x64
+OpenEmulsion v0.35 - Windows x64
 Experimental development release
 
 INSTALL
@@ -20,6 +20,8 @@ Bloom defaults to zero; raise its strength to use it.
 Selective Color defaults to disabled; only Graphic Noir presets enable it.
 Output Rendering defaults to Auto for log/linear input sent to Rec.709 or sRGB.
 Display-ready input, managed log output and texture-only modes are unaffected.
+Highlight Color Retention in Film Color preserves more color in bright emitters
+with a restrained brightness tradeoff. Default zero retains the previous look.
 User Presets can save/load portable look snapshots. Grain Response optionally
 adds negative-driven grain before Print; Post Print remains the default.
 
@@ -38,7 +40,7 @@ The film profiles are original creative approximations, not measured stocks.
 SOURCE AND LICENSE
 Free and open source, MPL-2.0. See LICENSE and THIRD_PARTY_NOTICES.md.
 Compiler runtime notices travel with the plugin in Contents/Licenses.
-Source/OpenEmulsion-v0.34-source.zip contains the matching project source;
+Source/OpenEmulsion-v0.35-source.zip contains the matching project source;
 external OpenFX SDK files are not included. See manifest.json for the exact
 source revision and SHA-256 hashes.
 

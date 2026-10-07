@@ -1,4 +1,4 @@
-# User Presets (v0.34)
+# User Presets (v0.35)
 
 The User Presets group sits below the built-in Preset dropdown. Save Preset and Load Preset open native Windows dialogs for portable `.oepreset` files. The files contain UTF-8 JSON, not executable code or external LUT references. They are separate from Filmbox/Dehancer preset formats.
 
@@ -24,7 +24,7 @@ Canceling a dialog changes nothing. Filesystem failures are reported through the
 
 ## File Format and Validation
 
-Format version 3 stores `plugin`, `createdWith`, `name`, `controls`, `modules`, and `context`, alongside `formatVersion`. It adds Output Rendering to the color-space context. Creative settings use stable parameter identifiers, not display labels; choices are numeric indices. Complete format-version-1/2 files remain readable with their prior values retained and Output Rendering set to Conversion Only, preserving their original conversion behavior. Version 1 also receives neutral Selective Color defaults and a disabled switch. Mixed/incomplete schemas are rejected. New files require v0.34 or later; older builds cannot read format version 3. New plugin instances default to Auto; this differs deliberately from legacy file migration. Set Auto after importing an old preset to use the new SDR foundation.
+Format version 4 stores `plugin`, `createdWith`, `name`, `controls`, `modules`, and `context`, alongside `formatVersion`. It adds Highlight Color Retention to creative controls; format 3 introduced Output Rendering in the color-space context. Creative settings use stable parameter identifiers, not display labels; choices are numeric indices. Complete format-version-1/2/3 files remain readable, with retention set to zero. Versions 1/2 retain prior tuning and migrate Output Rendering to Conversion Only; version 3 retains its stored rendering policy. Version 1 also receives neutral Selective Color defaults and a disabled switch. Mixed/incomplete schemas are rejected. New files require v0.35 or later; older builds cannot read format version 4. New plugin instances default to Auto; this differs deliberately from legacy format-1/2 migration. Set Auto after importing an old preset to use the new SDR foundation. Highlight retention is restored even when Preserve Color Spaces is enabled, because it is a creative control, not encoding context.
 
 All known controls and switches are required. Parsing rejects unsupported versions/plugins, missing or unknown controls, wrong types, fractional choices, nonfinite/out-of-range numbers, duplicate fields, excessive nesting, trailing data, and files over 64 KiB. Names are limited to 256 UTF-8 bytes; paths use the native Unicode Windows APIs. JSON parsing/serialization use vendored MIT-licensed nlohmann/json v3.12.0, whose release checksum was verified upstream.
 

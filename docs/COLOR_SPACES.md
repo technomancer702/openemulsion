@@ -1,4 +1,4 @@
-# OFX Color Spaces (v0.34)
+# OFX Color Spaces (v0.35)
 
 ## Resolve Workflow
 
@@ -55,6 +55,34 @@ The independent rational luminance curve maps scene-linear 18% gray to display-l
 Chroma is rescaled with linear luminance, then compressed radially toward the neutral axis at the display-gamut boundary. In-gamut colors below the compression knee retain their chroma direction; overbright colored emitters smoothly approach neutral white rather than relying on display channel clipping. No global saturation boost, stock-data import, ARRI LUT reproduction, or ACES rendering-transform equivalence is claimed. Creative print lift/casts and texture can still intentionally change the final black/white values.
 
 Source highlight extraction and selective-color keys still use the original converted scene signal (camera-balanced for selection when Film Color is enabled). Rendering does not change glow extraction thresholds, source hue selection or procedural grain coordinates. Grain tonal weighting follows the image at its selected insertion point, so its amplitude can legitimately change with the improved tone response.
+
+### Highlight Color Retention
+
+Film Color's **Highlight Color Retention** defaults to zero, preserving v0.34's
+rendering. Its 0-1 range smoothly blends the display-linear luminance-based
+result toward peak-RGB scaling, with an effective maximum blend of 0.35. The
+weight smoothly activates between peak scene-linear 0.6 and 2.0, after camera
+balance. Both endpoints use bounded radial gamut mapping. This trades some
+highlight brightness for retained emitter color; it is not a global saturation
+increase or guaranteed recovery of clipped source channels.
+
+Neutral grays and colors whose largest linear channel is at most 0.6 retain
+their original response. Bright colored windows and reflections can change too,
+not just neon/LEDs. Start around 0.5 when a luminous colored source turns too
+white, and compare its brightness as well as its hue.
+
+It requires enabled Film Color and active SDR output rendering. Conversion
+Only, Auto with display-ready input, log/linear output, disabled Film Color,
+texture-only, bypass, full-strength Mono Negative and Selection Matte ignore
+it. The UI greys it out in those cases without discarding its stored value.
+Film Color/Tone Strength do not scale it: it belongs to the SDR foundation, so
+it works on Clean Slate while Film Color is enabled even at zero creative
+strengths. Built-in looks reset it to zero; portable user files capture it.
+
+Runs in the shared CPU/OpenCL composite pass without extra buffers or image
+passes. Source glow/selection keys and grain geometry remain unchanged;
+image-dependent grain amplitude may follow changed highlight tones. This is an
+original RGB rendering control, not spectral processing or stock calibration.
 
 The C++/OpenCL operation is in the existing composite pass with no new image buffers, passes, transfers or dependencies. It adds transfer-function and rational arithmetic when active. The original conversions below remain separately testable and retain their signed/HDR round trips in Conversion Only.
 

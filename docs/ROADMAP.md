@@ -1,6 +1,9 @@
 # Upgrade Roadmap
 
-## Completed Through v0.34
+## Completed Through v0.35
+
+- Restrained Highlight Color Retention in Film Color, neutral at zero and isolated from disabled/managed/texture/matte/Mono workflows. Shared CPU/OpenCL arithmetic, smooth slider and exposure-ramp checks, format-4 snapshots with zero-retention legacy migration. See [Color Spaces](COLOR_SPACES.md).
+- Optional [Offline Color Bench](COLOR_BENCH.md), using native production color stages, high-precision local ProRes 4:4:4 decode, float output/region statistics, tagged browser previews and experimental highlight variants. Original media and results are ignored and never packaged. Five-clip evaluation informed the retention range; this is not calibrated stock ground truth.
 
 - Automatic SDR viewing response for scene-log/linear input going to display output, before creative film/print processing. Denser shadows without an added pedestal, smooth highlight shoulder and linear-light radial gamut compression. Explicit Conversion Only and Standard SDR policies, exact texture/bypass isolation and portable format-3 capture with legacy conversion-only migration. See [Color Spaces](COLOR_SPACES.md).
 

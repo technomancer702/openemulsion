@@ -6,7 +6,7 @@ Film Color, Film Development, Print, Halation, Aura, Bloom, Grain, and Selective
 
 ## Status
 
-Experimental, Windows x64. Current development version: **v0.34**. The current implementation supports OpenCL acceleration and a multithreaded CPU fallback. CUDA, Metal, macOS, and Linux builds are not implemented.
+Experimental, Windows x64. Current development version: **v0.35**. The current implementation supports OpenCL acceleration and a multithreaded CPU fallback. CUDA, Metal, macOS, and Linux builds are not implemented.
 
 OpenEmulsion is an original artistic approximation, not a measured film-stock calibration or a complete HDR rendering transform. There is no DCTL dependency. Rendering has been tested in Resolve, but this is not yet a stable production release.
 
@@ -96,6 +96,8 @@ Selecting a mode switches its applicable ordinary modules on and the others off,
 
 With **Mono Negative** and Film Color Strength at 1, the final print and texture composite stays monochrome, including source-colored bloom. Halation/Aura remain visible as neutral glow, and grain automatically becomes monochrome. This does not affect texture-only modes, bypass, or a disabled Film Color module.
 
+**Highlight Color Retention**, inside Film Color below Gamut Compression, keeps more color in bright emitters during SDR rendering. Zero/default retains v0.34's rendering; the 0-1 range is deliberately restrained and trades some highlight brightness for chroma, without boosting global saturation. Disabled when Film Color or SDR rendering is inactive, with full-strength Mono Negative, or in Selection Matte. Built-in recipes reset it to zero; user files capture it. See [Color Spaces](docs/COLOR_SPACES.md).
+
 Grain Size uses a 1080-line reference, scaling granules with image height. Grain Color at zero uses one monochrome noise field; RGB intensity controls at equal values give equal RGB grain. Horizontal Stretch uses a 0.5-2.0 desqueeze ratio and does not resize the image. Grain is procedural, not sampled from film scans.
 
 Strengths default to 1 (full response). Zero Color Strength removes that stage's color character; zero Tone Strength removes its tone shaping. Camera and print exposure/balance remain independent while their modules are enabled. Disable Film Color, Film Development, and Print completely when using your own LUT with texture only.
@@ -123,9 +125,9 @@ The optional sixth preview path produces a five-panel bloom comparison; see [Blo
 
 ## Release Packaging
 
-Commit release files first, then run `.\tools\package_release.ps1`. It builds and tests Release, verifies the supported compiler/runtime notices and imported DLLs, and creates `dist/releases/OpenEmulsion-v0.34-Windows-x64.zip` plus `.zip.sha256`. Use `-Force` only when deliberately replacing a generated archive. Release output is ignored by Git; upload the ZIP and checksum as release assets, not repository files.
+Commit release files first, then run `.\tools\package_release.ps1`. It builds and tests Release, verifies the supported compiler/runtime notices and imported DLLs, and creates `dist/releases/OpenEmulsion-v0.35-Windows-x64.zip` plus `.zip.sha256`. Use `-Force` only when deliberately replacing a generated archive. Release output is ignored by Git; upload the ZIP and checksum as release assets, not repository files.
 
-The packager includes only the bundle, release guides, documentation, licenses, and a `git archive` source snapshot of the exact revision in `manifest.json`. It validates the extracted files and hashes, loads the extracted OFX binary using only its directory and Windows system DLL search, and checks its exported identifier/version. To recheck an archive, run `.\tools\test_release.ps1 -Archive "dist/releases/OpenEmulsion-v0.34-Windows-x64.zip"` in 64-bit PowerShell. This is not a clean-machine Resolve installation test or a code-signing/security certification; separate-machine and other-GPU validation remain outstanding.
+The packager includes only the bundle, release guides, documentation, licenses, and a `git archive` source snapshot of the exact revision in `manifest.json`. It validates the extracted files and hashes, loads the extracted OFX binary using only its directory and Windows system DLL search, and checks its exported identifier/version. To recheck an archive, run `.\tools\test_release.ps1 -Archive "dist/releases/OpenEmulsion-v0.35-Windows-x64.zip"` in 64-bit PowerShell. This is not a clean-machine Resolve installation test or a code-signing/security certification; separate-machine and other-GPU validation remain outstanding.
 
 Optional Resolve test charts:
 
@@ -135,6 +137,11 @@ python tools/generate_test_charts.py
 ```
 
 Generated charts and diagnostics stay local under `analysis/`.
+
+Optional original-footage evaluation: the [Offline Color Bench](docs/COLOR_BENCH.md)
+renders float comparisons through the production color math, with local scopes,
+region statistics and experimental highlight variants. It is developer tooling,
+not an installed plugin feature; source media and results remain ignored by Git.
 
 See the [Upgrade Roadmap](docs/ROADMAP.md) for remaining work.
 

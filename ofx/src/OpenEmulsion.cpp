@@ -26,7 +26,7 @@
 #define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, halation, aura, linear-light bloom, and selective color, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 34
+#define kPluginVersionMinor 35
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -65,6 +65,7 @@ struct Settings {
     double negativeShoulder = 0.50;
     double negativeCrosstalk = 0.35;
     double gamutCompression = 0.50;
+    double highlightRetention = 0;
     double skinHue = 0.0;
     double printTone = 0.0;
     double printContrast = 1.0;
@@ -389,6 +390,7 @@ private:
         out[26] = static_cast<float>(s.sourceSpace);
         out[27] = static_cast<float>(s.outputSpace);
         out[film::OutputRendering] = static_cast<float>(s.outputRendering);
+        out[film::HighlightRetention] = static_cast<float>(s.highlightRetention);
         out[28] = static_cast<float>(s.negativeShoulder);
         out[29] = static_cast<float>(s.negativeCrosstalk);
         out[30] = static_cast<float>(s.gamutCompression);
@@ -484,6 +486,7 @@ public:
         negativeShoulder_ = fetchDoubleParam("negativeShoulder");
         negativeCrosstalk_ = fetchDoubleParam("negativeCrosstalk");
         gamutCompression_ = fetchDoubleParam("gamutCompression");
+        highlightRetention_ = fetchDoubleParam("highlightRetention");
         skinHue_ = fetchDoubleParam("skinHue");
         printTone_ = fetchDoubleParam("printTone");
         printContrast_ = fetchDoubleParam("printContrast");
@@ -621,7 +624,8 @@ public:
         }
         if (name == "lookPreset") updatePresetBrowser();
         const bool affectsControls = name == "mode" || name == "printStyle" || name == "system" ||
-            name == "negativeColorStrength" || args.reason == OFX::eChangeTime ||
+            name == "negativeColorStrength" || name == "sourceSpace" || name == "outputSpace" ||
+            name == "outputRendering" || name == "selectiveView" || args.reason == OFX::eChangeTime ||
             std::any_of(moduleui::Toggles.begin(), moduleui::Toggles.end(), [&](const auto& toggle) { return name == toggle.name; });
         if (!affectsControls) return;
         if (name == "mode" && args.reason == OFX::eChangeUserEdit) {
@@ -799,6 +803,12 @@ private:
                 moduleui::semanticControlEnabled(moduleui::Controls[i].name, mode, enabled, system, colorStrength));
         for (auto* parameter : printRecipeControls_)
             parameter->setEnabled(moduleui::printRecipeEnabled(mode, enabled, style));
+        int source = color::Rec709Gamma24, output = 0, rendering = color::Automatic, view = 0;
+        sourceSpace_->getValue(source); outputSpace_->getValue(output);
+        outputRendering_->getValue(rendering); selectiveView_->getValue(view);
+        const auto cp = color::prepare(source,output,false,rendering);
+        highlightRetention_->setEnabled(color::highlightRetentionEnabled(cp,film::modulesForMode(mode,enabled),system,
+                                                                         static_cast<float>(colorStrength),view));
     }
 
     Settings settingsAt(double time) const
@@ -838,6 +848,7 @@ private:
         s.negativeShoulder = negativeShoulder_->getValueAtTime(time);
         s.negativeCrosstalk = negativeCrosstalk_->getValueAtTime(time);
         s.gamutCompression = gamutCompression_->getValueAtTime(time);
+        s.highlightRetention = highlightRetention_->getValueAtTime(time);
         s.skinHue = skinHue_->getValueAtTime(time);
         s.printTone = printTone_->getValueAtTime(time);
         s.printContrast = printContrast_->getValueAtTime(time);
@@ -953,6 +964,7 @@ private:
     OFX::DoubleParam* negativeShoulder_ = nullptr;
     OFX::DoubleParam* negativeCrosstalk_ = nullptr;
     OFX::DoubleParam* gamutCompression_ = nullptr;
+    OFX::DoubleParam* highlightRetention_ = nullptr;
     OFX::DoubleParam* skinHue_ = nullptr;
     OFX::DoubleParam* printTone_ = nullptr;
     OFX::DoubleParam* printContrast_ = nullptr;
@@ -1209,6 +1221,7 @@ public:
         addDouble(desc, page, "negativeShoulder", "Negative Shoulder", 0.50, 0.0, 1.0, 0.01, negative);
         addDouble(desc, page, "negativeCrosstalk", "Color Crosstalk", 0.35, 0.0, 3.0, 0.01, negative, "Zero is no palette mixing, one is the original family matrix, and values above one intensify that palette. Not a global film strength control.");
         addDouble(desc, page, "gamutCompression", "Gamut Compression", 0.50, 0.0, 1.0, 0.01, negative, "Continuously blends negative gamut compression: 0 is off, 0.5 is half strength, and 1 is full strength. Preserves working-space brightness and chroma direction. Partial strength can retain out-of-range values; Print and downstream color management determine the final display range.");
+        addDouble(desc, page, "highlightRetention", "Highlight Color Retention", 0.0, 0.0, 1.0, 0.01, negative, "Retains more color in bright emitters during SDR rendering, trading some highlight brightness for chroma. Zero keeps the previous rendering; the maximum is deliberately restrained. Requires Film Color and active SDR output rendering. Neutral grays and lower-intensity colors are unchanged; full-strength Mono Negative and selective matte ignore it. Independent of Film Color/Tone Strength; built-in presets reset it to zero.");
         addDouble(desc, page, "skinHue", "Skin Hue", 0.0, -3.0, 3.0, 0.01, negative, "Selective warm-color adjustment toward magenta or green, with extra endpoint range. Not face detection; neutral and cool colors are excluded.");
         addDouble(desc, page, "printTone", "Print Tone Curve", 0.0, -1.0, 1.0, 0.01, print, "Minus one gives a stronger print-like tone curve; plus one gives a gentler telecine-like response. Print Tone Strength separately blends the complete tonal response.");
         addDouble(desc, page, "printContrast", "Print Contrast", 1.0, 0.5, 2.0, 0.01, print);

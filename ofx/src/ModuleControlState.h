@@ -34,6 +34,7 @@ inline constexpr Control Controls[] {
     {"saturation", film::Negative}, {"toe", film::Negative}, {"contrast", film::Negative},
     {"negativeShoulder", film::Negative}, {"negativeCrosstalk", film::Negative},
     {"gamutCompression", film::Negative}, {"skinHue", film::Negative},
+    {"highlightRetention", film::Negative},
     {"pushPull", film::Development}, {"colorRichness", film::Development},
     {"splitTone", film::Development}, {"splitHue", film::Development},
     {"splitPivot", film::Development}, {"splitWidth", film::Development},
@@ -77,7 +78,7 @@ inline bool semanticControlEnabled(std::string_view name, int mode, int enabled,
     if (!mono) return true;
     if (name == "negativeCrosstalk" || name == "skinHue") return false;
     if (colorStrength < 1.0) return true;
-    return name != "saturation" && name != "density" && name != "gamutCompression" && name != "grainColor";
+    return name != "saturation" && name != "density" && name != "gamutCompression" && name != "grainColor" && name != "highlightRetention";
 }
 
 template<class Writer>
