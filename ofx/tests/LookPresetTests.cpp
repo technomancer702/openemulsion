@@ -100,7 +100,11 @@ static void testLookIntent()
 
 static void testCategoriesAndNeutral()
 {
-    require(look::Count == 38,"Expected 37 named recipes plus Custom");
+    require(look::Count == 47,"Expected 46 named recipes plus Custom");
+    require(look::Neutral == 13 && look::FadedInstant == 37 && look::Creative == 7,
+        "Existing preset/category IDs changed");
+    require(look::optionCount(look::Thriller) == 4 && look::optionCount(look::Horror) == 5 &&
+        look::optionCount(look::ScienceFiction) == 3,"Genre categories omit recipes");
     const std::set<int> order(look::MenuOrder.begin(),look::MenuOrder.end());
     require(order.size() == look::Count && *order.begin() == 0 && *order.rbegin() == look::Count-1,
         "Menu order duplicates or omits a stable preset ID");
@@ -169,15 +173,62 @@ static void testCategoriesAndNeutral()
         require(colorDistance(creative[a],creative[b]) > 3,"New creative looks have insufficient color/tone separation");
 }
 
+static void testGenreIntent()
+{
+    const std::array<int,9> genres {look::ArchiveThriller,look::SilverThriller,look::SodiumNoir,
+        look::FolkDread,look::DaylightDread,look::GialloCrimson,look::CrimsonDream,
+        look::SimulationGreen,look::AmberWasteland};
+    double closest = 255;
+    for (size_t a=0; a<genres.size(); ++a) for (size_t b=a+1; b<genres.size(); ++b) {
+        const double distance = colorDistance(genres[a],genres[b]);
+        std::printf("Genre separation: %s / %s: %.3f codes.\n",look::Labels[genres[a]],look::Labels[genres[b]],distance);
+        closest = std::min(closest,distance);
+        require(distance > 3,"Genre looks overlap without grain/glow");
+    }
+    for (const auto pair : std::array<std::array<int,2>,5> {{{look::SilverThriller,look::BleachBypass},
+        {look::SodiumNoir,look::NeonNights},{look::DaylightDread,look::SoftPortrait},
+        {look::FolkDread,look::ArcticDusk},{look::AmberWasteland,look::DesertChrome}}})
+        require(colorDistance(pair[0],pair[1]) > 3,"Genre recipe merely renames a general creative look");
+    const auto silver=renderColorOnly({.018f,.018f,.018f},look::SilverThriller);
+    const auto archive=renderColorOnly({.018f,.018f,.018f},look::ArchiveThriller);
+    const auto folk=renderColorOnly({.018f,.018f,.018f},look::FolkDread);
+    require(response_luma(archive) > response_luma(silver)+.015f &&
+        response_luma(folk) > response_luma(silver)+.015f,"Restrained thrillers/folk horror crush like silver print");
+    const auto daylight=renderColorOnly({.18f,.18f,.18f},look::DaylightDread);
+    const auto folkGray=renderColorOnly({.18f,.18f,.18f},look::FolkDread);
+    require(response_luma(daylight) > response_luma(folkGray)+.025f,"Daylight horror loses its luminous midtones");
+    const auto green=renderColorOnly({.018f,.018f,.018f},look::SimulationGreen);
+    require(green.g > green.r+.015f && green.g > green.b+.015f,"Simulation loses green shadows");
+    const auto amber=renderColorOnly({.18f,.18f,.18f},look::AmberWasteland);
+    require(amber.r > amber.g+.06f && amber.g > amber.b+.06f,"Wasteland loses amber print balance");
+    const auto crimson=renderColorOnly({.018f,.018f,.018f},look::CrimsonDream);
+    require(crimson.b > crimson.g+.015f,"Crimson Dream loses violet shadow separation");
+    for (int preset : genres) {
+        float previous=-1;
+        for (float level : {0.0f,.0001f,.001f,.003f,.01f,.018f,.04f,.08f,.18f}) {
+            const auto rgb=renderColorOnly({level,level,level},preset);
+            const float luma=response_luma(rgb);
+            require(std::isfinite(luma) && luma > previous+1e-6f,"Genre shadows flatten or reverse");
+            previous=luma;
+        }
+    }
+    require(look::recipe(look::CrimsonDream)[film::BloomAmount] >
+        look::recipe(look::GialloCrimson)[film::BloomAmount],"Dream and giallo diffusion identities collapse");
+    std::printf("Closest genre color/tone separation: %.3f codes (synthetic, not film-match validation).\n",closest);
+}
+
 int main()
 {
     try {
         testLookIntent();
         testCategoriesAndNeutral();
+        testGenreIntent();
         std::set<std::string> names, labels;
         std::set<int> settings;
-        for (const auto* label : look::Labels)
+        for (const auto* label : look::Labels) {
             require(labels.insert(label).second, "Duplicate preset label");
+            require(std::string(label).find("(Inspired)") == std::string::npos,"UI retains Inspired suffix");
+        }
         for (const auto& control : look::Controls) {
             require(names.insert(control.name).second, "Duplicate preset binding");
             require(settings.insert(control.setting).second, "Duplicate packed binding");

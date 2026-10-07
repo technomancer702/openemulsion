@@ -18,30 +18,38 @@ enum Preset { Custom, Daylight50, Daylight250, Tungsten200, Tungsten500,
               Portra800Push2, Ektar100, Gold200, Ultramax400, Pro400H, Xtra400,
               C200, Kodachrome64, Ektachrome100, Velvia100, Provia100,
               Print2383, Print2393, TriX400, Hp5Plus400,
-              DesertChrome, ArcticDusk, GoldenHour, FadedInstant, Count };
+              DesertChrome, ArcticDusk, GoldenHour, FadedInstant,
+              ArchiveThriller, SilverThriller, SodiumNoir, FolkDread, DaylightDread,
+              GialloCrimson, CrimsonDream, SimulationGreen, AmberWasteland, Count };
 
 inline constexpr std::array<const char*, Count> Labels {{
-    "Custom", "50D Daylight (Inspired)", "250D Daylight (Inspired)",
-    "200T Tungsten (Inspired)", "500T Tungsten (Inspired)",
-    "B&W Reversal (Inspired)", "Classic Cinema", "Soft Portrait", "Neon Nights",
+    "Custom", "50D Daylight", "250D Daylight",
+    "200T Tungsten", "500T Tungsten",
+    "B&W Reversal", "Classic Cinema", "Soft Portrait", "Neon Nights",
     "Seventies Print", "Bleach Bypass", "Super 8 Home Movie", "Silver Noir",
-    "Neutral / Clean Slate", "VERITA 200D (Inspired)",
-    "Portra 160 (Inspired)", "Portra 400 (Inspired)", "Portra 800 (Inspired)",
-    "Portra 800 Push +1 (Inspired)", "Portra 800 Push +2 (Inspired)",
-    "Ektar 100 (Inspired)", "Gold 200 (Inspired)", "Ultramax 400 (Inspired)",
-    "PRO 400H (Inspired)", "Superia X-TRA 400 (Inspired)", "C200 (Inspired)",
-    "Kodachrome 64 (Inspired)", "Ektachrome 100 (Inspired)",
-    "Velvia 100 (Inspired)", "Provia 100F (Inspired)",
-    "2383 Print (Inspired)", "2393 Print (Inspired)",
-    "Tri-X 400 (Inspired)", "HP5 Plus 400 (Inspired)",
-    "Desert Chrome", "Arctic Dusk", "Golden Hour", "Faded Instant"
+    "Neutral / Clean Slate", "VERITA 200D",
+    "Portra 160", "Portra 400", "Portra 800",
+    "Portra 800 Push +1", "Portra 800 Push +2",
+    "Ektar 100", "Gold 200", "Ultramax 400",
+    "PRO 400H", "Superia X-TRA 400", "C200",
+    "Kodachrome 64", "Ektachrome 100",
+    "Velvia 100", "Provia 100F",
+    "2383 Print", "2393 Print",
+    "Tri-X 400", "HP5 Plus 400",
+    "Desert Chrome", "Arctic Dusk", "Golden Hour", "Faded Instant",
+    "Archive Thriller (Zodiac)", "Silver Thriller (Se7en)", "Sodium Noir (Nightcrawler)",
+    "Folk Dread (The Witch)", "Daylight Dread (Midsommar)",
+    "Giallo Crimson (Suspiria 1977)", "Crimson Dream (Mandy)",
+    "Simulation Green (The Matrix)", "Amber Wasteland (2049 Vegas)"
 }};
 
 enum Category { AllLooks, StartingPoints, CinemaNegative, StillNegative,
-                ReversalFilm, Monochrome, PrintLooks, Creative, CategoryCount };
+                ReversalFilm, Monochrome, PrintLooks, Creative,
+                Thriller, Horror, ScienceFiction, CategoryCount };
 inline constexpr std::array<const char*, CategoryCount> CategoryLabels {{
     "All Presets", "Starting Points", "Cinema Negative", "Still Negative",
-    "Reversal Film", "Monochrome", "Print Looks", "Creative Looks"
+    "Reversal Film", "Monochrome", "Print Looks", "Creative Looks",
+    "Thriller", "Horror", "Sci-Fi"
 }};
 
 inline constexpr std::array<int,Count> MenuOrder {{
@@ -51,7 +59,9 @@ inline constexpr std::array<int,Count> MenuOrder {{
     Kodachrome64, Ektachrome100, Velvia100, Provia100,
     ReversalMono, TriX400, Hp5Plus400, SilverNoir, Print2383, Print2393,
     ClassicCinema, SoftPortrait, NeonNights, SeventiesPrint, BleachBypass,
-    Super8HomeMovie, DesertChrome, ArcticDusk, GoldenHour, FadedInstant
+    Super8HomeMovie, DesertChrome, ArcticDusk, GoldenHour, FadedInstant,
+    ArchiveThriller, SilverThriller, SodiumNoir, FolkDread, DaylightDread,
+    GialloCrimson, CrimsonDream, SimulationGreen, AmberWasteland
 }};
 
 inline constexpr int categoryFor(int preset)
@@ -66,6 +76,9 @@ inline constexpr int categoryFor(int preset)
     case Kodachrome64: case Ektachrome100: case Velvia100: case Provia100: return ReversalFilm;
     case ReversalMono: case TriX400: case Hp5Plus400: case SilverNoir: return Monochrome;
     case Print2383: case Print2393: return PrintLooks;
+    case ArchiveThriller: case SilverThriller: case SodiumNoir: return Thriller;
+    case FolkDread: case DaylightDread: case GialloCrimson: case CrimsonDream: return Horror;
+    case SimulationGreen: case AmberWasteland: return ScienceFiction;
     default: return Creative;
     }
 }
@@ -357,6 +370,88 @@ inline Recipe recipe(int preset)
         s[38]=.1; s[39]=.045; s[40]=-.12;
         s[film::ColorRichness]=-.3; s[film::BloomAmount]=.09;
         s[16]=.19; s[17]=.54; s[20]=.55; s[13]=.08;
+        break;
+    case ArchiveThriller:
+        s[1]=1; s[7]=.12; s[8]=.72; s[9]=.07; s[10]=1.01; s[28]=.72; s[29]=.55;
+        s[32]=.55; s[33]=.98; s[11]=.8; s[12]=.22; s[34]=.65; s[35]=1;
+        s[38]=.06; s[39]=.035; s[40]=-.14;
+        s[film::SplitTone]=.55; s[film::SplitHue]=85; s[film::SplitShadows]=.75;
+        s[film::SplitHighlights]=0; s[film::ColorRichness]=-.15;
+        s[16]=.045; s[17]=.28; s[18]=.18; s[20]=.4; s[21]=.08;
+        s[film::ModuleIndex]=film::Negative | film::Development | film::Print | film::Grain;
+        break;
+    case SilverThriller:
+        // Print-led silver-retention interpretation, not another negative bleach recipe.
+        s[7]=.26; s[8]=.64; s[9]=.18; s[10]=1.02; s[28]=.68; s[29]=.4;
+        s[32]=-1; s[33]=1.28; s[11]=.45; s[12]=.025; s[34]=.68; s[35]=1; s[36]=.9;
+        s[38]=.12; s[39]=.10; s[40]=-.15;
+        s[film::SplitTone]=.65; s[film::SplitHue]=185; s[film::SplitShadows]=1;
+        s[film::SplitHighlights]=.15;
+        s[16]=.22; s[17]=.48; s[18]=.46; s[20]=.25; s[21]=.04;
+        s[film::ModuleIndex]=film::Negative | film::Development | film::Print | film::Grain;
+        break;
+    case SodiumNoir:
+        s[7]=.24; s[8]=.86; s[9]=.1; s[10]=1.04; s[28]=.85; s[29]=.2;
+        s[32]=-.35; s[33]=1.08; s[11]=.9; s[12]=.14; s[34]=.72; s[35]=1;
+        s[38]=.20; s[39]=.11; s[40]=-.26;
+        s[film::SplitTone]=1.3; s[film::SplitHue]=220; s[film::SplitShadows]=1.4;
+        s[film::SplitHighlights]=.8; s[film::ColorRichness]=.12;
+        s[13]=.14; s[14]=.65; s[16]=.035; s[17]=.27; s[18]=.2;
+        s[21]=.08;
+        break;
+    case FolkDread:
+        s[7]=.08; s[8]=.38; s[9]=.06; s[10]=1.01; s[28]=.82; s[29]=.15;
+        s[32]=.7; s[33]=.98; s[11]=1; s[12]=.18; s[34]=.8; s[35]=1;
+        s[38]=-.04; s[39]=.015; s[40]=.045;
+        s[film::ColorRichness]=-.25;
+        s[16]=.025; s[17]=.28; s[20]=.5; s[21]=0;
+        s[film::ModuleIndex]=film::Negative | film::Development | film::Print | film::Grain;
+        break;
+    case DaylightDread:
+        s[1]=3; s[7]=.04; s[8]=.84; s[9]=.025; s[10]=.9; s[28]=.9; s[29]=.15;
+        s[32]=.95; s[33]=.9; s[11]=1; s[12]=.20; s[34]=.78; s[35]=1; s[37]=.18;
+        s[38]=.025; s[39]=.035; s[40]=0;
+        s[film::ColorRichness]=-.25;
+        s[film::BloomAmount]=.08; s[film::BloomRadius]=.6; s[film::BloomProtection]=.9;
+        s[16]=.02; s[17]=.25; s[20]=.5; s[21]=.1;
+        break;
+    case GialloCrimson:
+        s[1]=5; s[7]=.30; s[8]=1.3; s[9]=.16; s[10]=1.12; s[28]=.62; s[29]=.7; s[30]=.4;
+        s[32]=-.75; s[33]=1.07; s[11]=.9; s[12]=.07; s[34]=.68; s[35]=1; s[36]=1.1;
+        s[38]=.22; s[39]=-.08; s[40]=.08;
+        s[film::SplitTone]=1.1; s[film::SplitHue]=240; s[film::SplitShadows]=1.2;
+        s[film::SplitHighlights]=.15; s[film::ColorRichness]=.35;
+        s[13]=.12; s[14]=.65; s[film::BloomAmount]=.06; s[film::BloomRadius]=.5;
+        s[16]=.11; s[17]=.35; s[18]=.28; s[20]=.3;
+        break;
+    case CrimsonDream:
+        s[7]=.32; s[8]=1.04; s[9]=.13; s[10]=1.03; s[28]=.9; s[29]=.35;
+        s[32]=-.1; s[33]=1.03; s[11]=1; s[12]=.10; s[34]=.86; s[35]=1;
+        s[38]=.46; s[39]=-.22; s[40]=.02;
+        s[film::SplitTone]=2; s[film::SplitHue]=255; s[film::SplitShadows]=1.5;
+        s[film::SplitHighlights]=.10; s[film::ColorRichness]=.25;
+        s[13]=.38; s[14]=.85; s[15]=.025;
+        s[film::BloomAmount]=.28; s[film::BloomRadius]=1.05; s[film::BloomProtection]=.85;
+        s[16]=.16; s[17]=.45; s[18]=.45; s[20]=.5; s[21]=.12;
+        break;
+    case SimulationGreen:
+        s[7]=.24; s[8]=.76; s[9]=.16; s[10]=1.07; s[28]=.68; s[29]=.15;
+        s[32]=-.5; s[33]=1.08; s[11]=1; s[12]=.09; s[34]=.65; s[35]=1;
+        s[38]=-.06; s[39]=.10; s[40]=-.10;
+        s[film::SplitTone]=1.65; s[film::SplitHue]=115; s[film::SplitShadows]=1.3;
+        s[film::SplitHighlights]=0; s[film::SplitPivot]=.58;
+        s[16]=.12; s[17]=.39; s[18]=.3; s[21]=.12;
+        s[film::FilmGauge]=gauge::Super35;
+        s[film::ModuleIndex]=film::Negative | film::Development | film::Print | film::Grain;
+        break;
+    case AmberWasteland:
+        s[1]=1; s[7]=.20; s[8]=.65; s[9]=.07; s[10]=.98; s[28]=.92; s[29]=.4;
+        s[32]=.55; s[33]=.95; s[11]=1; s[12]=.16; s[34]=.9; s[35]=1;
+        s[38]=.60; s[39]=.12; s[40]=-.80;
+        s[film::SplitTone]=.8; s[film::SplitHue]=32; s[film::SplitShadows]=.85;
+        s[film::SplitHighlights]=0; s[film::ColorRichness]=-.2;
+        s[film::BloomAmount]=.18; s[film::BloomRadius]=1.1; s[film::BloomProtection]=.9;
+        s[16]=.015; s[17]=.25; s[20]=.55; s[21]=.05;
         break;
     default: break;
     }

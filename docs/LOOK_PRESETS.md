@@ -1,10 +1,10 @@
 # Look Presets
 
-Added in v0.24, categorized and expanded in v0.30. Preset Category and Preset sit directly below Film Gauge and remain available in every mode, including Bypass. New instances default to All Presets / Custom without applying a look. Existing saved values are not reset.
+Added in v0.24, categorized in v0.30 and expanded with genre looks in v0.31. Preset Category and Preset sit directly below Film Gauge and remain available in every mode, including Bypass. New instances default to All Presets / Custom without applying a look. Existing saved values are not reset.
 
 ## Categories And Neutral
 
-The browser contains 37 named recipes plus Custom. Categories: All Presets, Starting Points, Cinema Negative, Still Negative, Reversal Film, Monochrome, Print Looks, and Creative Looks. Every filtered list starts with **Custom / Current Settings**, which does nothing to the image. Changing category only filters the menu: it never loads that category's first look. If the active look is outside the selected category, the menu shows Custom / Current Settings; switching back to its category or All Presets shows the stored name again. Silver Noir is under Monochrome.
+The browser contains 46 named recipes plus Custom. Categories: All Presets, Starting Points, Cinema Negative, Still Negative, Reversal Film, Monochrome, Print Looks, Creative Looks, Thriller, Horror, and Sci-Fi. Every filtered list starts with **Custom / Current Settings**, which does nothing to the image. Changing category only filters the menu: it never loads that category's first look. If the active look is outside the selected category, the menu shows Custom / Current Settings; switching back to its category or All Presets shows the stored name again. Silver Noir is under Monochrome.
 
 **Neutral / Clean Slate**, in Starting Points and first after Custom in All Presets, resets creative tuning with film/print color and tone strengths at zero, development at zero, grain at zero, and all glow at zero. It loads Full mode, Custom gauge, Custom print style, and enabled module switches so you can build a look. Raise Film/Print strength sliders when adding their response; their other sliders alone cannot affect the image while those strengths remain zero.
 
@@ -14,11 +14,11 @@ Neutral retains Input/Output Color Space, camera Exposure/Temperature/Tint, and 
 
 | Preset | Creative target |
 | --- | --- |
-| 50D Daylight (Inspired) | Fine, restrained grain; cleaner color and gentle highlight shaping. |
-| 250D Daylight (Inspired) | Balanced daytime starting point with moderate texture and near-neutral print balance. |
-| 200T Tungsten (Inspired) | Fine texture, gentler contrast, and softer highlights; no automatic warm cast. |
-| 500T Tungsten (Inspired) | More texture than 200T, stronger highlight shoulder and halation, with restrained shadow weighting. |
-| B&W Reversal (Inspired) | Monochrome contrast with grain, without colored diffusion. |
+| 50D Daylight | Fine, restrained grain; cleaner color and gentle highlight shaping. |
+| 250D Daylight | Balanced daytime starting point with moderate texture and near-neutral print balance. |
+| 200T Tungsten | Fine texture, gentler contrast, and softer highlights; no automatic warm cast. |
+| 500T Tungsten | More texture than 200T, stronger highlight shoulder and halation, with restrained shadow weighting. |
+| B&W Reversal | Monochrome contrast with grain, without colored diffusion. |
 | Classic Cinema | Richer color, denser print contrast, deeper shadows, and restrained halation. |
 | Soft Portrait | Gentler contrast, saturation, and texture, with subtle bloom. |
 | Neon Nights | Visible cool shadow/warm highlight split, cleaner print palette, stronger halation, and saturated-color compression. |
@@ -34,25 +34,25 @@ All twelve existing recipes are unchanged. The following original recipes add br
 | Category / Preset | Creative target |
 | --- | --- |
 | Starting Points / Neutral | Creative reset described above; retains conversion and camera balance. |
-| Cinema Negative / VERITA 200D (Inspired) | Restrained daylight color, softer tone and fine-to-moderate texture. |
-| Still Negative / Portra 160 (Inspired) | Gentle contrast and saturation, smooth highlights and fine grain. |
-| Still Negative / Portra 400 (Inspired) | Related portrait palette with moderate grain and a little more contrast. |
-| Still Negative / Portra 800 (Inspired) | Related faster-negative target with stronger texture and firmer tone. |
-| Still Negative / Portra 800 Push +1 / +2 (Inspired) | Existing Push/Pull development at +1/+2, with grain-strength coupling and restrained saturation. Not calibrated push chemistry or exposure compensation. |
-| Still Negative / Ektar 100 (Inspired) | Cleaner fine texture, stronger saturation and firmer contrast. |
-| Still Negative / Gold 200 (Inspired) | Warm consumer-negative print interpretation and moderate grain. |
-| Still Negative / Ultramax 400 (Inspired) | Punchier color/contrast and coarser texture than Gold. |
-| Still Negative / PRO 400H (Inspired) | Gentle pastel-like rendering, fine-to-moderate grain and a restrained cool/green print balance. |
-| Still Negative / Superia X-TRA 400 (Inspired) | More color/contrast and grain, with a restrained cool print interpretation. |
-| Still Negative / C200 (Inspired) | Gentler related consumer-negative target with less texture than Superia. |
-| Reversal Film / Kodachrome 64 (Inspired) | Firmer reversal contrast, denser color and a small warm viewing balance. |
-| Reversal Film / Ektachrome 100 (Inspired) | Fine texture, moderately vivid color and a restrained cool viewing balance. |
-| Reversal Film / Velvia 100 (Inspired) | Stronger saturation and contrast, enriched muted colors, fine grain. |
-| Reversal Film / Provia 100F (Inspired) | More restrained saturation/contrast than Velvia and fine texture. |
-| Monochrome / Tri-X 400 (Inspired) | Firmer B&W tone and pronounced conventional grain. |
-| Monochrome / HP5 Plus 400 (Inspired) | Gentler B&W contrast, more open shadows and slightly softer texture. |
-| Print Looks / 2383 Print (Inspired) | Film-print-style palette/contrast, with negative response and grain at zero. |
-| Print Looks / 2393 Print (Inspired) | Denser, higher-contrast related print interpretation and stronger color. |
+| Cinema Negative / VERITA 200D | Restrained daylight color, softer tone and fine-to-moderate texture. |
+| Still Negative / Portra 160 | Gentle contrast and saturation, smooth highlights and fine grain. |
+| Still Negative / Portra 400 | Related portrait palette with moderate grain and a little more contrast. |
+| Still Negative / Portra 800 | Related faster-negative target with stronger texture and firmer tone. |
+| Still Negative / Portra 800 Push +1 / +2 | Existing Push/Pull development at +1/+2, with grain-strength coupling and restrained saturation. Not calibrated push chemistry or exposure compensation. |
+| Still Negative / Ektar 100 | Cleaner fine texture, stronger saturation and firmer contrast. |
+| Still Negative / Gold 200 | Warm consumer-negative print interpretation and moderate grain. |
+| Still Negative / Ultramax 400 | Punchier color/contrast and coarser texture than Gold. |
+| Still Negative / PRO 400H | Gentle pastel-like rendering, fine-to-moderate grain and a restrained cool/green print balance. |
+| Still Negative / Superia X-TRA 400 | More color/contrast and grain, with a restrained cool print interpretation. |
+| Still Negative / C200 | Gentler related consumer-negative target with less texture than Superia. |
+| Reversal Film / Kodachrome 64 | Firmer reversal contrast, denser color and a small warm viewing balance. |
+| Reversal Film / Ektachrome 100 | Fine texture, moderately vivid color and a restrained cool viewing balance. |
+| Reversal Film / Velvia 100 | Stronger saturation and contrast, enriched muted colors, fine grain. |
+| Reversal Film / Provia 100F | More restrained saturation/contrast than Velvia and fine texture. |
+| Monochrome / Tri-X 400 | Firmer B&W tone and pronounced conventional grain. |
+| Monochrome / HP5 Plus 400 | Gentler B&W contrast, more open shadows and slightly softer texture. |
+| Print Looks / 2383 Print | Film-print-style palette/contrast, with negative response and grain at zero. |
+| Print Looks / 2393 Print | Denser, higher-contrast related print interpretation and stronger color. |
 | Creative Looks / Desert Chrome | Warm desaturated highlights, cool shadows, harder tone and moderate grain. |
 | Creative Looks / Arctic Dusk | Cool, muted color, restrained highlights and fine texture. |
 | Creative Looks / Golden Hour | Warm soft print, warm-highlight split, gentle bloom and fine texture. |
@@ -62,7 +62,25 @@ Color-reversal recipes use the Reversal family with Print Color/Tone Strength at
 
 The new stock-name coverage parallels the twenty camera-stock targets in the reviewed SpektraFilm checkout, but uses our own parameter recipes. It does not reproduce their spectral profiles, paper models, or datasets. Manufacturer names are reference identifiers, not endorsements. Historical/discontinued names describe the intended inspiration, not current product availability.
 
-Public [Kodak film technical publications](https://www.kodakprofessional.com/en-gb/node/133), [VERITA information](https://www.kodak.com/en/motion/product/camera-films/verita-200d-5206-7206/), [Fujifilm negative/reversal data sheets](https://www.fujifilm.com/mx/es/consumer/support/films/negative-and-reversal), and [ILFORD HP5 information](https://www.ilfordphoto.com/hp5-plus-sheet-film?___store=ilford_brochure) provide qualitative starting points. Warm/cool viewing interpretations and all numeric recipes are artistic decisions, not measured stock fits. Movie names are deliberately avoided: a movie's grade is not a single stock preset.
+Public [Kodak film technical publications](https://www.kodakprofessional.com/en-gb/node/133), [VERITA information](https://www.kodak.com/en/motion/product/camera-films/verita-200d-5206-7206/), [Fujifilm negative/reversal data sheets](https://www.fujifilm.com/mx/es/consumer/support/films/negative-and-reversal), and [ILFORD HP5 information](https://www.ilfordphoto.com/hp5-plus-sheet-film?___store=ilford_brochure) provide qualitative starting points. Warm/cool viewing interpretations and all numeric recipes are artistic decisions, not measured stock fits. v0.31 removes the redundant `(Inspired)` UI suffix, not this limitation or the approximation warning in the tooltip.
+
+## Genre Library In v0.31
+
+Nine original recipes use genre names with film references in parentheses. These are editable interpretations, not official products, measured film matches, extracted LUTs, or reconstructions of an entire movie. The research, source facts, artistic choices and limits are in [Creative Look Research](CREATIVE_LOOK_RESEARCH.md).
+
+| Category / Preset | Creative target |
+| --- | --- |
+| Thriller / Archive Thriller (Zodiac) | Muted earth/olive print, readable lower midtones, restrained contrast, fine light texture and no diffusion. |
+| Thriller / Silver Thriller (Se7en) | Print-led silver-retention interpretation: dense blacks, stronger print contrast, drained chroma, dirty warmth/cool shadows and mostly monochrome texture. |
+| Thriller / Sodium Noir (Nightcrawler) | Amber practical-light balance against cool shadows, shaped highlights, legible darks, light halation and very restrained texture. |
+| Horror / Folk Dread (The Witch) | Near-gray muted earth colors, subtly cold balance, open shadow gradation, gentle highlights and minimal texture; no glow. |
+| Horror / Daylight Dread (Midsommar) | Brighter midtones, softer pastel-like chroma and contrast, a soft highlight shoulder and light bloom; not a neon-green foliage treatment. |
+| Horror / Giallo Crimson (Suspiria 1977) | Bold chroma, red/magenta print bias, blue shadows, firm contrast and restrained diffusion. Requires colored source lighting for the strongest result. |
+| Horror / Crimson Dream (Mandy) | Denser red/magenta bias, violet-blue shadow separation, broader bloom, stronger halation and visible texture; interprets the nightmare sequences, not the natural opening. |
+| Sci-Fi / Simulation Green (The Matrix) | Green shadows/lower midtones, firmer contrast, reduced chroma and moderate Super 35 texture, without a complementary magenta highlight split. Targets the simulated world of the 1999 film. |
+| Sci-Fi / Amber Wasteland (2049 Vegas) | Strong amber/red print balance, suppressed blue, softer contrast, long highlight rolloff, broad restrained bloom and minimal grain. Vegas only, not every sequence of Blade Runner 2049. |
+
+Existing recipe values and default controls are unchanged. New preset/category IDs are appended. Color-space settings, camera balance and seed remain preserved. Movie lighting, selective local corrections, set colors, atmosphere and framing cannot be generated by these recipes. Broad palette trims do not provide independent hue-selective foliage, red or blue calibration. Adapt exposure to the source; no preset can recover clipped or missing shadow detail.
 
 Preset labels use a stable persistent ID; filtered menu positions are transient and not rendering inputs. Existing IDs 0-12 retain their meaning, including the hidden original `lookPreset` parameter. A new persistent `presetCategory` stores browsing context; nonpersistent `presetBrowser` is rebuilt from category and stored ID on instantiation and selector restore notifications. User `.oepreset` files still store ordinary render controls only and load as Custom. Their schema remains unchanged.
 
@@ -101,3 +119,5 @@ The stock families are informed by public [Kodak camera-film references](https:/
 Automated checks cover complete recipe application, valid control ranges, preserved encoding/balance/seed, Custom inheritance, repeated selection, finite/monotonic gray ramps, and edit/restore/recursion policy. v0.29 adds synthetic creative-separation guards, stock-family restraint/texture hierarchy/neutral pivot checks, representative midtone skin channel ordering, Neon cool-shadow/warm-highlight identity, and vintage-shadow softness. The render harness exercises every recipe across all supported input/output spaces, mode overrides, alpha, and all-disabled bypass on CPU/OpenCL, and times every full recipe at 4K. Synthetic appearance checks are not validation against actual film scans. Dropdown placement, grouped undo/redo, project reload, keyframe replacement, and final appearance should also be checked in Resolve on real footage.
 
 v0.30 adds exhaustive filtered-option/stable-ID round trips and invalid-index handling, distinct recipe checks, Neutral equivalence to conversion alone including negative/HDR chips, Portra texture/push hierarchy, reversal/print-stage isolation, B&W neutrality and new-creative color separation. All 37 recipes receive CPU/OpenCL input/output-space coverage and 4K timing. With all four film/print strengths at zero and gamma-2.4 output within 0.01 of zero, the numerical parity comparison also permits less than 1e-6 linear error and less than one 8-bit-equivalent displayed code; this accounts for wide-gamut cancellation amplified by the gamma curve near zero. Other parity tolerances, identity behavior, renderer math and historical math anchors are unchanged. Native dynamic-menu refresh and undo/reload behavior still require host validation; pure mapping tests are not an interactive Resolve session.
+
+v0.31 covers all 46 recipes, the three appended genre categories and unchanged existing IDs. New synthetic checks compare every pair of genre looks without grain/glow, guard against selected existing-creative duplicates, check low-end gradation and relative shadow/midtone behavior, and verify green/amber/violet color identities. A separate nine-look synthetic preview is available as the render harness's tenth output argument. These checks establish internal recipe behavior and numerical separation, not perceptual accuracy to the named films. Real-footage and native host evaluation remain necessary.

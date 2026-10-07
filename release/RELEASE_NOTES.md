@@ -1,6 +1,18 @@
-# OpenEmulsion v0.30
+# OpenEmulsion v0.31
 
-Experimental Windows x64 categorized preset library. Stock-inspired recipes are artistic approximations, not measured film profiles. Existing recipes, renderer math and default controls are unchanged.
+Experimental Windows x64 genre preset expansion. Stock and movie references are artistic interpretations, not measured film profiles or exact movie grades. Existing recipes, renderer math and default controls are unchanged.
+
+## Changes in v0.31
+
+- Removed `(Inspired)` from stock preset labels. The documentation and tooltip retain the artistic-approximation warning; no calibration claim is implied.
+- Added Thriller, Horror and Sci-Fi categories with nine complete editable recipes, bringing the library to 46 named looks plus Custom.
+- Thriller: Archive Thriller (Zodiac), Silver Thriller (Se7en), Sodium Noir (Nightcrawler). Restrained period color, print-led silver-retention contrast, and mixed city-night light are separate directions.
+- Horror: Folk Dread (The Witch), Daylight Dread (Midsommar), Giallo Crimson (Suspiria 1977), Crimson Dream (Mandy). Covers near-gray naturalism, bright pastel daylight, sharper saturated giallo and softer red/violet nightmare imagery.
+- Sci-Fi: Simulation Green (The Matrix) and Amber Wasteland (2049 Vegas). References the 1999 simulated world and the Vegas sequence specifically, not a single grade for either whole film.
+- Added primary cinematographer/production sources and original design rationale in `docs/CREATIVE_LOOK_RESEARCH.md`. Source lighting, local grading, atmosphere and set palettes cannot be recreated by a global recipe; no third-party LUTs or presets are included.
+- Appended new stored IDs without reordering existing recipes/categories. Preserves camera balance, input/output color spaces and grain seed. All original recipes and user-preset format remain unchanged.
+- Added all-pair genre color-only separation, selected existing-look overlap, low-end gradation, relative shadow/midtone and green/amber/violet intent checks, plus a nine-look synthetic preview. All 46 recipes receive CPU/OpenCL color-space coverage and full-recipe 4K timing.
+- Uses existing rendering stages only, with no new passes, buffers or dependencies. Glow-enabled recipes can cost more than no-glow recipes. Real-footage and native Resolve menu/undo/reload validation remain necessary.
 
 ## Changes in v0.30
 

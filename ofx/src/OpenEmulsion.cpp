@@ -26,7 +26,7 @@
 #define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, halation, aura, and linear-light bloom, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 30
+#define kPluginVersionMinor 31
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -1066,7 +1066,7 @@ public:
         choice->setAnimates(false);
         choice->setIsPersistant(false);
         choice->setEvaluateOnChange(false);
-        choice->setHint("Original stock-inspired and creative recipes, not measured stock profiles. Loads Full mode, gauge, module switches and editable settings; replaces creative keyframes. Preserves input/output spaces, camera balance and grain seed. Neutral removes film, development, glow and grain, but retains color-space conversion/balance. Custom changes nothing. Film/Print strengths are zero after Neutral; raise them to add their response.");
+        choice->setHint("Original stock and creative interpretations, not measured stock profiles or exact movie grades. Loads Full mode, gauge, module switches and editable settings; replaces creative keyframes. Preserves input/output spaces, camera balance and grain seed. Neutral removes film, development, glow and grain, but retains color-space conversion/balance. Custom changes nothing. Film/Print strengths are zero after Neutral; raise them to add their response.");
         page->addChild(*choice);
 
         GroupParamDescriptor* presets = addGroup(desc, page, "userPresetControls", "User Presets", false);

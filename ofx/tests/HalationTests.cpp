@@ -1279,10 +1279,12 @@ public:
         std::puts("; bands lights/grain).");
     }
 
-    void writeLookPreview(const char* path)
+    void writeLookPreview(const char* path, int firstPreset=1)
     {
+        require(firstPreset >= 1 && firstPreset < look::Count,"Invalid preview start");
+        const int count=look::Count-firstPreset;
         const int panel=320, columns=4, width=panel*columns,
-            height=panel*((look::Count-1+columns-1)/columns), rowBytes=width*3;
+            height=panel*((count+columns-1)/columns), rowBytes=width*3;
         std::vector<float> input(panel*panel*4,1);
         const std::array<ColorRgb,8> chips {{{.65f,.44f,.33f},{.45f,.28f,.20f},
             {.7f,.05f,.02f},{.02f,.7f,.07f},{.03f,.12f,.75f},
@@ -1301,14 +1303,14 @@ public:
             const size_t i=(static_cast<size_t>(y)*panel+x)*4;
             input[i]=rgb.r; input[i+1]=rgb.g; input[i+2]=rgb.b;
         }
-        std::array<std::vector<float>,look::Count-1> rendered;
-        for (int preset=1; preset<look::Count; ++preset) {
+        std::vector<std::vector<float>> rendered(count);
+        for (int preset=firstPreset; preset<look::Count; ++preset) {
             auto s=filmSettings();
             const auto recipe=look::recipe(preset);
             for (const auto& control : look::Controls) s[control.setting]=static_cast<float>(recipe[control.setting]);
             s[film::ModuleIndex]=static_cast<float>(recipe[film::ModuleIndex]);
             s[26]=color::Rec709Gamma24; s[27]=4;
-            rendered[preset-1]=render(input,panel,panel,s);
+            rendered[preset-firstPreset]=render(input,panel,panel,s);
         }
         std::array<unsigned char,54> header {};
         header[0]='B'; header[1]='M'; header[10]=54; header[14]=40; header[26]=1; header[28]=24;
@@ -1335,7 +1337,7 @@ public:
             file.write(reinterpret_cast<const char*>(row.data()),row.size());
         }
         require(file.good(),"Look preview write failed");
-        std::printf("Look preview: %s (row-major, %d recipes in stored-ID order).\n",path,look::Count-1);
+        std::printf("Look preview: %s (row-major, %d recipes from stable ID %d).\n",path,count,firstPreset);
     }
 
     void writeGrainResponsePreview(const char* path)
@@ -2340,6 +2342,7 @@ int main(int argc, char** argv)
         if (argc > 6) gpu.writeBloomPreview(argv[6]);
         if (argc > 7) gpu.writeLookPreview(argv[7]);
         if (argc > 9) gpu.writeGrainResponsePreview(argv[9]);
+        if (argc > 10) gpu.writeLookPreview(argv[10],look::ArchiveThriller);
         gpu.benchmark();
         return 0;
     } catch (const std::exception& error) {
