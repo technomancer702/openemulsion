@@ -50,6 +50,10 @@ extern "C" {
 __declspec(dllexport) int oe_settings_count() { return film::SettingsCount; }
 __declspec(dllexport) int oe_rendering_index() { return film::OutputRendering; }
 __declspec(dllexport) int oe_retention_index() { return film::HighlightRetention; }
+__declspec(dllexport) int oe_hdr_peak_index() { return film::HDRPeak; }
+__declspec(dllexport) int oe_hdr_white_index() { return film::HDRWhite; }
+__declspec(dllexport) int oe_hdr_output_index() { return color::HDRPQOutput; }
+__declspec(dllexport) int oe_hdr_rendering_index() { return color::StandardHDR; }
 __declspec(dllexport) int oe_preset_count() { return look::Count; }
 __declspec(dllexport) const char* oe_preset_label(int preset)
 {
@@ -88,7 +92,7 @@ try
         settings[19]<0 || settings[19]>film::All || settings[26]<0 || settings[26]>=color::SpaceCount ||
         settings[27]<0 || settings[27]>=color::OutputSpaces.size() ||
         settings[film::SelectiveView]<0 || settings[film::SelectiveView]>1 ||
-        settings[film::OutputRendering]<0 || settings[film::OutputRendering]>color::StandardSDR) return 1;
+        settings[film::OutputRendering]<0 || settings[film::OutputRendering]>color::StandardHDR) return 1;
     const int modules=film::modulesForSettings(settings);
     if (modules & ~(film::Negative|film::Development|film::Print|film::SelectiveColor)) return 1;
     const auto cp=color::prepare(settings);

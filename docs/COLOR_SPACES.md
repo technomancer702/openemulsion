@@ -1,4 +1,4 @@
-# OFX Color Spaces (v0.35)
+# OFX Color Spaces (v0.36)
 
 ## Resolve Workflow
 
@@ -36,7 +36,7 @@ The input dropdown contains these 15 combinations:
 | ACES AP1 | Linear (ACEScg) |
 | Rec.709 | Linear |
 
-Outputs: Same as Input, Rec.709/Gamma 2.4, DaVinci Wide Gamut/Intermediate, ACEScct/AP1, sRGB, and Linear/Rec.709. Output conversion runs only while Film Color, non-neutral Film Development, Print, or non-neutral Selective Color is active. Diagnostic mattes are not output-encoded. This is not a standalone CST: disabling all effects means pass-through, not input-to-output conversion.
+Outputs: Same as Input, Rec.709/Gamma 2.4, DaVinci Wide Gamut/Intermediate, ACEScct/AP1, sRGB, Linear/Rec.709, and Rec.2100/PQ (Rec.2020). PQ is output-only; the 15 input choices are unchanged. Output conversion runs only while Film Color, non-neutral Film Development, Print, or non-neutral Selective Color is active. Diagnostic mattes are not output-encoded. This is not a standalone CST: disabling all effects means pass-through, not input-to-output conversion.
 
 ## Math and Limits
 
@@ -47,6 +47,7 @@ Outputs: Same as Input, Rec.709/Gamma 2.4, DaVinci Wide Gamut/Intermediate, ACES
 - **Auto** (default): apply an original SDR viewing response for camera-log, DaVinci Intermediate, ACEScct or scene-linear input going to Rec.709/Gamma 2.4 or sRGB. Do not apply it to display-ready Rec.709/Gamma 2.4 or sRGB input, or to log/linear output. Same as Input therefore does not add rendering automatically.
 - **Conversion Only**: retain the pre-v0.34 encoding/gamut conversion. Use when another stage supplies the viewing transform. This does not make an enabled creative film/print response an identity.
 - **Standard SDR**: explicitly enable the viewing response for display output, including display-ready input if deliberately desired. It still does nothing for log/linear output, texture-only processing, bypass, or diagnostic mattes.
+- **Standard HDR (PQ)**: explicitly render only Rec.2100/PQ output. Auto selects this HDR path for scene-log/linear input sent to PQ; neither applies SDR first. Standard HDR does nothing to SDR or managed log/linear destinations. Standard SDR does not tone-map PQ output.
 
 The viewing response runs after enabled Film Color camera balance and before the creative negative, development and print stages. It does not replace or scale the creative recipe sliders. Clean Slate removes those creative effects but retains the selected viewing response. Auto thus provides a finished neutral SDR starting point for log input, not just a mathematical conversion.
 
@@ -92,9 +93,74 @@ Matrices are derived from published chromaticities in double precision once. Bra
 
 Negative/HDR values survive texture processing. Gamma 2.4 and sRGB use symmetric negative extensions; camera curves use linear/signed extensions. Rec.709/Gamma 2.4 is a zero-black display power function, not the scene Rec.709 OETF. ACEScct decoding follows its specified 65504 upper limit. Other ordinary photographic values are not clamped to 0..1 by conversions. Film Color/Print still intentionally reshape tone and clamp negative effect-domain values.
 
-These are encoding/gamut conversions plus an optional original SDR viewing response and artistic look, not manufacturer viewing LUTs, an ACES rendering transform, measured film spectral response, or a complete HDR rendering pipeline. PQ/HLG, non-800 LogC3 EI curves, alternate Canon gamuts, and sensor-specific IDTs are not included. LogC3 uses the SUP 3.x exposure-value EI-800 curve, not the sensor-value curve. ARRI's VFX document explicitly distinguishes direct colorimetric conversion from its tone-mapped viewing LUTs; neither a correct LogC inverse nor matching input/output labels implies a matching display rendering.
+These are encoding/gamut conversions plus original viewing responses and artistic looks, not manufacturer viewing LUTs, an ACES rendering transform or measured film spectral response. HLG, PQ input, non-800 LogC3 EI curves, alternate Canon gamuts, and sensor-specific IDTs are not included. LogC3 uses the SUP 3.x exposure-value EI-800 curve, not the sensor-value curve. ARRI's VFX document explicitly distinguishes direct colorimetric conversion from its tone-mapped viewing LUTs; neither a correct LogC inverse nor matching input/output labels implies a matching display rendering.
 
 Resolve must supply float RGB in the selected encoding. The plugin does not apply video/full-range remapping; Resolve handles media data levels before OFX. Incorrect clip levels cannot be corrected by changing this dropdown.
+
+### HDR PQ Output
+
+For manually managed direct HDR output, choose the actual input space, output
+**Rec.2100 / PQ (Rec.2020)** and **Standard HDR (PQ)**. Auto also renders HDR
+for log/linear input to PQ; display-ready Rec.709/sRGB input requires explicit
+Standard HDR to reinterpret its decoded values with our HDR tone scale.
+This is not inverse tone mapping or recovery of already clipped SDR highlights.
+
+**HDR Peak Luminance** ranges from 400 to 10000 nits (default 1000).
+**HDR Reference White** ranges from 80 to 300 nits (default 203). Their ranges
+ensure white is below peak. Both are top-level output context, preserved when
+switching built-in looks and by Preserve Color Spaces during user-preset loading.
+Peak is enabled only during HDR rendering; reference white is enabled for all
+active PQ output, including Conversion Only. Texture-only, bypass and diagnostic
+mattes ignore both and keep the existing pass-through/matte behavior.
+
+The existing creative/texture pipeline works in its original perceptual Rec.709
+domain. Only during HDR rendering, negative and print shoulder ceilings receive
+extra perceptual headroom derived from peak/reference white; print gamut mapping
+uses the adapted print ceiling too. Toe, pivot, knee, contrast and palette settings
+remain the same. This lets print-heavy looks carry above-white highlights rather
+than stretching an SDR-limited result. SDR/Conversion Only/managed/texture
+parameters are unchanged. HDR does not squeeze the signal through the SDR viewing curve. After
+film, development, print, grain, glow and selective finishing, we decode to linear,
+convert to Rec.2020 and apply an original luminance tone scale. This does not
+expand the creative engine itself to wide-gamut spectral processing.
+
+The scale anchors linear gray 0.18 at 0.12 times reference white, and linear
+white 1 at reference white. A cubic segment smoothly joins the shadow toe to
+white; a rational shoulder approaches peak with matching first derivatives.
+At defaults, neutral gray is 24.36 nits and white is 203 nits. Above-white scene
+values can occupy HDR headroom. Peak-normalized radial gamut mapping preserves
+Rec.2020 linear luminance/chroma direction, then ST 2084 inverse EOTF encodes
+absolute luminance (code 1 means 10000 nits, not the selected peak).
+This is our artistic HDR rendering, not the BT.2100 reference OOTF or an ACES ODT.
+
+PQ transfer constants/Rec.2020 primaries and the 203-nit reference-white convention
+come from [ITU-R BT.2100-3](https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.2100-3-202502-I!!PDF-E.pdf).
+The algebraically equivalent float PQ evaluation avoids independently rounded
+numerator/denominator terms reversing tiny highlight steps. The HDR-only primary conversion uses a neutral-anchored matrix evaluation to
+avoid amplifying float rounding into near-neutral PQ chroma. Existing SDR and
+managed encodings retain their previous math. Highlight Color Retention remains
+an SDR-only control and greys out during PQ output.
+
+Conversion Only to PQ skips tone and radial gamut mapping, scales decoded linear
+white by HDR Reference White, and applies PQ encoding. Negative channels and
+channels above 10000 nits clip to the PQ transfer's physical endpoints. The peak
+control is ignored. This is not the usual RCM/ACES configuration: in a managed
+timeline, use the space entering the plugin, Same as Input and Conversion Only,
+letting Resolve's chosen output transform handle SDR/HDR delivery.
+
+Strong creative negative/print shoulders can intentionally compress values near
+or below reference white. A 1000-nit target does not guarantee a 1000-nit image.
+Start with Clean Slate to evaluate the HDR foundation; reduce Film Tone/Print
+Tone Strength if their look suppresses specular headroom. No source highlight
+restoration is performed. Glow/grain still run before output rendering; source
+keys and grain geometry are unchanged, although HDR maps their visible amplitude.
+
+Configure Resolve monitoring, project/output tagging, export data levels and
+mastering metadata separately. The OFX cannot set HDR10/MaxCLL/MaxFALL metadata
+or configure an HDR display. Avoid a second viewing transform after rendered PQ.
+There is no calibrated HDR viewer certification; SDR browser previews must not
+be used to judge PQ appearance. CPU/OpenCL numerical tests and original-footage
+luminance checks are not substitutes for a reference HDR display.
 
 ## References
 

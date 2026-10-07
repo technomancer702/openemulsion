@@ -34,6 +34,8 @@ class Renderer:
         self.dll.oe_settings_count.restype = ctypes.c_int
         self.dll.oe_rendering_index.restype = ctypes.c_int
         self.dll.oe_retention_index.restype = ctypes.c_int
+        for name in ["oe_hdr_peak_index","oe_hdr_white_index","oe_hdr_output_index","oe_hdr_rendering_index"]:
+            getattr(self.dll,name).restype = ctypes.c_int
         self.dll.oe_preset_count.restype = ctypes.c_int
         self.dll.oe_preset_label.argtypes = [ctypes.c_int]
         self.dll.oe_preset_label.restype = ctypes.c_char_p

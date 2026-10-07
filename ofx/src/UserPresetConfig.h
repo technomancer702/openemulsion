@@ -16,7 +16,7 @@ namespace userpreset {
 
 using Json = nlohmann::json;
 constexpr size_t MaximumBytes = 65536;
-constexpr int FormatVersion = 4;
+constexpr int FormatVersion = 5;
 constexpr const char* Plugin = "org.openemulsion.film";
 
 enum ContextKind { Choice, Number, Integer };
@@ -32,7 +32,8 @@ inline constexpr ContextControl ContextControls[] {
     {"outputSpace",Choice,Spaces,0,0,std::size(color::OutputSpaces)-1},
     {"exposure",Number,Camera,0,-4,4}, {"temperature",Number,Camera,0,-3,3},
     {"tint",Number,Camera,0,-3,3}, {"grainSeed",Integer,Seed,0,0,1000000},
-    {"outputRendering",Choice,Spaces,color::Automatic,0,color::StandardSDR}
+    {"outputRendering",Choice,Spaces,color::Automatic,0,color::StandardHDR},
+    {"hdrPeak",Number,Spaces,1000,400,10000}, {"hdrWhite",Number,Spaces,203,80,300}
 };
 
 struct Snapshot {
@@ -102,7 +103,7 @@ inline Json toJson(const Snapshot& preset)
         const auto& c = ContextControls[i];
         context[c.name] = validateNumber(preset.context[i], c.minimum, c.maximum, c.kind != Number, c.name);
     }
-    return {{"formatVersion",FormatVersion}, {"plugin",Plugin}, {"createdWith","0.35"},
+    return {{"formatVersion",FormatVersion}, {"plugin",Plugin}, {"createdWith","0.36"},
             {"name",preset.name}, {"controls",controls}, {"modules",modules}, {"context",context}};
 }
 
@@ -129,7 +130,7 @@ inline Snapshot parse(const std::string& input)
     if (!document.is_object() || document.size() != 7 ||
         !document.contains("formatVersion") || !document["formatVersion"].is_number_integer() ||
         (document["formatVersion"] < 1 || document["formatVersion"] > FormatVersion) || document.value("plugin",std::string()) != Plugin)
-        throw std::runtime_error("Not a supported OpenEmulsion preset (format version 1-4 required).");
+        throw std::runtime_error("Not a supported OpenEmulsion preset (format version 1-5 required).");
     if (!document.at("createdWith").is_string() || document.at("createdWith").get<std::string>().size() > 64 ||
         !document.at("name").is_string() || document.at("name").get<std::string>().size() > 256)
         throw std::runtime_error("Invalid preset metadata.");
@@ -141,9 +142,10 @@ inline Snapshot parse(const std::string& input)
     const bool legacy = document["formatVersion"] == 1;
     const bool legacyRendering = document["formatVersion"] <= 2;
     const bool legacyRetention = document["formatVersion"] < 4;
+    const bool legacyHDR = document["formatVersion"] < 5;
     if (!controls.is_object() || controls.size() != preset.controls.size() - (legacy ? 6 : 0) - (legacyRetention ? 1 : 0) ||
         !modules.is_object() || modules.size() != preset.modules.size() - (legacy ? 1 : 0) ||
-        !context.is_object() || context.size() != preset.context.size() - (legacyRendering ? 1 : 0))
+        !context.is_object() || context.size() != preset.context.size() - (legacyRendering ? 1 : 0) - (legacyHDR ? 2 : 0))
         throw std::runtime_error("Incomplete or unsupported preset controls.");
     for (size_t i = 0; i < preset.controls.size(); ++i) {
         const auto& c = look::Controls[i];
@@ -161,11 +163,15 @@ inline Snapshot parse(const std::string& input)
     }
     for (size_t i = 0; i < preset.context.size(); ++i) {
         const auto& c = ContextControls[i];
+        if (legacyHDR && (std::string(c.name) == "hdrPeak" || std::string(c.name) == "hdrWhite")) continue;
         if (legacyRendering && std::string(c.name) == "outputRendering") {
             preset.context[i] = color::ConversionOnly;
             continue;
         }
         preset.context[i] = readNumber(context,c.name,c.minimum,c.maximum,c.kind != Number);
+        if (legacyHDR && ((std::string(c.name) == "outputRendering" && preset.context[i] > color::StandardSDR) ||
+                          (std::string(c.name) == "outputSpace" && preset.context[i] >= color::HDRPQOutput)))
+            throw std::runtime_error("HDR choices require preset format 5.");
     }
     return preset;
 }

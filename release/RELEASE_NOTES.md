@@ -1,6 +1,17 @@
-# OpenEmulsion v0.35
+# OpenEmulsion v0.36
 
-Experimental Windows x64 film emulation with adjustable SDR highlight color retention. Stock and movie references remain artistic interpretations, not measured film profiles or exact movie grades.
+Experimental Windows x64 film emulation with SDR and direct HDR PQ output. Stock and movie references remain artistic interpretations, not measured film profiles or exact movie grades. HDR monitor/host validation is still outstanding.
+
+## Changes in v0.36
+
+- Added output-only Rec.2100 / PQ (Rec.2020) and Standard HDR (PQ) rendering. Auto renders HDR for scene-log/linear input sent to PQ. Existing input/output/rendering IDs, SDR math, managed log/linear and texture-only behavior are retained.
+- Added top-level HDR Peak Luminance (400-10000 nits, default 1000) and HDR Reference White (80-300 nits, default 203). Context is preserved by built-in looks; controls grey out when inapplicable. Peak requires HDR rendering; reference white also defines Conversion Only PQ scaling.
+- Original HDR luminance rendering runs after creative, grain/glow and selective finishing, not through an SDR curve first. Rec.2020 radial gamut mapping and ST 2084 absolute PQ encoding use shared CPU/OpenCL math in the existing composite pass, with no additional passes/buffers/readbacks. Neutral-anchored HDR matrix evaluation prevents PQ amplification of neutral-axis float rounding.
+- During HDR rendering only, negative/print shoulder ceilings and print gamut headroom adapt to the selected peak/reference-white ratio. Print-heavy recipes can retain above-white highlights without stretching an SDR-limited result. Existing toe/pivot/knee/contrast/palette settings and all SDR/managed/Conversion Only response parameters are retained. A stable equivalent PQ evaluation avoids float highlight-step reversals near the peak.
+- Conversion Only PQ skips viewing/gamut mapping and encodes relative linear white using the reference-white setting. Physical PQ endpoints clip negatives/above-10000-nit channels. Standard SDR does not render HDR output. Highlight Color Retention remains SDR-only.
+- Portable preset format 5 captures HDR output context. Complete format-1/2/3/4 files receive 1000/203 defaults without changing existing choices or creative tuning. Older builds cannot load format-5 files; mixed/incomplete schemas are rejected.
+- Extended numerical tests cover independent PQ/matrix anchors, gray/white/black, smooth joins, peak bounds, all-space/recipe CPU/OpenCL parity, queue ordering, mode/matte isolation, presets and comparative 4K HDR timings. Added local numeric HDR footage checks using retained precision inputs; footage/results are never packaged or uploaded.
+- This is artistic HDR rendering, not an ACES/RCM output transform, inverse tone mapper or HDR10 metadata writer. Strong creative film/print shoulders can suppress HDR highlight headroom. Configure Resolve HDR monitoring/export separately. HLG and PQ input are not implemented; calibrated HDR display/Resolve appearance and other GPUs remain unverified. See `docs/COLOR_SPACES.md`.
 
 ## Changes in v0.35
 

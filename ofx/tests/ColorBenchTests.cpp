@@ -31,7 +31,9 @@ int main()
         for (int preset=0; preset<look::Count; ++preset) {
             require(oe_preset_settings(preset,s.data(),s.size())==0,"Recipe loading failed");
             s[19]=static_cast<float>(static_cast<int>(s[19]) & (film::Negative|film::Development|film::Print|film::SelectiveColor));
-            for (int source=0; source<color::SpaceCount; ++source) for (int rendering=0; rendering<3; ++rendering) for (float retention : {0.0f,.5f,1.0f}) {
+            for (int source=0; source<color::SpaceCount; ++source) for (int output : {1,color::HDRPQOutput})
+                for (int rendering=0; rendering<color::RenderingCount; ++rendering) for (float retention : {0.0f,.5f,1.0f}) {
+                s[27]=static_cast<float>(output);
                 s[26]=static_cast<float>(source); s[film::OutputRendering]=static_cast<float>(rendering);
                 s[film::HighlightRetention]=retention;
                 const auto cp=color::prepare(s.data());

@@ -13,6 +13,8 @@ static void require(bool condition, const char* message)
 
 static void near(float a, float b, float tolerance, const char* message)
 {
+    if (!std::isfinite(a) || std::abs(a-b)>tolerance)
+        std::fprintf(stderr,"%s: %.9g vs %.9g (tolerance %.9g)\n",message,a,b,tolerance);
     require(std::isfinite(a) && std::abs(a-b) <= tolerance,message);
 }
 
@@ -78,9 +80,110 @@ static void testHighlightRetention()
     }
 }
 
+static void testHDR()
+{
+    // Independent ST 2084 numerical anchors (normalized float code values).
+    for (const auto anchor : std::array<std::pair<float,float>,6>{{
+        {0,.000000730956f},{100,.508078422f},{203,.580688881f},
+        {1000,.751827096f},{4000,.902572393f},{10000,1}}}) {
+        near(color_encode(anchor.first/10000,ColorPQ),anchor.second,8e-6f,"PQ inverse EOTF anchor");
+        near(color_decode(anchor.second,ColorPQ)*10000,anchor.first,
+             std::max(.003f,anchor.first*.0001f),"PQ EOTF anchor");
+    }
+    const auto matrix=color::inverse(color::to709Matrices()[color::Rec2100PQ]);
+    const std::array<double,9> reference {.62740390,.32928304,.04331307,.06909729,.91954040,.01136232,.01639144,.08801331,.89559525};
+    for (size_t i=0; i<matrix.size(); ++i) near(static_cast<float>(matrix[i]),static_cast<float>(reference[i]),2e-6f,"Rec.709 to Rec.2020 matrix");
+    for (float peak : {400.0f,1000.0f,4000.0f,10000.0f}) for (float white : {80.0f,203.0f,300.0f}) {
+        const auto p=color::prepare(color::LinearRec709,color::HDRPQOutput,false,color::StandardHDR,peak,white);
+        require(p.renderHDR && !p.renderSDR,"HDR accidentally renders SDR first");
+        near(color_hdr_tone(.18f,peak/white),.12f,1e-7f,"HDR gray anchor");
+        near(color_hdr_tone(1,peak/white),1,1e-7f,"HDR reference white anchor");
+        for (float join : {.18f,1.0f}) {
+            const float h=1e-4f;
+            near((color_hdr_tone(join,peak/white)-color_hdr_tone(join-h,peak/white))/h,
+                 (color_hdr_tone(join+h,peak/white)-color_hdr_tone(join,peak/white))/h,.005f,"HDR slope continuity");
+        }
+        float previous=-1;
+        for (int i=0; i<2000; ++i) {
+            const float y=std::exp2(-20.0f+i*.019f);
+            const auto pq=color_from_work(color_curve_rgb({y,y,y},ColorSRGB,1),p);
+            const auto nits=color_curve_rgb(pq,ColorPQ,0);
+            for (float v : {nits.r,nits.g,nits.b})
+                require(std::isfinite(v) && v>=0 && v*10000<=peak+.2f,"HDR luminance ceiling");
+            near(nits.r,nits.g,2e-5f,"HDR neutral axis");
+            if (nits.r+2e-5f<previous) std::fprintf(stderr,"HDR ramp: peak %.0f white %.0f source %.9g previous %.9g current %.9g code %.9g\n",peak,white,y,previous,nits.r,pq.r);
+            require(nits.r+2e-5f>=previous,"HDR neutral exposure order");
+            previous=nits.r;
+        }
+        for (float y : {0.0f,.18f,1.0f,4.0f,64.0f}) {
+            const auto pq=color_from_work(color_curve_rgb({y,y,y},ColorSRGB,1),p);
+            near(color_decode(pq.r,ColorPQ)*10000,color_hdr_tone(y,peak/white)*white,
+                 std::max(.01f,peak*.00015f),"HDR rendered neutral luminance");
+        }
+        for (const auto chip : std::array<ColorRgb,6>{{{32,.1f,.3f},{-.03f,.5f,.1f},{.01f,.03f,32},
+            {4,4,.1f},{.38f,.2f,.12f},{1,-.1f,.3f}}}) {
+            const auto c=color_from_work(color_curve_rgb(chip,ColorSRGB,1),p);
+            for (float v : {c.r,c.g,c.b}) require(std::isfinite(v) && v>=0 && color_decode(v,ColorPQ)*10000<=peak+.2f,"HDR colored gamut bound");
+        }
+        auto conversion=p; conversion.renderHDR=0;
+        const auto c=color_from_work(color_curve_rgb({1,1,1},ColorSRGB,1),conversion);
+        near(color_decode(c.r,ColorPQ)*10000,white,.05f,"Conversion-only PQ scale");
+    }
+    for (int source=0; source<color::SpaceCount; ++source) for (int output=0; output<static_cast<int>(color::OutputSpaces.size()); ++output)
+        for (int rendering=0; rendering<color::RenderingCount; ++rendering) for (bool texture : {false,true}) {
+            const auto p=color::prepare(source,output,texture,rendering);
+            const bool expected=!texture && output==color::HDRPQOutput && (rendering==color::StandardHDR ||
+                (rendering==color::Automatic && source!=color::Rec709Gamma24 && source!=color::SRGB));
+            require(bool(p.renderHDR)==expected,"HDR automatic/explicit policy");
+            require(!(p.renderHDR && p.renderSDR),"SDR/HDR stack");
+            if (p.renderHDR) {
+                const ColorRgb work {-.02f,.3f,4};
+                const auto c=color_render_work(work,p);
+                require(c.r==work.r && c.g==work.g && c.b==work.b,"HDR is rendered before creative stages");
+                require(!color::highlightRetentionEnabled(p,film::Negative,0,1,0),"SDR retention leaks into HDR");
+            }
+        }
+    auto recipe=look::recipe(look::Neutral);
+    std::array<float,film::SettingsCount> s {};
+    for (size_t i=0; i<s.size(); ++i) s[i]=static_cast<float>(recipe[i]);
+    s[26]=color::AlexaLogC3; s[27]=color::HDRPQOutput;
+    for (int mode=0; mode<7; ++mode) for (int mask=0; mask<=film::All; ++mask) {
+        s[0]=static_cast<float>(mode); s[19]=static_cast<float>(mask);
+        const int active=film::modulesForSettings(s.data());
+        const auto p=color::prepare(s.data());
+        require(bool(p.renderHDR)==bool(active & (film::Negative|film::Print|film::Development|film::SelectiveColor)),"HDR module isolation");
+        require(color::hdrWhiteEnabled(p,active,0)==bool(p.renderHDR),"HDR UI policy");
+    }
+    s[0]=0; s[19]=film::Negative|film::SelectiveColor; s[film::SelectiveView]=1;
+    const auto p=color::prepare(s.data());
+    require(!color::hdrWhiteEnabled(p,film::Negative|film::SelectiveColor,1),"HDR controls enabled on Selection Matte");
+    for (int preset=1; preset<look::Count; ++preset) {
+        const auto look=look::recipe(preset);
+        for (size_t i=0; i<s.size(); ++i) s[i]=static_cast<float>(look[i]);
+        s[26]=color::LinearRec709; s[27]=color::HDRPQOutput; s[film::OutputRendering]=color::StandardHDR;
+        const auto cp=color::prepare(s.data()); const auto hdr=response::prepare(s.data());
+        s[27]=1; const auto sdr=response::prepare(s.data());
+        require(hdr.printTone.ceiling>sdr.printTone.ceiling && hdr.negativeTone.ceiling>sdr.negativeTone.ceiling,
+                "HDR creative shoulders have no headroom");
+        near(hdr.printTone.knee,sdr.printTone.knee,0,"HDR changes print knee");
+        const auto modules=film::modulesForSettings(s.data());
+        auto c=color_curve_rgb({32,32,32},ColorSRGB,1);
+        if (modules & film::Negative) c=response_negative_stage(c,hdr);
+        if (modules & film::Development) c=response_development(c,hdr);
+        if (modules & film::Print) c=response_print(c,hdr);
+        c=response_finish(c,modules,hdr);
+        const auto out=color_from_work(c,cp);
+        for (float code : {out.r,out.g,out.b}) require(std::isfinite(code) && code>=0 && code<1,"HDR recipe range");
+        if (preset==look::Daylight50)
+            require(color_decode(out.r,ColorPQ)*10000>300,"Print preset loses HDR highlight headroom");
+    }
+    std::puts("HDR PQ: independent transfer/matrix anchors, black/gray/white, C1 joins, exposure order, gamut/peak bounds, scale, output policy and module/matte isolation pass.");
+}
+
 int main()
 {
     try {
+        testHDR();
         testHighlightRetention();
         near(color_sdr_tone(0),0,0,"SDR adds a black offset");
         near(color_sdr_tone(.18f),.12f,1e-7f,"SDR gray anchor");

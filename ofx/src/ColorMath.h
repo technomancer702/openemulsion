@@ -31,7 +31,7 @@
 enum ColorCurve {
     ColorGamma24, ColorSRGB, ColorLinear, ColorLogC3, ColorLogC4,
     ColorSLog3, ColorIntermediate, ColorFilmGen5, ColorLog3G10,
-    ColorCanonLog2, ColorCanonLog3, ColorACEScct, ColorVLog
+    ColorCanonLog2, ColorCanonLog3, ColorACEScct, ColorVLog, ColorPQ
 };
 typedef struct ColorRgb { float r, g, b; } ColorRgb;
 typedef struct ColorParameters {
@@ -39,6 +39,8 @@ typedef struct ColorParameters {
     float to709[9];
     float from709[9];
     float highlightRetention;
+    int renderHDR;
+    float hdrPeak, hdrWhite;
 } ColorParameters;
 
 static inline float color_signed_power(float x, float exponent)
@@ -98,6 +100,11 @@ static inline float color_decode(float v, int curve)
             COLOR_EXP2((v < 1.467996312f ? v : 1.467996312f) * 17.52f - 9.72f);
     case ColorVLog:
         return v < 0.181f ? (v - 0.125f) / 5.6f : color_pow10((v - 0.598206f) / 0.241514f) - 0.00873f;
+    case ColorPQ: {
+        // ST 2084 normalized display linear: 1 = 10000 cd/m2, not reference white.
+        const float n = COLOR_POW(COLOR_MAX(0.0f,COLOR_MIN(1.0f,v)),1.0f/78.84375f);
+        return COLOR_POW(COLOR_MAX(n-0.8359375f,0.0f)/(18.8515625f-18.6875f*n),1.0f/0.1593017578125f);
+    }
     default: return v;
     }
 }
@@ -140,6 +147,12 @@ static inline float color_encode(float x, int curve)
         return x <= 0.0078125f ? 10.5402377416545f * x + 0.0729055341958355f : (COLOR_LOG2(x) + 9.72f) / 17.52f;
     case ColorVLog:
         return x < 0.01f ? 5.6f * x + 0.125f : 0.241514f * color_log10(x + 0.00873f) + 0.598206f;
+    case ColorPQ: {
+        const float n = COLOR_POW(COLOR_MAX(0.0f,COLOR_MIN(1.0f,x)),0.1593017578125f);
+        // Equivalent ratio, avoiding independent numerator/denominator rounding
+        // that can reverse tiny highlight steps near the PQ ceiling.
+        return COLOR_POW(1.0f-0.1640625f*(1.0f-n)/(1.0f+18.6875f*n),78.84375f);
+    }
     default: return x;
     }
 }
@@ -232,10 +245,53 @@ static inline ColorRgb color_render_work(ColorRgb work, ColorParameters p)
     return color_curve_rgb(c, ColorSRGB, 1);
 }
 
+// Original HDR tone scale, in reference-white units. C1 joins at gray and white.
+static inline float color_hdr_tone(float x, float ceiling)
+{
+    if (x <= 0.0f) return 0.0f;
+    if (x <= 0.18f) return 0.12f*x/(0.234f-0.30f*x);
+    const float slope = 0.88f/0.82f;
+    if (x <= 1.0f) {
+        const float t = (x-0.18f)/0.82f;
+        return 0.12f+0.88f*t+0.82f*(0.8666666667f-slope)*t*(1.0f-t)*(1.0f-t);
+    }
+    const float headroom = ceiling-1.0f;
+    const float high = slope*(x-1.0f);
+    return 1.0f+headroom*(high/(headroom+high));
+}
+
+// HDR runs after creative/texture finishing, in linear destination primaries.
+static inline ColorRgb color_hdr_output(ColorRgb c, ColorParameters p)
+{
+    const float y = c.g+0.2627f*(c.r-c.g)+0.0593f*(c.b-c.g);
+    if (y <= 0.0f) { ColorRgb black = {0,0,0}; return black; }
+    const float mapped = color_hdr_tone(y,p.hdrPeak/p.hdrWhite)*p.hdrWhite/p.hdrPeak;
+    const float gain = mapped/y;
+    c.r *= gain; c.g *= gain; c.b *= gain;
+    c = color_sdr_gamut(c,mapped);
+    const float scale = p.hdrPeak/10000.0f;
+    c.r *= scale; c.g *= scale; c.b *= scale;
+    return c;
+}
+
 static inline ColorRgb color_from_work(ColorRgb v, ColorParameters p)
 {
     if (p.outputIsWork) return v;
-    return color_curve_rgb(color_matrix(color_curve_rgb(v, ColorSRGB, 0), p.from709), p.outputCurve, 1);
+    ColorRgb linear = color_curve_rgb(v, ColorSRGB, 0);
+    if (p.outputCurve == ColorPQ) {
+        // D65 Rec.709 -> D65 Rec.2020 rows sum to one. Anchor at green so
+        // exact grays do not acquire matrix-rounding chroma amplified by PQ.
+        const float red = linear.r-linear.g, blue = linear.b-linear.g, neutral = linear.g;
+        linear.r = neutral+p.from709[0]*red+p.from709[2]*blue;
+        linear.g = neutral+p.from709[3]*red+p.from709[5]*blue;
+        linear.b = neutral+p.from709[6]*red+p.from709[8]*blue;
+        if (p.renderHDR) linear = color_hdr_output(linear,p);
+        else {
+            const float scale = p.hdrWhite/10000.0f;
+            linear.r *= scale; linear.g *= scale; linear.b *= scale;
+        }
+    } else linear = color_matrix(linear,p.from709);
+    return color_curve_rgb(linear,p.outputCurve,1);
 }
 
 #ifndef __cplusplus

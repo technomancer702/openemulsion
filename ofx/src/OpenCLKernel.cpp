@@ -432,7 +432,7 @@ bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, c
     static_assert(sizeof(bloom::Pixel) == 16, "OpenCL bloom float4 layout mismatch");
     const int identity = film::isIdentity(mode, modules, halation, aura, settings[16], bloomConfig.parameters.amount,
                                           responseParameters.selectiveAmount, responseParameters.selectiveView);
-    static_assert(sizeof(ColorParameters) == 96, "OpenCL color structure layout mismatch");
+    static_assert(sizeof(ColorParameters) == 108, "OpenCL color structure layout mismatch");
     static_assert(sizeof(GrainParameters) == 64, "OpenCL grain structure layout mismatch");
     cl_mem blurMem = inputMem;
     if (halation > 0.0f || aura > 0.0f) {

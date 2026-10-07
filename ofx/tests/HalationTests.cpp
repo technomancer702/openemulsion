@@ -86,6 +86,7 @@ static grain::PackedSettings settings(float radius, float amount = 1.0f, float a
     s[film::GrainBlue] = 1.0f;
     s[film::BloomRadius] = 1; s[film::BloomThreshold] = 0.65f; s[film::BloomSoftness] = 0.35f;
     s[film::BloomColor] = 1; s[film::BloomProtection] = 0.8f;
+    s[film::HDRPeak] = 1000; s[film::HDRWhite] = 203;
     return s;
 }
 
@@ -1458,6 +1459,11 @@ public:
             s[film::HighlightRetention]=retention;
             cases.push_back(s);
         }
+        for (int mode : {0,1}) for (float peak : {1000.0f,4000.0f}) {
+            auto s=filmSettings(); s[0]=static_cast<float>(mode); s[26]=color::AlexaLogC3;
+            s[27]=color::HDRPQOutput; s[film::OutputRendering]=color::StandardHDR; s[film::HDRPeak]=peak;
+            cases.push_back(s);
+        }
         for (int source : {color::Rec709Gamma24, color::AlexaLogC3, color::DaVinciIntermediate, color::ACEScct}) {
             for (int mode : {1, 3, 2, 0}) {
                 auto s = filmSettings();
@@ -2107,8 +2113,8 @@ public:
 
     void testDisplayRendering()
     {
-        for (int source=0; source<color::SpaceCount; ++source) for (int output=0; output<6; ++output)
-            for (int rendering=0; rendering<3; ++rendering) for (float retention : {0.0f,.5f,1.0f}) {
+        for (int source=0; source<color::SpaceCount; ++source) for (int output=0; output<static_cast<int>(color::OutputSpaces.size()); ++output)
+            for (int rendering=0; rendering<color::RenderingCount; ++rendering) for (float retention : {0.0f,.5f,1.0f}) {
                 auto s=filmSettings(); s[26]=static_cast<float>(source); s[27]=static_cast<float>(output);
                 s[film::OutputRendering]=static_cast<float>(rendering);
                 s[film::HighlightRetention]=retention;
@@ -2164,7 +2170,53 @@ public:
             test(17,19,s,false);
             s[0]=1; test(17,19,s,false);
         }
-        std::puts("OpenCL SDR: all spaces/options/retention amounts, all recipes, gray/gradation, exposure order, alpha, unchanged skin/display-ready input, and texture/bypass/matte isolation match CPU.");
+        testHDRRendering();
+        std::puts("OpenCL SDR/HDR: all spaces/options/retention amounts, all recipes, gray/gradation, exposure order, alpha, unchanged skin/display-ready input, and texture/bypass/matte isolation match CPU.");
+    }
+
+    void testHDRRendering()
+    {
+        for (float peak : {400.0f,1000.0f,4000.0f,10000.0f}) for (float white : {80.0f,203.0f,300.0f}) {
+            auto s=filmSettings(); s[27]=color::HDRPQOutput; s[26]=color::LinearRec709;
+            s[film::HDRPeak]=peak; s[film::HDRWhite]=white; s[film::OutputRendering]=color::StandardHDR;
+            s[film::NegativeColorStrength]=s[film::NegativeToneStrength]=0; s[19]=film::Negative;
+            const std::vector<float> input {0,0,0,.37f, .18f,.18f,.18f,.37f, 1,1,1,.37f,
+                4,4,4,.37f, 64,64,64,.37f, 32,.1f,.3f,.37f, .01f,.03f,32,.37f};
+            const auto result=render(input,7,1,s);
+            const auto cp=color::prepare(s.data());
+            for (int i=0; i<7; ++i) {
+                const auto expected=color_from_work(color_to_work({input[i*4],input[i*4+1],input[i*4+2]},cp),cp);
+                for (const auto pair : {std::pair<float,float>{result[i*4],expected.r}, {result[i*4+1],expected.g}, {result[i*4+2],expected.b}})
+                    requireNear(pair.first,pair.second,2e-5f,"HDR PQ GPU luminance anchor");
+                require(result[i*4+3]==input[i*4+3],"HDR changes alpha");
+            }
+            for (int mode : {2,3,4,5,6}) {
+                s[19]=film::All;
+                s[0]=static_cast<float>(mode); s[16]=.2f; s[13]=.2f; s[film::BloomAmount]=.2f;
+                s[film::OutputRendering]=color::ConversionOnly;
+                const auto baseline=render(input,7,1,s);
+                s[film::OutputRendering]=color::StandardHDR; s[film::HDRPeak]=10000; s[film::HDRWhite]=300;
+                require(baseline==render(input,7,1,s),"HDR settings alter texture/bypass/glow matte");
+            }
+            s=filmSettings(); s[26]=color::AlexaLogC3; s[27]=color::HDRPQOutput;
+            s[film::HDRPeak]=peak; s[film::HDRWhite]=white; s[film::OutputRendering]=color::StandardHDR;
+            s[13]=.2f; s[film::BloomAmount]=.2f; s[16]=.2f;
+            test(17,19,s,false);
+            if (unordered) test(17,19,s,true);
+        }
+        for (int preset=1; preset<look::Count; ++preset) {
+            auto s=filmSettings(); const auto recipe=look::recipe(preset);
+            for (size_t i=0; i<s.size(); ++i) s[i]=static_cast<float>(recipe[i]);
+            s[26]=color::AlexaLogC3; s[27]=color::HDRPQOutput; s[film::OutputRendering]=color::StandardHDR;
+            test(17,19,s,false); s[0]=1; test(17,19,s,false);
+        }
+        auto s=filmSettings(); s[26]=color::LinearRec709; s[27]=color::HDRPQOutput;
+        s[19]=film::Negative|film::SelectiveColor; s[film::SelectiveView]=1;
+        const std::vector<float> input {4,.1f,.03f,.37f};
+        s[film::OutputRendering]=color::ConversionOnly; const auto matte=render(input,1,1,s);
+        s[film::OutputRendering]=color::StandardHDR; s[film::HDRPeak]=10000; s[film::HDRWhite]=300;
+        require(matte==render(input,1,1,s),"HDR encodes Selection Matte");
+        std::puts("OpenCL HDR PQ: all peak/reference-white limits, independent anchors, alpha, full color/glow/grain, recipes, unordered queue and texture/matte/bypass isolation pass.");
     }
 
     void testUpgradeControls()

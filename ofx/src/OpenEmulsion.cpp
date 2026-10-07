@@ -26,7 +26,7 @@
 #define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, halation, aura, linear-light bloom, and selective color, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 35
+#define kPluginVersionMinor 36
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -43,6 +43,7 @@ struct Settings {
     int sourceSpace = color::Rec709Gamma24;
     int outputSpace = 0;
     int outputRendering = color::Automatic;
+    double hdrPeak = 1000, hdrWhite = 203;
     bool enableNegative = true;
     bool enableDevelopment = true;
     bool enablePrint = true;
@@ -390,6 +391,8 @@ private:
         out[26] = static_cast<float>(s.sourceSpace);
         out[27] = static_cast<float>(s.outputSpace);
         out[film::OutputRendering] = static_cast<float>(s.outputRendering);
+        out[film::HDRPeak] = static_cast<float>(s.hdrPeak);
+        out[film::HDRWhite] = static_cast<float>(s.hdrWhite);
         out[film::HighlightRetention] = static_cast<float>(s.highlightRetention);
         out[28] = static_cast<float>(s.negativeShoulder);
         out[29] = static_cast<float>(s.negativeCrosstalk);
@@ -463,6 +466,8 @@ public:
         sourceSpace_ = fetchChoiceParam("sourceSpace");
         outputSpace_ = fetchChoiceParam("outputSpace");
         outputRendering_ = fetchChoiceParam("outputRendering");
+        hdrPeak_ = fetchDoubleParam("hdrPeak");
+        hdrWhite_ = fetchDoubleParam("hdrWhite");
         system_ = fetchChoiceParam("system");
         printStyle_ = fetchChoiceParam("printStyle");
         grainStyle_ = fetchChoiceParam("grainStyle");
@@ -625,7 +630,8 @@ public:
         if (name == "lookPreset") updatePresetBrowser();
         const bool affectsControls = name == "mode" || name == "printStyle" || name == "system" ||
             name == "negativeColorStrength" || name == "sourceSpace" || name == "outputSpace" ||
-            name == "outputRendering" || name == "selectiveView" || args.reason == OFX::eChangeTime ||
+            name == "outputRendering" || name == "selectiveView" || name == "selectiveAmount" ||
+            name == "pushPull" || name == "colorRichness" || name == "splitTone" || args.reason == OFX::eChangeTime ||
             std::any_of(moduleui::Toggles.begin(), moduleui::Toggles.end(), [&](const auto& toggle) { return name == toggle.name; });
         if (!affectsControls) return;
         if (name == "mode" && args.reason == OFX::eChangeUserEdit) {
@@ -803,12 +809,22 @@ private:
                 moduleui::semanticControlEnabled(moduleui::Controls[i].name, mode, enabled, system, colorStrength));
         for (auto* parameter : printRecipeControls_)
             parameter->setEnabled(moduleui::printRecipeEnabled(mode, enabled, style));
-        int source = color::Rec709Gamma24, output = 0, rendering = color::Automatic, view = 0;
-        sourceSpace_->getValue(source); outputSpace_->getValue(output);
-        outputRendering_->getValue(rendering); selectiveView_->getValue(view);
-        const auto cp = color::prepare(source,output,false,rendering);
-        highlightRetention_->setEnabled(color::highlightRetentionEnabled(cp,film::modulesForMode(mode,enabled),system,
-                                                                         static_cast<float>(colorStrength),view));
+        Settings s;
+        sourceSpace_->getValue(s.sourceSpace); outputSpace_->getValue(s.outputSpace);
+        outputRendering_->getValue(s.outputRendering); selectiveView_->getValue(s.selectiveView);
+        pushPull_->getValue(s.pushPull); colorRichness_->getValue(s.colorRichness);
+        splitTone_->getValue(s.splitTone); selectiveAmount_->getValue(s.selectiveAmount);
+        int active = film::modulesForMode(mode,enabled);
+        if (s.pushPull == 0 && s.colorRichness == 0 && s.splitTone == 0) active &= ~film::Development;
+        if (s.selectiveAmount == 0 && s.selectiveView == 0) active &= ~film::SelectiveColor;
+        const bool textureOnly = !(active & (film::Negative|film::Print|film::Development|film::SelectiveColor));
+        const auto cp = color::prepare(s.sourceSpace,s.outputSpace,textureOnly,s.outputRendering,
+                                       static_cast<float>(s.hdrPeak),static_cast<float>(s.hdrWhite));
+        highlightRetention_->setEnabled(color::highlightRetentionEnabled(cp,active,system,
+                                                                         static_cast<float>(colorStrength),s.selectiveView));
+        const bool whiteEnabled = color::hdrWhiteEnabled(cp,active,s.selectiveView);
+        hdrWhite_->setEnabled(whiteEnabled);
+        hdrPeak_->setEnabled(whiteEnabled && cp.renderHDR);
     }
 
     Settings settingsAt(double time) const
@@ -818,6 +834,8 @@ private:
         sourceSpace_->getValueAtTime(time, s.sourceSpace);
         outputSpace_->getValueAtTime(time, s.outputSpace);
         outputRendering_->getValueAtTime(time, s.outputRendering);
+        s.hdrPeak = hdrPeak_->getValueAtTime(time);
+        s.hdrWhite = hdrWhite_->getValueAtTime(time);
         system_->getValueAtTime(time, s.system);
         printStyle_->getValueAtTime(time, s.printStyle);
         grainStyle_->getValueAtTime(time, s.grainStyle);
@@ -909,6 +927,8 @@ private:
     OFX::ChoiceParam* sourceSpace_ = nullptr;
     OFX::ChoiceParam* outputSpace_ = nullptr;
     OFX::ChoiceParam* outputRendering_ = nullptr;
+    OFX::DoubleParam* hdrPeak_ = nullptr;
+    OFX::DoubleParam* hdrWhite_ = nullptr;
     OFX::ChoiceParam* system_ = nullptr;
     OFX::ChoiceParam* printStyle_ = nullptr;
     std::array<OFX::DoubleParam*, printstyle::ControlCount> printRecipeControls_ {};
@@ -1089,8 +1109,13 @@ public:
         choice->setLabels("Output Rendering", "Output Rendering", "Output Rendering");
         for (const auto* label : color::RenderingLabels) choice->appendOption(label);
         choice->setDefault(color::Automatic);
-        choice->setHint("Auto adds an SDR viewing response when scene-log/linear input is sent to Rec.709 or sRGB. Runs after camera balance, before the creative film response. Display-ready input and log/linear output remain unchanged. Conversion Only keeps the original gamut/gamma conversion for an external viewing transform. Standard SDR explicitly enables rendering for display output. Texture-only modes, bypass and diagnostic mattes never apply it.");
+        choice->setHint("Auto renders scene-log/linear input for the selected display output: SDR for Rec.709/sRGB, HDR for Rec.2100 PQ. SDR runs before creative film; HDR runs after creative and texture stages. Conversion Only leaves rendering to another stage (PQ still encodes absolute luminance using HDR Reference White). Standard SDR and Standard HDR explicitly render only their matching output targets. Managed log/linear output, texture-only, bypass and mattes do not apply display rendering.");
         page->addChild(*choice);
+
+        addDouble(desc,page,"hdrPeak","HDR Peak Luminance (nits)",1000,400,10000,1,nullptr,
+                  "PQ rendering ceiling. Default 1000 nits; match the intended mastering target. Only active with PQ output and HDR rendering. Does not configure Resolve monitoring, export tags or HDR metadata.");
+        addDouble(desc,page,"hdrWhite","HDR Reference White (nits)",203,80,300,1,nullptr,
+                  "Linear white 1 maps to this luminance in PQ; default 203 nits. Active for PQ output, including Conversion Only. Peak Luminance remains higher across the allowed ranges. Creative tone/print can compress highlights before output; lower their tone strengths for more headroom.");
 
         choice = desc.defineChoiceParam("filmGauge");
         choice->setLabels("Film Gauge", "Film Gauge", "Film Gauge");

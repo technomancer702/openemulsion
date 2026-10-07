@@ -24,9 +24,12 @@ enum SpaceId {
     PanasonicVLog, ACEScct, ACEScg, LinearRec709, SpaceCount
 };
 
-enum Rendering { Automatic, ConversionOnly, StandardSDR };
-inline constexpr std::array<const char*,3> RenderingLabels {
-    "Auto", "Conversion Only", "Standard SDR"
+// PQ is an output-only space; existing camera-input IDs remain unchanged.
+constexpr int Rec2100PQ = SpaceCount;
+constexpr int HDRPQOutput = 6;
+enum Rendering { Automatic, ConversionOnly, StandardSDR, StandardHDR, RenderingCount };
+inline constexpr std::array<const char*,RenderingCount> RenderingLabels {
+    "Auto", "Conversion Only", "Standard SDR", "Standard HDR (PQ)"
 };
 
 struct Space {
@@ -36,11 +39,11 @@ struct Space {
     double wx = 0.3127, wy = 0.3290;
 };
 
-inline const std::array<Space, SpaceCount>& spaces()
+inline const std::array<Space, SpaceCount+1>& allSpaces()
 {
     static const std::array<double, 6> rec709 {0.64, 0.33, 0.30, 0.60, 0.15, 0.06};
     static const std::array<double, 6> ap1 {0.713, 0.293, 0.165, 0.830, 0.128, 0.044};
-    static const std::array<Space, SpaceCount> list {{
+    static const std::array<Space, SpaceCount+1> list {{
         {"ARRI Alexa LogC3 / Wide Gamut 3 (EI 800)", ColorLogC3, {0.684, 0.313, 0.221, 0.848, 0.0861, -0.1020}},
         {"ARRI LogC4 / Wide Gamut 4", ColorLogC4, {0.7347, 0.2653, 0.1424, 0.8576, 0.0991, -0.0308}},
         {"Sony S-Log3 / S-Gamut3.Cine", ColorSLog3, {0.766, 0.275, 0.225, 0.800, 0.089, -0.087}},
@@ -55,14 +58,25 @@ inline const std::array<Space, SpaceCount>& spaces()
         {"Panasonic V-Gamut / V-Log", ColorVLog, {0.730, 0.280, 0.165, 0.840, 0.100, -0.030}},
         {"ACEScct / AP1", ColorACEScct, ap1, 0.32168, 0.33767},
         {"ACEScg / AP1 Linear", ColorLinear, ap1, 0.32168, 0.33767},
-        {"Linear / Rec.709", ColorLinear, rec709}
+        {"Linear / Rec.709", ColorLinear, rec709},
+        {"Rec.2100 / PQ (Rec.2020)", ColorPQ, {0.708,0.292,0.170,0.797,0.131,0.046}}
     }};
     return list;
 }
 
-inline constexpr std::array<int, 6> OutputSpaces {Rec709Gamma24, Rec709Gamma24, DaVinciIntermediate, ACEScct, SRGB, LinearRec709};
-inline constexpr std::array<const char*, 6> OutputLabels {
-    "Same as Input", "Rec.709 / Gamma 2.4", "DaVinci Wide Gamut / Intermediate", "ACEScct / AP1", "sRGB", "Linear / Rec.709"
+inline const std::array<Space, SpaceCount>& spaces()
+{
+    static const auto inputs = [] {
+        std::array<Space,SpaceCount> result {};
+        std::copy_n(allSpaces().begin(),SpaceCount,result.begin());
+        return result;
+    }();
+    return inputs;
+}
+
+inline constexpr std::array<int, 7> OutputSpaces {Rec709Gamma24, Rec709Gamma24, DaVinciIntermediate, ACEScct, SRGB, LinearRec709, Rec2100PQ};
+inline constexpr std::array<const char*, 7> OutputLabels {
+    "Same as Input", "Rec.709 / Gamma 2.4", "DaVinci Wide Gamut / Intermediate", "ACEScct / AP1", "sRGB", "Linear / Rec.709", "Rec.2100 / PQ (Rec.2020)"
 };
 
 using Matrix = std::array<double, 9>;
@@ -117,32 +131,37 @@ inline Matrix adaptToD65(const Space& s)
     return multiply(inverse(bradford), multiply(diagonal, bradford));
 }
 
-inline const std::array<Matrix, SpaceCount>& to709Matrices()
+inline const std::array<Matrix, SpaceCount+1>& to709Matrices()
 {
     static const auto matrices = [] {
-        std::array<Matrix, SpaceCount> result {};
+        std::array<Matrix, SpaceCount+1> result {};
         const Matrix xyzTo709 = inverse(rgbToXYZ(spaces()[Rec709Gamma24]));
         for (size_t i = 0; i < result.size(); ++i)
-            result[i] = multiply(xyzTo709, multiply(adaptToD65(spaces()[i]), rgbToXYZ(spaces()[i])));
+            result[i] = multiply(xyzTo709, multiply(adaptToD65(allSpaces()[i]), rgbToXYZ(allSpaces()[i])));
         return result;
     }();
     return matrices;
 }
 
-inline ColorParameters prepare(int source, int output, bool textureOnly, int rendering = ConversionOnly)
+inline ColorParameters prepare(int source, int output, bool textureOnly, int rendering = ConversionOnly,
+                               float hdrPeak = 1000, float hdrWhite = 203)
 {
-    source = std::clamp(source, 0, static_cast<int>(spaces().size()) - 1);
+    source = std::clamp(source, 0, SpaceCount - 1);
     output = std::clamp(output, 0, static_cast<int>(OutputSpaces.size()) - 1);
     const int destination = textureOnly || output == 0 ? source : OutputSpaces[output];
     ColorParameters p {};
     p.sourceCurve = spaces()[source].curve;
-    p.outputCurve = spaces()[destination].curve;
+    p.outputCurve = allSpaces()[destination].curve;
     p.sourceIsWork = source == SRGB;
     p.outputIsWork = destination == SRGB;
     const bool displayOutput = destination == Rec709Gamma24 || destination == SRGB;
     const bool sceneInput = source != Rec709Gamma24 && source != SRGB;
     p.renderSDR = !textureOnly && displayOutput &&
         (rendering == StandardSDR || (rendering == Automatic && sceneInput));
+    p.hdrPeak = std::clamp(hdrPeak,400.0f,10000.0f);
+    p.hdrWhite = std::clamp(hdrWhite,80.0f,300.0f);
+    p.renderHDR = !textureOnly && destination == Rec2100PQ &&
+        (rendering == StandardHDR || (rendering == Automatic && sceneInput));
     const Matrix& a = to709Matrices()[source];
     const Matrix b = inverse(to709Matrices()[destination]);
     for (int i = 0; i < 9; ++i) { p.to709[i] = static_cast<float>(a[i]); p.from709[i] = static_cast<float>(b[i]); }
@@ -155,12 +174,18 @@ inline bool highlightRetentionEnabled(const ColorParameters& p, int modules, int
         !((modules & film::SelectiveColor) && view == 1);
 }
 
+inline bool hdrWhiteEnabled(const ColorParameters& p, int modules, int view)
+{
+    return p.outputCurve == ColorPQ && (modules & (film::Negative|film::Print|film::Development|film::SelectiveColor)) &&
+        !((modules & film::SelectiveColor) && view == 1);
+}
+
 inline ColorParameters prepare(const float* settings)
 {
     const int modules = film::modulesForSettings(settings);
     auto p = prepare(static_cast<int>(settings[26]), static_cast<int>(settings[27]),
         !(modules & (film::Negative | film::Development | film::Print | film::SelectiveColor)),
-        static_cast<int>(settings[film::OutputRendering]));
+        static_cast<int>(settings[film::OutputRendering]),settings[film::HDRPeak],settings[film::HDRWhite]);
     if (highlightRetentionEnabled(p,modules,static_cast<int>(settings[1]),settings[film::NegativeColorStrength],
                                   static_cast<int>(settings[film::SelectiveView])))
         p.highlightRetention = std::clamp(settings[film::HighlightRetention],0.0f,1.0f);

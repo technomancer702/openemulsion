@@ -251,7 +251,7 @@ static inline ColorRgb response_print(ColorRgb c, FilmResponseParameters p)
                      p.printCast * (shadow * 0.024f - high * 0.028f)};
     const float correction = response_luma(bias);
     c.r += bias.r - correction; c.g += bias.g - correction; c.b += bias.b - correction;
-    const float ceiling = p.printToneStrength >= 1.0f ? 1.0f : RESPONSE_MAX(1.0f, response_luma(c) + 0.05f);
+    const float ceiling = p.printToneStrength >= 1.0f ? p.printTone.ceiling : RESPONSE_MAX(p.printTone.ceiling, response_luma(c) + 0.05f);
     return response_mix(beforeCast, response_gamut(c, ceiling, p.printGamutKnee), p.printColorStrength);
 }
 

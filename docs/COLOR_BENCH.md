@@ -57,6 +57,21 @@ python tools/check_color_reference.py analysis/color-bench
 The checker requires existing input/output float arrays and verifies exact
 zero-retention output, without needing the original clips again.
 
+HDR PQ numeric evaluation (v0.36 onward), using retained source floats:
+
+```powershell
+python tools/check_hdr_footage.py analysis/color-bench
+```
+
+Runs Clean Slate/50D at 400/1000/4000-nit targets and 203-nit white by default.
+The ignored JSON report records source/DLL hashes, settings, alpha checks,
+peak-code bounds and independently decoded Rec.2020 luminance in nits.
+`--presets`, `--peaks`, `--white`, `--output` narrow/extend a run. All inputs
+must share the source ID recorded by the reference bench. Percentiles include
+burn-ins and are diagnostics, not quality scores. This does not generate an
+SDR preview pretending to display HDR; a calibrated HDR monitor is required
+to judge PQ appearance. The ordinary HTML bench remains SDR-only.
+
 The decoder currently requires integer planar YUV 4:4:4 (8-16 bit), including
 the supplied 12-bit ProRes 4444 clips. It fails on subsampled formats rather than
 silently choosing a chroma reconstruction. `--matrix` selects YCbCr *packing*

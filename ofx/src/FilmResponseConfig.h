@@ -6,6 +6,7 @@
 #include <array>
 #include <cmath>
 #include "FilmResponseMath.h"
+#include "ColorSpaceConfig.h"
 #include "FilmModules.h"
 #include "PrintStyleConfig.h"
 
@@ -90,6 +91,14 @@ inline FilmResponseParameters prepare(const float* s)
     p.printGain = {std::exp2(exposure + std::clamp(s[38], -2.0f, 2.0f)),
                    std::exp2(exposure + std::clamp(s[39], -2.0f, 2.0f)),
                    std::exp2(exposure + std::clamp(s[40], -2.0f, 2.0f))};
+    const auto output = color::prepare(s);
+    if (output.renderHDR) {
+        // Carry HDR headroom through creative shoulders instead of expanding
+        // an already SDR-limited print at output. SDR parameters stay identical.
+        const float headroom = color_encode(output.hdrPeak/output.hdrWhite,ColorSRGB)-1.0f;
+        p.negativeTone.ceiling += headroom;
+        p.printTone.ceiling += headroom;
+    }
     return p;
 }
 

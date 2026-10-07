@@ -23,6 +23,7 @@ enum SettingIndex {
     SelectiveAmount, SelectiveHue, SelectiveRange, SelectiveSoftness, SelectiveSaturation, SelectiveView,
     OutputRendering,
     HighlightRetention,
+    HDRPeak, HDRWhite,
     SettingsCount
 };
 constexpr int ModuleIndex = 19;

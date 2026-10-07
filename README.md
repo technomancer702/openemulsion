@@ -6,9 +6,9 @@ Film Color, Film Development, Print, Halation, Aura, Bloom, Grain, and Selective
 
 ## Status
 
-Experimental, Windows x64. Current development version: **v0.35**. The current implementation supports OpenCL acceleration and a multithreaded CPU fallback. CUDA, Metal, macOS, and Linux builds are not implemented.
+Experimental, Windows x64. Current development version: **v0.36**. The current implementation supports OpenCL acceleration and a multithreaded CPU fallback. CUDA, Metal, macOS, and Linux builds are not implemented.
 
-OpenEmulsion is an original artistic approximation, not a measured film-stock calibration or a complete HDR rendering transform. There is no DCTL dependency. Rendering has been tested in Resolve, but this is not yet a stable production release.
+OpenEmulsion is an original artistic approximation, not a measured film-stock calibration. HDR PQ output is experimental; HLG and HDR metadata are not implemented. There is no DCTL dependency. Earlier rendering has been tested in Resolve, but this is not yet a stable production release and calibrated HDR monitoring still needs verification.
 
 ## Build
 
@@ -65,6 +65,7 @@ Earlier development builds appeared as Cleanroom Film. OpenEmulsion uses a new p
 Set **Input Color Space** to the RGB space entering the node, which may differ from the camera recording space. It is not auto-detected.
 
 - Unconverted Alexa footage: choose **ARRI Alexa LogC3 / Wide Gamut 3 (EI 800)**. For an SDR look with Film Color or Print enabled, choose **Rec.709 / Gamma 2.4** output and **Output Rendering: Auto**.
+- Direct HDR output: choose **Rec.2100 / PQ (Rec.2020)** output and **Standard HDR (PQ)** rendering, with **HDR Peak Luminance** and **HDR Reference White** set for the target (defaults 1000/203 nits). Configure Resolve monitoring/export separately; do not apply another output transform to already rendered PQ.
 - A DaVinci Wide Gamut/Intermediate timeline: choose that input and **Same as Input** output, keeping the project's normal output transform.
 - Your own LUT: use **Grain Only** or **Halation, Bloom & Grain Only** and select the space entering this node. Texture-only processing preserves its input encoding for a downstream LUT.
 
@@ -73,6 +74,10 @@ New instances default to Rec.709/Gamma 2.4 input and Same as Input output. Suppo
 **Output Rendering** defaults to Auto: an original neutral SDR viewing response for scene-log/linear input sent to Rec.709 or sRGB, before creative film/print processing. It improves shadow placement, highlight rolloff and bright-color gamut handling across all presets, including Clean Slate. Auto leaves display-ready input and managed log/linear output alone. Conversion Only retains the pre-v0.34 gamut/gamma conversion for another viewing transform; Standard SDR explicitly enables the response for display output. Texture-only modes and bypass ignore it. Built-in presets preserve this choice, and user files save it. Old format-1/2 user files migrate to Conversion Only; select Auto to adopt the new SDR foundation.
 
 See [Color Spaces](docs/COLOR_SPACES.md) for exact gamut pairs, workflow details, references, and limitations.
+
+Auto also selects HDR rendering for scene-log/linear input sent to PQ. HDR runs after creative/texture finishing, without SDR rendering first. Conversion Only to PQ scales linear white by HDR Reference White and encodes absolute luminance without a tone/gamut mapper; out-of-range values clip at PQ's physical endpoints. Strong Film/Print shoulders may reduce specular headroom. Built-in looks preserve HDR context; portable format-5 files capture it, and complete older files migrate to 1000/203 defaults without changing output or rendering choices. RCM/ACES use their actual working-space input, Same as Input and Conversion Only, leaving the output transform to Resolve.
+
+During HDR rendering only, film/print shoulder and print-gamut ceilings adapt to the peak/reference-white ratio so print-heavy recipes can carry HDR highlights. Existing SDR and managed response parameters are unchanged; this is not recovery of clipped footage or a spectral wide-gamut engine.
 
 ## Modes and Controls
 
@@ -125,9 +130,9 @@ The optional sixth preview path produces a five-panel bloom comparison; see [Blo
 
 ## Release Packaging
 
-Commit release files first, then run `.\tools\package_release.ps1`. It builds and tests Release, verifies the supported compiler/runtime notices and imported DLLs, and creates `dist/releases/OpenEmulsion-v0.35-Windows-x64.zip` plus `.zip.sha256`. Use `-Force` only when deliberately replacing a generated archive. Release output is ignored by Git; upload the ZIP and checksum as release assets, not repository files.
+Commit release files first, then run `.\tools\package_release.ps1`. It builds and tests Release, verifies the supported compiler/runtime notices and imported DLLs, and creates `dist/releases/OpenEmulsion-v0.36-Windows-x64.zip` plus `.zip.sha256`. Use `-Force` only when deliberately replacing a generated archive. Release output is ignored by Git; upload the ZIP and checksum as release assets, not repository files.
 
-The packager includes only the bundle, release guides, documentation, licenses, and a `git archive` source snapshot of the exact revision in `manifest.json`. It validates the extracted files and hashes, loads the extracted OFX binary using only its directory and Windows system DLL search, and checks its exported identifier/version. To recheck an archive, run `.\tools\test_release.ps1 -Archive "dist/releases/OpenEmulsion-v0.35-Windows-x64.zip"` in 64-bit PowerShell. This is not a clean-machine Resolve installation test or a code-signing/security certification; separate-machine and other-GPU validation remain outstanding.
+The packager includes only the bundle, release guides, documentation, licenses, and a `git archive` source snapshot of the exact revision in `manifest.json`. It validates the extracted files and hashes, loads the extracted OFX binary using only its directory and Windows system DLL search, and checks its exported identifier/version. To recheck an archive, run `.\tools\test_release.ps1 -Archive "dist/releases/OpenEmulsion-v0.36-Windows-x64.zip"` in 64-bit PowerShell. This is not a clean-machine Resolve installation test or a code-signing/security certification; separate-machine and other-GPU validation remain outstanding.
 
 Optional Resolve test charts:
 

@@ -59,6 +59,24 @@ class BenchTests(unittest.TestCase):
             for amount in [0, .35, 1]:
                 self.renderer.render(frame, self.renderer.settings(name, 14), amount)
 
+    def test_hdr_pq_reference_and_headroom(self):
+        from check_hdr_footage import pq_nits
+        frame = rgba(np.array([[[.18] * 3, [1] * 3, [4] * 3, [64] * 3]], np.float32))
+        s = self.renderer.settings("Neutral / Clean Slate", 14, self.renderer.dll.oe_hdr_rendering_index())
+        s[27] = self.renderer.dll.oe_hdr_output_index()
+        s[self.renderer.dll.oe_hdr_peak_index()] = 1000
+        s[self.renderer.dll.oe_hdr_white_index()] = 203
+        actual = pq_nits(self.renderer.render(frame, s)[..., :3])
+        np.testing.assert_allclose(actual[0, 0], 24.36, atol=.02)
+        np.testing.assert_allclose(actual[0, 1], 203, atol=.05)
+        self.assertTrue((actual[0, 2] > 203).all())
+        self.assertTrue((actual[0, 3] > actual[0, 2]).all())
+        self.assertTrue((actual < 1000).all())
+        stock = self.renderer.settings("50D Daylight",14,self.renderer.dll.oe_hdr_rendering_index())
+        stock[27] = self.renderer.dll.oe_hdr_output_index()
+        bright = pq_nits(self.renderer.render(frame,stock)[...,:3])
+        self.assertTrue((bright[0,3] > 300).all())
+
     def test_threaded_path_matches_small_render(self):
         pixel = rgba(np.array([[[4, .05, .25]]], np.float32))
         frame = np.tile(pixel, (192, 192, 1))

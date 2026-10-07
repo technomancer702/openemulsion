@@ -15,8 +15,8 @@ def check(reference: Path, renderer: Renderer) -> int:
         if row["model"] not in ["Production SDR", "Conversion Only"]:
             continue
         settings = np.array(row["settings"], dtype=np.float32)
-        if settings.size == renderer.count - 1:
-            settings = np.pad(settings, (0, 1))
+        if settings.size in [renderer.count - 1,renderer.count - 2,renderer.count - 3]:
+            settings = np.pad(settings, (0,renderer.count-settings.size))
         if settings.size != renderer.count:
             raise ValueError("Unsupported reference settings layout")
         settings[renderer.dll.oe_retention_index()] = 0

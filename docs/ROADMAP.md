@@ -1,6 +1,8 @@
 # Upgrade Roadmap
 
-## Completed Through v0.35
+## Completed Through v0.36
+
+- Experimental Rec.2100 PQ / Rec.2020 output, post-look HDR viewing response, peak/reference-white controls, shared CPU/OpenCL math and format-5 output-context snapshots. Independent transfer/matrix anchors, all-recipe parity and local footage luminance checks. HLG/metadata and calibrated HDR monitoring remain outstanding. See [Color Spaces](COLOR_SPACES.md).
 
 - Restrained Highlight Color Retention in Film Color, neutral at zero and isolated from disabled/managed/texture/matte/Mono workflows. Shared CPU/OpenCL arithmetic, smooth slider and exposure-ramp checks, format-4 snapshots with zero-retention legacy migration. See [Color Spaces](COLOR_SPACES.md).
 - Optional [Offline Color Bench](COLOR_BENCH.md), using native production color stages, high-precision local ProRes 4:4:4 decode, float output/region statistics, tagged browser previews and experimental highlight variants. Original media and results are ignored and never packaged. Five-clip evaluation informed the retention range; this is not calibrated stock ground truth.

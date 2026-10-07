@@ -138,7 +138,24 @@ int main()
             require(toJson(parse(older.dump())) == valid,"Older preset settings no longer load");
         }
         auto invalid = valid;
-        auto legacy = valid;
+        auto oldValid = valid;
+        oldValid["context"].erase("hdrPeak"); oldValid["context"].erase("hdrWhite");
+        oldValid["context"]["outputSpace"] = color::HDRPQOutput-1;
+        oldValid["context"]["outputRendering"] = color::StandardSDR;
+        auto oldContext = original.context;
+        for (size_t i=0; i<oldContext.size(); ++i) {
+            const std::string name = ContextControls[i].name;
+            if (name == "hdrPeak" || name == "hdrWhite") oldContext[i] = ContextControls[i].initial;
+            if (name == "outputSpace") oldContext[i] = color::HDRPQOutput-1;
+            if (name == "outputRendering") oldContext[i] = color::StandardSDR;
+        }
+        auto v4=oldValid; v4["formatVersion"]=4;
+        const auto migratedV4=parse(v4.dump());
+        require(migratedV4.context==oldContext && migratedV4.controls==original.controls && migratedV4.modules==original.modules,
+                "v4 migration changes existing settings or HDR defaults");
+        auto mixedV4=v4; mixedV4["context"]["hdrPeak"]=1000;
+        rejects([&] { parse(mixedV4.dump()); },"Mixed HDR schema accepted");
+        auto legacy = oldValid;
         legacy["formatVersion"] = 1;
         legacy["context"].erase("outputRendering");
         for (const auto& c : look::Controls) if (c.setting >= film::SelectiveAmount) legacy["controls"].erase(c.name);
@@ -147,19 +164,20 @@ int main()
         for (size_t i=0; i<migrated.controls.size(); ++i)
             require(migrated.controls[i] == (look::Controls[i].setting >= film::SelectiveAmount ?
                 look::Controls[i].initial : original.controls[i]),"Legacy migration changes existing settings");
-        auto legacyContext=original.context;
-        legacyContext.back()=color::ConversionOnly;
+        auto legacyContext=oldContext;
+        for (size_t i=0; i<legacyContext.size(); ++i)
+            if (std::string(ContextControls[i].name)=="outputRendering") legacyContext[i]=color::ConversionOnly;
         require(!migrated.modules.back() && migrated.context == legacyContext,"Legacy import enables selective color or changes context");
         auto oldControls=original.controls;
         for (size_t i=0; i<oldControls.size(); ++i) if (look::Controls[i].setting == film::HighlightRetention) oldControls[i]=0;
-        auto v2=valid; v2["formatVersion"]=2; v2["context"].erase("outputRendering");
+        auto v2=oldValid; v2["formatVersion"]=2; v2["context"].erase("outputRendering");
         v2["controls"].erase("highlightRetention");
         const auto migratedV2=parse(v2.dump());
         require(migratedV2.controls == oldControls && migratedV2.modules == original.modules &&
             migratedV2.context == legacyContext,"v2 preset gains an unrequested display rendering");
-        auto v3=valid; v3["formatVersion"]=3; v3["controls"].erase("highlightRetention");
+        auto v3=oldValid; v3["formatVersion"]=3; v3["controls"].erase("highlightRetention");
         const auto migratedV3=parse(v3.dump());
-        require(migratedV3.controls==oldControls && migratedV3.context==original.context && migratedV3.modules==original.modules,
+        require(migratedV3.controls==oldControls && migratedV3.context==oldContext && migratedV3.modules==original.modules,
             "v3 migration changes rendering or enables highlight retention");
         auto mixedV3=v3; mixedV3["controls"]["highlightRetention"]=.5;
         rejects([&] { parse(mixedV3.dump()); },"Mixed highlight schema accepted");
@@ -169,7 +187,7 @@ int main()
         rejects([&] { parse(brokenLegacy.dump()); },"Incomplete legacy preset accepted");
         brokenLegacy=legacy; brokenLegacy["controls"]["selectiveAmount"]=1;
         rejects([&] { parse(brokenLegacy.dump()); },"Mixed-schema preset accepted");
-        invalid["formatVersion"] = 5;
+        invalid["formatVersion"] = 6;
         rejects([&] { parse(invalid.dump()); },"Future schema silently accepted");
         invalid = valid; invalid["formatVersion"] = 1.0;
         rejects([&] { parse(invalid.dump()); },"Non-integer schema accepted");

@@ -191,6 +191,7 @@ inline Recipe recipe(int preset)
 {
     Recipe s {};
     for (const auto& control : Controls) s[control.setting] = control.initial;
+    s[film::HDRPeak] = 1000; s[film::HDRWhite] = 203;
     s[film::ModuleIndex] = film::DefaultModules;
     // Original artistic recipes, not digitized stock measurements or movie grades.
     switch (preset) {
