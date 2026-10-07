@@ -16,10 +16,85 @@ template<class Function> static void rejects(Function operation, const char* mes
     require(rejected,message);
 }
 
+template<class T> struct CurrentParam {
+    T value {};
+    int reads = 0;
+    void getValue(T& result) { result = value; ++reads; }
+    void getValueAtTime(double, T&) { throw std::runtime_error("Export sampled callback time instead of current UI"); }
+};
+
+struct Binding {
+    CurrentParam<int>* choice = nullptr;
+    CurrentParam<double>* number = nullptr;
+    CurrentParam<int>* integer = nullptr;
+};
+
+static void testCurrentCapture()
+{
+    using namespace userpreset;
+    std::array<CurrentParam<int>,std::size(look::Controls)> choices {};
+    std::array<CurrentParam<double>,std::size(look::Controls)> numbers {};
+    std::array<Binding,std::size(look::Controls)> controls {};
+    std::array<CurrentParam<bool>,moduleui::Toggles.size()> switches {};
+    std::array<CurrentParam<bool>*,moduleui::Toggles.size()> toggles {};
+    std::array<CurrentParam<int>,std::size(ContextControls)> integers {};
+    std::array<CurrentParam<double>,std::size(ContextControls)> contextNumbers {};
+    std::array<Binding,std::size(ContextControls)> context {};
+    Snapshot expected;
+    for (size_t i = 0; i < controls.size(); ++i) {
+        const auto& c = look::Controls[i];
+        if (c.kind == look::Choice) {
+            choices[i].value = static_cast<int>(c.maximum);
+            controls[i].choice = &choices[i];
+            expected.controls[i] = c.maximum;
+        } else {
+            numbers[i].value = c.minimum + (c.maximum-c.minimum)*.237;
+            controls[i].number = &numbers[i];
+            expected.controls[i] = numbers[i].value;
+        }
+    }
+    for (size_t i = 0; i < toggles.size(); ++i) {
+        switches[i].value = expected.modules[i] = i % 2 != 0;
+        toggles[i] = &switches[i];
+    }
+    for (size_t i = 0; i < context.size(); ++i) {
+        const auto& c = ContextControls[i];
+        expected.context[i] = c.maximum;
+        if (c.kind == Number) {
+            contextNumbers[i].value = c.maximum;
+            context[i].number = &contextNumbers[i];
+        } else {
+            integers[i].value = static_cast<int>(c.maximum);
+            if (c.kind == Choice) context[i].choice = &integers[i];
+            else context[i].integer = &integers[i];
+        }
+    }
+    const auto captured = captureCurrent(controls,toggles,context);
+    require(toJson(captured) == toJson(expected),"Current host binding capture loses edited settings");
+    for (size_t i = 0; i < controls.size(); ++i)
+        require(choices[i].reads + numbers[i].reads == 1,"Creative control not captured exactly once");
+    for (const auto& toggle : switches) require(toggle.reads == 1,"Module switch not captured exactly once");
+    for (size_t i = 0; i < context.size(); ++i)
+        require(integers[i].reads + contextNumbers[i].reads == 1,"Context control not captured exactly once");
+    // A subsequent modal dialog/host notification cannot mutate the saved snapshot.
+    for (auto& number : numbers) number.value = 0;
+    for (auto& choice : choices) choice.value = 0;
+    for (auto& toggle : switches) toggle.value = true;
+    for (auto& number : contextNumbers) number.value = 0;
+    for (auto& integer : integers) integer.value = 0;
+    require(toJson(parse(serialize(captured))) == toJson(expected),"Snapshot changed after dialog-time host edits");
+    Snapshot restored;
+    apply(captured,ImportOptions {},[&](size_t i,double v) { restored.controls[i] = v; },
+        [&](size_t i,bool v) { restored.modules[i] = v; },
+        [&](size_t i,double v) { restored.context[i] = v; });
+    require(toJson(restored) == toJson(expected),"Default import does not restore the complete saved look");
+}
+
 int main()
 {
     try {
         using namespace userpreset;
+        testCurrentCapture();
         Snapshot original;
         original.name = "Night look \"A\" \n \u00e9";
         for (size_t i = 0; i < original.controls.size(); ++i) {
@@ -54,6 +129,9 @@ int main()
             require(toJson(parse(serialize(stock))) == toJson(stock),"Built-in recipe does not round-trip");
         }
         const auto valid = toJson(original);
+        auto older = valid;
+        older["createdWith"] = "0.27";
+        require(toJson(parse(older.dump())) == valid,"v0.27 preset settings no longer load");
         auto invalid = valid;
         invalid["formatVersion"] = 2;
         rejects([&] { parse(invalid.dump()); },"Future schema silently accepted");
@@ -112,7 +190,7 @@ int main()
         for (const auto& entry : std::filesystem::directory_iterator(folder))
             require(entry.path() == path,"Temporary preset file leaked");
         rejects([&] { saveFile(folder/"missing"/"look.oepreset",original); },"Missing folder silently accepted");
-        std::puts("User presets: all recipes, exact JSON round-trip, every preservation policy, strict validation, duplicate/depth/size rejection, Unicode paths, atomic replacement, and failed-save preservation pass.");
+        std::puts("User presets: current host binding capture, immutable pre-dialog snapshot, complete default restore, all recipes, exact JSON round-trip, every preservation policy, strict validation, Unicode paths, atomic replacement, and failed-save preservation pass.");
         return 0;
     } catch (const std::exception& error) {
         std::fprintf(stderr,"FAILED: %s\n",error.what());

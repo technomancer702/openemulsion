@@ -1,6 +1,6 @@
 # Upgrade Roadmap
 
-## Completed Through v0.27
+## Completed Through v0.28
 
 - Independent film/print color and tone strengths and in-module Enable toggles.
 - Disabled-module control greying, mode-driven Enable toggles, and mode-aware print-preset locks.
@@ -16,7 +16,7 @@
 - Top-level Preset dropdown with twelve complete, editable stock-inspired/creative recipes, Custom inheritance, preserved camera balance/encoding/seed, and recipe/edit-policy plus CPU/OpenCL checks.
 - Targeted slider range expansion with unchanged defaults/presets, variance-normalized primary grain smoothing above Softness one, full-strength Mono semantic greying, historical response anchors, and expanded CPU/OpenCL/performance checks.
 - Comparable Filmbox-style control terminology and clearer directional tooltips, without changing parameter identifiers or rendering. See [Control Names](CONTROL_NAMES.md).
-- Portable user preset save/load, strict JSON validation, atomic file replacement, and optional context preservation. See [User Presets](USER_PRESETS.md).
+- Portable user preset save/load, current-control capture before dialogs, complete restoration by default, strict JSON validation, atomic file replacement, and optional context preservation. See [User Presets](USER_PRESETS.md).
 - Optional Negative & Print grain keyed by the developed negative before Print, with unchanged default/texture-only behavior and CPU/OpenCL parity. See [Texture Controls](TEXTURE_CONTROLS.md).
 
 ## Bloom Added in v0.18

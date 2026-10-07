@@ -1,10 +1,17 @@
-# OpenEmulsion v0.27
+# OpenEmulsion v0.28
 
-Experimental Windows x64 update with portable user presets and optional negative-driven, pre-print grain. Post Print remains the default; existing preset recipes and texture-only workflows retain their appearance.
+Experimental Windows x64 preset-capture update. Film rendering, built-in recipes, and grain response are unchanged.
+
+## Changes in v0.28
+
+- User preset export now reads current host/UI parameter values immediately when Save is clicked, before opening the modal dialog, instead of sampling the button callback's time afterward.
+- Loading restores all saved rendering settings by default, including input/output spaces, exposure/temperature/tint, and grain seed. Preserve switches are now opt-in for new nodes; existing v0.27 nodes retain their stored switches until unchecked.
+- Added typed host-binding capture tests, immutable snapshot checks across simulated dialog-time changes, and complete default restoration checks. Existing format-version-1 files remain readable; adjustments absent from an older file must be resaved from the tuned node.
+- Native Resolve save/reload comparison and undo behavior still require host validation. Presets store control snapshots, not animation curves, other nodes, or Resolve's external blend/bypass state.
 
 ## Changes in v0.27
 
-- Added native Save Preset / Load Preset dialogs and portable `.oepreset` JSON snapshots. Import optionally preserves camera balance, color spaces, and grain seed; all three are preserved by default.
+- Added native Save Preset / Load Preset dialogs and portable `.oepreset` JSON snapshots. In v0.27, camera balance, color spaces, and grain seed were preserved by default; v0.28 makes preservation opt-in.
 - Added complete preset validation, Unicode file paths, atomic replacement, and malformed/oversize/duplicate-field rejection before applying any settings. Snapshot imports replace creative keyframes in one undoable edit; animation curves are not exported.
 - Added Grain Response: Post Print (original/default) or Negative & Print. The new optional response keys grain after Film Color/Development and adds it before Print, so print tone/color shapes the texture. It does not add buffers, readbacks, blur passes, or extra grain evaluations.
 - Retained original texture-only grain, source-keyed halation/bloom, exact zero/disabled behavior, Mono finishing, stable grain coordinates, and all built-in looks. The new selector is unavailable in texture-only modes.

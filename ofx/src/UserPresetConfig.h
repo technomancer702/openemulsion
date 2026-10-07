@@ -47,11 +47,31 @@ struct Snapshot {
 };
 
 struct ImportOptions {
-    bool preserveSpaces = true, preserveCamera = true, preserveSeed = true;
+    bool preserveSpaces = false, preserveCamera = false, preserveSeed = false;
     bool preserves(ContextGroup group) const {
         return group == Spaces ? preserveSpaces : group == Camera ? preserveCamera : preserveSeed;
     }
 };
+
+template<class Binding> inline double readCurrentControl(const Binding& control)
+{
+    if (control.choice) { int value = 0; control.choice->getValue(value); return value; }
+    if (control.integer) { int value = 0; control.integer->getValue(value); return value; }
+    double value = 0;
+    control.number->getValue(value);
+    return value;
+}
+
+// UI export uses current host values, not a render-time sample or a recipe label.
+template<class Controls, class Toggles, class Context>
+inline Snapshot captureCurrent(const Controls& controls, const Toggles& toggles, const Context& context)
+{
+    Snapshot preset;
+    for (size_t i = 0; i < preset.controls.size(); ++i) preset.controls[i] = readCurrentControl(controls[i]);
+    for (size_t i = 0; i < preset.modules.size(); ++i) toggles[i]->getValue(preset.modules[i]);
+    for (size_t i = 0; i < preset.context.size(); ++i) preset.context[i] = readCurrentControl(context[i]);
+    return preset;
+}
 
 inline double validateNumber(double value, double minimum, double maximum, bool integer, const char* name)
 {
@@ -80,7 +100,7 @@ inline Json toJson(const Snapshot& preset)
         const auto& c = ContextControls[i];
         context[c.name] = validateNumber(preset.context[i], c.minimum, c.maximum, c.kind != Number, c.name);
     }
-    return {{"formatVersion",FormatVersion}, {"plugin",Plugin}, {"createdWith","0.27"},
+    return {{"formatVersion",FormatVersion}, {"plugin",Plugin}, {"createdWith","0.28"},
             {"name",preset.name}, {"controls",controls}, {"modules",modules}, {"context",context}};
 }
 

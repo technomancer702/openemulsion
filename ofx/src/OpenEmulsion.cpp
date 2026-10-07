@@ -26,7 +26,7 @@
 #define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, halation, aura, and linear-light bloom, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 27
+#define kPluginVersionMinor 28
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -548,10 +548,11 @@ public:
             if (args.reason != OFX::eChangeUserEdit) return;
             try {
                 const bool save = name == "saveUserPreset";
+                // Snapshot before the modal dialog can pump host notifications or change UI context.
+                auto preset = save ? userpreset::captureCurrent(lookControls_,moduleToggles_,contextControls_) : userpreset::Snapshot {};
                 const auto path = userpreset::chooseFile(save);
                 if (!path) return;
                 if (save) {
-                    auto preset = presetAt(args.time);
                     preset.name = path->stem().u8string();
                     userpreset::saveFile(*path,preset);
                 } else {
@@ -683,15 +684,6 @@ private:
         applyingControls_ = false;
         endEditBlock();
         updateControlState();
-    }
-
-    userpreset::Snapshot presetAt(double time) const
-    {
-        userpreset::Snapshot preset;
-        for (size_t i = 0; i < preset.controls.size(); ++i) preset.controls[i] = readControl(lookControls_[i],time);
-        for (size_t i = 0; i < preset.modules.size(); ++i) preset.modules[i] = moduleToggles_[i]->getValueAtTime(time);
-        for (size_t i = 0; i < preset.context.size(); ++i) preset.context[i] = readControl(contextControls_[i],time);
-        return preset;
     }
 
     void applyUserPreset(const userpreset::Snapshot& preset)
@@ -835,12 +827,6 @@ private:
         OFX::DoubleParam* number = nullptr;
         OFX::IntParam* integer = nullptr;
     };
-    static double readControl(const LookControl& control, double time)
-    {
-        if (control.choice) { int value = 0; control.choice->getValueAtTime(time,value); return value; }
-        if (control.integer) { int value = 0; control.integer->getValueAtTime(time,value); return value; }
-        return control.number->getValueAtTime(time);
-    }
     static void setControl(const LookControl& control, double value)
     {
         if (control.choice) { control.choice->deleteAllKeys(); control.choice->setValue(static_cast<int>(value)); }
@@ -1015,15 +1001,15 @@ public:
             auto* button = desc.definePushButtonParam(command.first);
             button->setLabels(command.second,command.second,command.second);
             button->setHint(command.first == std::string("saveUserPreset") ?
-                "Save the current frame's settings to an OpenEmulsion preset file. Animation curves are not exported." :
-                "Load a complete preset in one undoable edit. Replaces creative settings and their keyframes; the Preserve options retain the selected context groups.");
+                "Save all current control values when clicked, before opening the file dialog. Animation curves are not exported." :
+                "Restore all saved settings in one undoable edit. Replaces their keyframes; enable a Preserve option only to keep that context group instead.");
             button->setParent(*presets);
             page->addChild(*button);
         }
         for (const auto& option : std::array<std::pair<const char*,const char*>,3> {{{"presetPreserveSpaces","Preserve Color Spaces"},{"presetPreserveCamera","Preserve Camera Balance"},{"presetPreserveSeed","Preserve Grain Seed"}}}) {
             auto* toggle = desc.defineBooleanParam(option.first);
             toggle->setLabels(option.second,option.second,option.second);
-            toggle->setDefault(true);
+            toggle->setDefault(false);
             toggle->setAnimates(false);
             toggle->setEvaluateOnChange(false);
             toggle->setHint("When loading a user preset, keep this node's current settings and animation in this group. Does not affect saving or built-in presets.");
