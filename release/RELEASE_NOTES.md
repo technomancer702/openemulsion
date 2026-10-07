@@ -1,6 +1,13 @@
-# OpenEmulsion v0.38
+# OpenEmulsion v0.39
 
 Experimental Windows x64 film emulation with SDR and direct HDR PQ output. Stock and movie references remain artistic interpretations, not measured film profiles or exact movie grades. HDR monitor/host validation is still outstanding.
+
+## Changes in v0.39
+
+- Corrected a limitation of v0.38: reduced whitening did not establish preserved taillight lens detail. Full-resolution exposure sweeps showed the detail existed in the source but was compressed by SDR rendering.
+- Added a smoothly joined square-root intensity shoulder for very bright, strongly colored SDR highlights before the existing tone/gamut response. It reserves more tonal separation for lens texture instead of only retaining hue. A logarithmic trial was rejected for reducing intermediate-intensity detail. No sharpening, spatial processing or reconstruction; saturated lights/reflections may become dimmer.
+- Neutral/pale highlights, peak scene-linear RGB at/below one, gray/shadow anchors, HDR, Conversion Only, managed destinations, display-ready Auto and texture/bypass/matte policies are unchanged. Preset recipes/IDs/format 5 are unchanged. Existing SDR highlight renders intentionally change.
+- Shared CPU/OpenCL composite math adds no passes/buffers/readbacks. Added independent numerical and intensity-contrast checks plus a full-resolution local before/after/exposure diagnostic using fixed source-selected nearby pixel pairs. Whitening/channel-variance statistics alone are not lens-detail evidence. Final Resolve appearance still needs user validation.
 
 ## Changes in v0.38
 

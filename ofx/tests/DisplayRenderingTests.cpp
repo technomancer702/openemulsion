@@ -67,7 +67,7 @@ static void testEmitterShoulder()
     const auto updated=renderRetained(emitter,0);
     require(updated.g<old.g*.75f && updated.b<old.b*.75f,"Default still forces red emitter near white");
     require(updated.r>updated.g && updated.r>updated.b,"Default emitter hue ordering");
-    require(luma(updated)<luma(old) && luma(updated)>.5f*luma(old),"Default brightness tradeoff");
+    require(luma(updated)<luma(old) && luma(updated)>.25f*luma(old),"Default brightness tradeoff");
     for (const auto color : std::array<ColorRgb,4>{{{.38f,.2f,.12f},{1,.01f,.025f},{.02f,.03f,1},{8,7.8f,7.6f}}}) {
         const float luminance=luma(color), scale=color_sdr_tone(luminance)/luminance;
         const auto reference=color_sdr_gamut({color.r*scale,color.g*scale,color.b*scale},color_sdr_tone(luminance));
@@ -77,6 +77,36 @@ static void testEmitterShoulder()
         near(result.b,reference.b,2e-6f,"Low-intensity/pale color changed");
     }
     std::puts("SDR emitters: matching value/slope at peak one, exposure order, RGB bounds, default color retention and unchanged low-intensity/pale colors pass.");
+}
+
+static void testEmitterDetail()
+{
+    for (float gate : {0.0f,1e-8f,.01f,.5f,1.0f}) {
+        near(color_sdr_detail_peak(1,gate),1,0,"Detail shoulder join value");
+        const float h=1e-4f;
+        near((color_sdr_detail_peak(1+h,gate)-1)/h,1,.001f,"Detail shoulder join slope");
+        float previous=0;
+        for (int i=0; i<2400; ++i) {
+            const float peak=std::exp2(-14.0f+i*.012f);
+            const float result=color_sdr_detail_peak(peak,gate);
+            require(result>=previous && result<=peak+1e-5f,"Detail shoulder order/range");
+            if (gate==0 || peak<=1) require(result==peak,"Detail shoulder changes neutral/sub-threshold signal");
+            previous=result;
+        }
+    }
+    // Equal chromaticity, different intensity: actual tonal contrast, not whitening.
+    // At extreme intensities the v0.38 luminance shoulder passed ordering but
+    // left these source variations effectively invisible.
+    for (const auto ray : std::array<ColorRgb,4>{{{1,.003125f,.009375f},{1,-.015f,.02f},
+                                                 {.01f,.03f,1},{1,1,.01f}}}) {
+        for (float peak : {8.0f,16.0f,32.0f,64.0f}) for (float amount : {0.0f,1.0f}) {
+            const auto a=renderRetained({ray.r*peak,ray.g*peak,ray.b*peak},amount);
+            const auto b=renderRetained({ray.r*peak*1.25f,ray.g*peak*1.25f,ray.b*peak*1.25f},amount);
+            const float contrast=(luma(b)-luma(a))/(.5f*(luma(a)+luma(b)));
+            require(contrast>(ray.g==1 ? .0025f : .01f),"Bright emitter intensity detail flattened");
+        }
+    }
+    std::puts("SDR emitter detail: smooth root input shoulder, neutral/low-intensity identity and bright source-intensity contrast pass.");
 }
 
 static void testHighlightRetention()
@@ -231,6 +261,7 @@ int main()
     try {
         testHDR();
         testEmitterShoulder();
+        testEmitterDetail();
         testHighlightRetention();
         near(color_sdr_tone(0),0,0,"SDR adds a black offset");
         near(color_sdr_tone(.18f),.12f,1e-7f,"SDR gray anchor");
@@ -263,12 +294,14 @@ int main()
                 const ColorRgb source {chip.r*exposure,chip.g*exposure,chip.b*exposure};
                 const auto c=renderLinear(source);
                 for (float v : {c.r,c.g,c.b}) require(std::isfinite(v) && v>=0 && v<=1.000001f,"SDR gamut boundary");
-                const float peak=std::max({source.r,source.g,source.b});
-                const float baseline=color_sdr_tone(luma(source));
-                const float retained=color_sdr_emitter_tone(luma(source),peak);
-                require(luma(c)<=baseline+3e-6f && luma(c)>=retained-3e-6f,"SDR luminance outside shoulder endpoints");
+                const float sourcePeak=std::max({source.r,source.g,source.b});
                 const float low=std::min({source.r,source.g,source.b});
-                const float t=std::clamp(((peak-low)/peak-.15f)/.6f,0.0f,1.0f);
+                const float t=std::clamp(((sourcePeak-low)/sourcePeak-.15f)/.6f,0.0f,1.0f);
+                const float peak=color_sdr_detail_peak(sourcePeak,t*t*(3-2*t));
+                const float detailY=luma(source)*(peak/sourcePeak);
+                const float baseline=color_sdr_tone(detailY);
+                const float retained=color_sdr_emitter_tone(detailY,peak);
+                require(luma(c)<=baseline+3e-6f && luma(c)>=retained-3e-6f,"SDR luminance outside shoulder endpoints");
                 const float weight=peak>1 ? .5f*t*t*(3-2*t) : 0;
                 near(luma(c),baseline+(retained-baseline)*weight,3e-6f,"SDR blend target luminance");
                 const float sourceY=luma(source), outputY=luma(c);

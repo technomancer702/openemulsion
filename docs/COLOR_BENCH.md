@@ -57,9 +57,9 @@ python tools/check_color_reference.py analysis/color-bench
 The checker requires existing input/output float arrays and verifies exact
 zero-retention output, without needing the original clips again. This historical
 bit-exact check intentionally fails when comparing pre-v0.38 SDR highlights with
-v0.38: the zero/default response has changed.
+v0.38 and later: the zero/default response has changed.
 
-SDR colored-highlight evaluation (v0.38), against a separately retained v0.37
+SDR colored-highlight evaluation, against a separately retained v0.37
 native bench DLL:
 
 ```powershell
@@ -73,8 +73,35 @@ and source-keyed bright red taillight regions. Reports near-white fraction and
 channel variation from float RGB; tagged sRGB ROI PNGs are visual previews only.
 Checks that the reference DLL exactly reproduces the retained baseline, and
 that HDR PQ and Conversion Only old/new outputs remain bit-exact. This does
-not prove recovery of clipped camera detail or equal perceived luminance.
-Reports/previews remain local in `analysis/highlight-detail-v038`.
+not prove preserved spatial lens texture, recovery of clipped camera detail or
+equal perceived luminance. Reduced whitening is a color result, not a detail
+measurement. Reports/previews remain local in `analysis/highlight-detail-v039`.
+
+### Native-Resolution Lens Detail
+
+Preserve the reference bridge before rebuilding a new version:
+
+```powershell
+Copy-Item build/ofx/bench/ColorBench.dll build/ofx/bench/ColorBench-v038.dll
+# Build the revised plugin/bridge, then:
+python tools/inspect_lens_detail.py --reference-bridge build/ofx/bench/ColorBench-v038.dll
+```
+
+Decodes the original LogC3/AWG3 taillight frame at native resolution, crops without
+decimation, and renders both native bridges at 0/-2/-4 EV. Same-exposure PNGs show
+the actual comparison; lower-exposure views diagnose whether source detail exists.
+Direct log/channel-normalized previews are explicitly diagnostic, not viewing
+LUTs or color references. Arrays/measurements stay float; output PNGs use the
+usual Gamma-2.4-to-sRGB preview conversion. Enlargements use nearest-neighbor,
+full-frame reductions Lanczos. Source media is untouched and remains local.
+
+Reports luminance contrast between nearby, fixed source-keyed bright-red pixels
+with similar chromaticity and differing intensity. This measures spatial signal
+separation, not white-pixel counts, global variance or perceptual ground truth.
+It does not prove exact texture reproduction or recover clipped channels.
+`--clip`, `--seconds`, `--box` (normalized crop), `--preset`, bridge labels and
+`--output` select other local comparisons. Native rendering is color-only;
+strong creative tones, glow, grain and Resolve scaling still require host tests.
 
 HDR PQ numeric evaluation (v0.36 onward), using retained source floats:
 

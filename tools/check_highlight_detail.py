@@ -2,7 +2,7 @@
 """Compare revised SDR highlights against a retained pre-v0.38 native bridge.
 
 Uses local full-precision source arrays; does not modify or package source media.
-ROI statistics measure retained source signal, not invented highlight recovery.
+ROI color statistics do not establish spatial lens detail or highlight recovery.
 """
 
 import argparse
@@ -86,7 +86,7 @@ def run(args):
                 images = [display_preview(c[ys.min():ys.max()+1, xs.min():xs.max()+1, :3]) for c in [old, new, maximum]]
                 canvas = Image.new("RGB", (images[0].width*3, images[0].height+24), "#202020")
                 draw = ImageDraw.Draw(canvas)
-                for i, (label, image) in enumerate(zip(["v0.37", "v0.38 default", "Retention 1"], images)):
+                for i, (label, image) in enumerate(zip([args.reference_label, args.updated_label+" default", "Retention 1"], images)):
                     canvas.paste(image, (i*image.width, 24))
                     draw.text((i*image.width+3, 5), label, fill="white")
                 canvas.save(output / f"{stem}-{updated.presets[row['preset']]}-{name.replace(' ', '-')}.png", icc_profile=ICC)
@@ -115,5 +115,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("reference", type=Path, help="Retained pre-v0.38 footage bench directory")
     parser.add_argument("--reference-bridge", type=Path, required=True, help="Retained pre-v0.38 ColorBench.dll")
-    parser.add_argument("--output", type=Path, default=ROOT / "analysis/highlight-detail-v038")
+    parser.add_argument("--reference-label", default="v0.37")
+    parser.add_argument("--updated-label", default="v0.39")
+    parser.add_argument("--output", type=Path, default=ROOT / "analysis/highlight-detail-v039")
     run(parser.parse_args())

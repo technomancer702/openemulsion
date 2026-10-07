@@ -1,6 +1,8 @@
 # Upgrade Roadmap
 
-## Completed Through v0.38
+## Completed Through v0.39
+
+- SDR bright-colored intensity shoulder to retain more lens texture, not merely reduce whitening. Full-resolution source/exposure comparisons, fixed source-keyed spatial contrast diagnostics, independent references and synthetic emitter-contrast checks. Neutral/sub-threshold colors and non-SDR paths are unchanged; no source reconstruction or spatial sharpening. See [Color Spaces](COLOR_SPACES.md) and [Color Bench](COLOR_BENCH.md).
 
 - SDR colored-highlight shoulder to reduce taillight washout automatically, preserving neutral/low-intensity response and ordered exposure ramps. Retention adds to the updated default. Shared CPU/OpenCL arithmetic, independent references and local footage/isolated-path comparisons; no source highlight reconstruction. See [Color Spaces](COLOR_SPACES.md).
 

@@ -8,6 +8,7 @@
 #include <cmath>
 #define COLOR_POW std::pow
 #define COLOR_LOG std::log
+#define COLOR_SQRT std::sqrt
 #define COLOR_LOG2 std::log2
 #define COLOR_EXP std::exp
 #define COLOR_EXP2 std::exp2
@@ -19,6 +20,7 @@
 #pragma OPENCL FP_CONTRACT OFF
 #define COLOR_POW pow
 #define COLOR_LOG log
+#define COLOR_SQRT sqrt
 #define COLOR_LOG2 log2
 #define COLOR_EXP exp
 #define COLOR_EXP2 exp2
@@ -245,24 +247,42 @@ static inline ColorRgb color_sdr_gamut(ColorRgb c, float mapped)
     return c;
 }
 
+// Reserve display contrast for colored emitters before the luminance/gamut
+// shoulders flatten their texture. Fixed chroma makes this exposure-monotonic;
+// A root shoulder gives a C1 join at peak one without the excessive intermediate
+// contrast reduction of a logarithmic input shoulder.
+static inline float color_sdr_detail_peak(float peak, float gate)
+{
+    if (peak <= 1.0f || gate <= 0.0f) return peak;
+    const float strength = 2.0f*gate;
+    const float delta = peak-1.0f;
+    return 1.0f+delta/COLOR_SQRT(1.0f+strength*delta);
+}
+
 // Keep conversion math separate: textures and selection keys still see scene data.
 static inline ColorRgb color_render_work(ColorRgb work, ColorParameters p)
 {
     if (!p.renderSDR) return work;
-    const ColorRgb linear = color_curve_rgb(work, ColorSRGB, 0);
+    ColorRgb linear = color_curve_rgb(work, ColorSRGB, 0);
+    float peak = COLOR_MAX(linear.r,COLOR_MAX(linear.g,linear.b));
+    const float low = COLOR_MIN(linear.r,COLOR_MIN(linear.g,linear.b));
+    const float relative = peak > 0.0f ? (peak-low)/peak : 0.0f;
+    const float t = COLOR_MAX(0.0f,COLOR_MIN(1.0f,(relative-0.15f)/0.60f));
+    const float gate = t*t*(3.0f-2.0f*t);
+    if (peak > 1.0f && gate > 0.0f) {
+        const float detailPeak = color_sdr_detail_peak(peak,gate), scale = detailPeak/peak;
+        linear.r *= scale; linear.g *= scale; linear.b *= scale;
+        peak = detailPeak;
+    }
     const float y = linear.r * 0.2126f + linear.g * 0.7152f + linear.b * 0.0722f;
     if (y <= 0.0f) { ColorRgb black = {0,0,0}; return black; }
     const float mapped = color_sdr_tone(y), gain = mapped / y;
     ColorRgb c = {linear.r * gain, linear.g * gain, linear.b * gain};
     c = color_sdr_gamut(c,mapped);
-    const float peak = COLOR_MAX(linear.r,COLOR_MAX(linear.g,linear.b));
-    const float low = COLOR_MIN(linear.r,COLOR_MIN(linear.g,linear.b));
     if (peak > 1.0f) {
-        const float relative = (peak-low)/peak;
-        const float t = COLOR_MAX(0.0f,COLOR_MIN(1.0f,(relative-0.15f)/0.60f));
         // The chroma gate is exposure invariant; an intensity-ramped blend can
         // reverse brightness as its weight rises, hiding detail rather than saving it.
-        const float weight = (0.50f+0.30f*p.highlightRetention)*t*t*(3.0f-2.0f*t);
+        const float weight = (0.50f+0.30f*p.highlightRetention)*gate;
         if (weight > 0.0f) {
             const float retainedY = color_sdr_emitter_tone(y,peak), retainedGain = retainedY/y;
             ColorRgb retained = {linear.r*retainedGain,linear.g*retainedGain,linear.b*retainedGain};

@@ -1,4 +1,4 @@
-# OFX Color Spaces (v0.38)
+# OFX Color Spaces (v0.39)
 
 ## Resolve Workflow
 
@@ -55,6 +55,21 @@ The independent rational luminance curve maps scene-linear 18% gray to display-l
 
 Chroma is rescaled with linear luminance, then compressed radially toward the neutral axis at the display-gamut boundary. In-gamut colors below the compression knee retain their chroma direction. From v0.38, bright saturated emitters blend toward a peak-aware shoulder rather than being forced too quickly toward neutral white. This trades highlight brightness for retained color/channel gradation, not a global saturation or exposure change. No stock-data import, ARRI LUT reproduction, or ACES rendering-transform equivalence is claimed. Creative print lift/casts and texture can still intentionally change the final black/white values.
 
+v0.38 improved highlight color but still compressed intensity differences enough
+to hide lens texture. From v0.39, SDR first reserves more contrast for very bright
+colored emitters with a square-root input shoulder. For source peak `p > 1`,
+`g = smoothstep(0.15, 0.75, (max-min)/max)` and `s = 2*g`, the compressed peak is
+`p' = 1 + (p-1)/sqrt(1+s*(p-1))`. All three linear channels scale by `p'/p` before
+the existing viewing/gamut shoulders. A zero gate or peak at/below one returns
+the original signal exactly. The join has matching value and slope at peak one;
+the chroma-only gate stays constant along an exposure ray, preserving exposure
+ordering. Neutral/pale highlights, ordinary-intensity colors, and shadow/gray
+anchors are unchanged. Saturated lights/reflections can be dimmer; this reserves
+tonal separation rather than adding sharpening, local contrast, or invented
+detail. This automatic SDR operation is independent of the retention slider.
+HDR, Conversion Only, managed output, display-ready Auto and texture/bypass/matte
+policies are unchanged. Source keys and grain coordinates are not compressed.
+
 For positive scene luminance `y` and peak RGB `p > 1`, let `q = y/p`,
 `k = tone(q)`, `h = q-k`, and `d = toneDerivative(q)*(y-q)`.
 The alternate luminance is `k + h*d/(h+d)`. At peak one it matches the
@@ -64,6 +79,7 @@ alternate's pre-gamut peak RGB below one, rather than requiring a red emitter
 to occupy the same near-white
 brightness as an achromatic light. Negative wide-gamut channels are handled by
 the same bounded radial mapping at both endpoints.
+Here `y` and `p` refer to the post-input-shoulder signal in v0.39.
 
 The original and alternate display-linear RGB outputs are blended with a
 chroma-only smooth gate: `smoothstep(0.15, 0.75, (max-min)/max)`. At default,
@@ -78,7 +94,7 @@ Source highlight extraction and selective-color keys still use the original conv
 
 ### Highlight Color Retention
 
-Film Color's **Highlight Color Retention** defaults to zero, using v0.38's
+Film Color's **Highlight Color Retention** defaults to zero, using the current
 updated automatic colored-highlight response. Its 0-1 range increases the
 fully gated display-linear RGB blend from 0.5 to 0.8. At each fixed source pixel
 the slider is an affine RGB blend between fixed, bounded endpoints, after

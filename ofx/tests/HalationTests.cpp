@@ -2163,6 +2163,21 @@ public:
         const auto retained=render(lights,3,1,s);
         require(retained[1]<baseline[1],"GPU retention does not restore red highlight color");
         for (int i=8; i<12; ++i) require(retained[i]==baseline[i],"GPU retention changes below-threshold skin/alpha");
+        for (const auto ray : std::array<ColorRgb,4>{{{1,.003125f,.009375f},{1,-.015f,.02f},
+                                                     {.01f,.03f,1},{1,1,.01f}}}) {
+            for (float peak : {8.0f,16.0f,32.0f,64.0f}) for (float amount : {0.0f,1.0f}) {
+                s[film::HighlightRetention]=amount;
+                const auto pair=render({ray.r*peak,ray.g*peak,ray.b*peak,.37f,
+                                        ray.r*peak*1.25f,ray.g*peak*1.25f,ray.b*peak*1.25f,.37f},2,1,s);
+                const auto y=[&](int offset) {
+                    return .2126f*std::pow(pair[offset],2.4f)+.7152f*std::pow(pair[offset+1],2.4f)+.0722f*std::pow(pair[offset+2],2.4f);
+                };
+                const float a=y(0), b=y(4), contrast=(b-a)/(.5f*(a+b));
+                require(contrast>(ray.g==1 ? .0025f : .01f),"GPU flattens bright emitter intensity detail");
+                require(pair[3]==.37f && pair[7]==.37f,"GPU emitter detail changes alpha");
+            }
+        }
+        std::puts("OpenCL SDR: nearby bright red/blue/yellow intensity pairs retain tonal contrast, including negative wide-gamut channels.");
         for (float amount : {0.0f,.5f,1.0f}) for (int preset=1; preset<look::Count; ++preset) {
             const auto recipe=look::recipe(preset);
             for (size_t i=0; i<s.size(); ++i) s[i]=static_cast<float>(recipe[i]);
