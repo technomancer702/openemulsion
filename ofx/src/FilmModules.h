@@ -24,6 +24,7 @@ enum SettingIndex {
     OutputRendering,
     HighlightRetention,
     HDRPeak, HDRWhite,
+    SDRContrast, SDRRolloff, SDRGamut,
     SettingsCount
 };
 constexpr int ModuleIndex = 19;

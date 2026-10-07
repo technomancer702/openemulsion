@@ -11,6 +11,9 @@ extern "C" {
 int oe_settings_count();
 int oe_rendering_index();
 int oe_retention_index();
+int oe_sdr_contrast_index();
+int oe_sdr_rolloff_index();
+int oe_sdr_gamut_index();
 int oe_preset_settings(int, float*, size_t);
 int oe_render(const float*, float*, size_t, const float*, size_t, float);
 }
@@ -25,6 +28,8 @@ int main()
     try {
         require(oe_settings_count()==film::SettingsCount && oe_rendering_index()==film::OutputRendering && oe_retention_index()==film::HighlightRetention,
                 "Native settings ABI mismatch");
+        require(oe_sdr_contrast_index()==film::SDRContrast && oe_sdr_rolloff_index()==film::SDRRolloff &&
+                oe_sdr_gamut_index()==film::SDRGamut,"Native SDR control indices mismatch");
         const std::array<float,16> input {0,0,0,.1f, .15f,.25f,.3f,.5f, .6f,.7f,.5f,.7f, .9f,.6f,.5f,1};
         std::array<float,16> actual {};
         std::array<float,film::SettingsCount> s {};
@@ -61,6 +66,11 @@ int main()
         s[film::SelectiveView]=std::numeric_limits<float>::max();
         require(oe_render(input.data(),actual.data(),4,s.data(),s.size(),0)!=0,"Out-of-range selective view accepted");
         s[film::SelectiveView]=0;
+        for (int control : {film::SDRContrast,film::SDRRolloff,film::SDRGamut}) {
+            s[control]=2;
+            require(oe_render(input.data(),actual.data(),4,s.data(),s.size(),0)!=0,"Invalid SDR control accepted");
+            s[control]=0;
+        }
         s[film::OutputRendering]=std::numeric_limits<float>::quiet_NaN();
         require(oe_render(input.data(),actual.data(),4,s.data(),s.size(),0)!=0,"NaN settings accepted");
         require(oe_render(nullptr,actual.data(),4,s.data(),s.size(),0)!=0,"Null pixels accepted");

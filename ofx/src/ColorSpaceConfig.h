@@ -180,6 +180,12 @@ inline bool hdrWhiteEnabled(const ColorParameters& p, int modules, int view)
         !((modules & film::SelectiveColor) && view == 1);
 }
 
+inline bool sdrControlsEnabled(const ColorParameters& p, int modules, int view)
+{
+    return p.renderSDR && (modules & (film::Negative|film::Print|film::Development|film::SelectiveColor)) &&
+        !((modules & film::SelectiveColor) && view == 1);
+}
+
 inline ColorParameters prepare(const float* settings)
 {
     const int modules = film::modulesForSettings(settings);
@@ -189,6 +195,11 @@ inline ColorParameters prepare(const float* settings)
     if (highlightRetentionEnabled(p,modules,static_cast<int>(settings[1]),settings[film::NegativeColorStrength],
                                   static_cast<int>(settings[film::SelectiveView])))
         p.highlightRetention = std::clamp(settings[film::HighlightRetention],0.0f,1.0f);
+    if (sdrControlsEnabled(p,modules,static_cast<int>(settings[film::SelectiveView]))) {
+        p.sdrContrast = std::clamp(settings[film::SDRContrast],-1.0f,1.0f);
+        p.sdrRolloff = std::clamp(settings[film::SDRRolloff],-1.0f,1.0f);
+        p.sdrGamut = std::clamp(settings[film::SDRGamut],-1.0f,1.0f);
+    }
     return p;
 }
 

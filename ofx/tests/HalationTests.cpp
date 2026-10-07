@@ -1567,6 +1567,18 @@ public:
             const double ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count()/12;
             std::printf("4K colored HDR LogC3, mode %d, highlight retention %.2f: %.2f ms/frame (GPU resident, every-pixel activation, excludes Resolve/transfers).\n",mode,amount,ms);
         }
+        for (int mode : {0,1}) for (float tuning : {0.0f,-1.0f,1.0f}) {
+            auto s=filmSettings(); s[0]=static_cast<float>(mode); s[26]=color::AlexaLogC3; s[27]=1;
+            s[16]=.16f; s[film::SDRContrast]=s[film::SDRRolloff]=s[film::SDRGamut]=tuning;
+            require(RunOpenEmulsionOpenCL(queue,width,height,0,s.data(),reinterpret_cast<const float*>(src),reinterpret_cast<float*>(dst)),"SDR control timing warmup failed");
+            require(finish(queue)==0,"SDR control timing warmup execution failed");
+            const auto start=std::chrono::steady_clock::now();
+            for (int frame=0; frame<12; ++frame)
+                require(RunOpenEmulsionOpenCL(queue,width,height,frame,s.data(),reinterpret_cast<const float*>(src),reinterpret_cast<float*>(dst)),"SDR control timing render failed");
+            require(finish(queue)==0,"SDR control timing execution failed");
+            const double ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count()/12;
+            std::printf("4K colored LogC3 SDR, mode %d, viewing controls %.2f: %.2f ms/frame (GPU resident, excludes Resolve/transfers).\n",mode,tuning,ms);
+        }
         releaseMem(src); releaseMem(dst);
     }
 
@@ -2113,6 +2125,26 @@ public:
 
     void testDisplayRendering()
     {
+        for (float contrast : {-1.0f,0.0f,1.0f}) for (float rolloff : {-1.0f,0.0f,1.0f})
+            for (float gamut : {-1.0f,0.0f,1.0f}) {
+                auto s=filmSettings(); s[26]=color::AlexaLogC3; s[27]=1;
+                s[film::SDRContrast]=contrast; s[film::SDRRolloff]=rolloff; s[film::SDRGamut]=gamut;
+                test(37,29,s,false);
+                s[film::NegativeColorStrength]=s[film::NegativeToneStrength]=0;
+                s[film::PrintColorStrength]=s[film::PrintToneStrength]=0;
+                test(37,29,s,false);
+            }
+        for (int mode : {0,1,2,3,4,5,6}) for (int output : {1,5,color::HDRPQOutput})
+            for (int rendering=0; rendering<color::RenderingCount; ++rendering) {
+                auto s=filmSettings(); s[26]=color::AlexaLogC3; s[27]=static_cast<float>(output);
+                s[0]=static_cast<float>(mode); s[film::OutputRendering]=static_cast<float>(rendering);
+                const bool active=color::prepare(s.data()).renderSDR;
+                const auto baseline=render({.1f,.15f,.12f,.37f,.6f,.45f,.42f,.37f},2,1,s);
+                s[film::SDRContrast]=1; s[film::SDRRolloff]=-1; s[film::SDRGamut]=1;
+                test(17,19,s,false);
+                if (!active) require(baseline==render({.1f,.15f,.12f,.37f,.6f,.45f,.42f,.37f},2,1,s),
+                                     "SDR controls change HDR/managed/conversion/texture/bypass");
+            }
         for (int source=0; source<color::SpaceCount; ++source) for (int output=0; output<static_cast<int>(color::OutputSpaces.size()); ++output)
             for (int rendering=0; rendering<color::RenderingCount; ++rendering) for (float retention : {0.0f,.5f,1.0f}) {
                 auto s=filmSettings(); s[26]=static_cast<float>(source); s[27]=static_cast<float>(output);

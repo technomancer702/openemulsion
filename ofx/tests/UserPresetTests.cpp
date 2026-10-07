@@ -138,13 +138,25 @@ int main()
             require(toJson(parse(older.dump())) == valid,"Older preset settings no longer load");
         }
         auto invalid = valid;
+        auto v5 = valid; v5["formatVersion"] = 5;
+        for (const char* name : {"sdrContrast","sdrRolloff","sdrGamut"}) v5["context"].erase(name);
+        auto v5Context = original.context;
+        for (size_t i=0; i<v5Context.size(); ++i)
+            if (std::string(ContextControls[i].name).rfind("sdr",0)==0) v5Context[i]=0;
+        const auto migratedV5=parse(v5.dump());
+        require(migratedV5.context==v5Context && migratedV5.controls==original.controls && migratedV5.modules==original.modules,
+                "v5 migration changes existing look or SDR defaults");
+        auto mixedV5=v5; mixedV5["context"]["sdrContrast"]=0;
+        rejects([&] { parse(mixedV5.dump()); },"Mixed SDR schema accepted");
         auto oldValid = valid;
+        for (const char* name : {"sdrContrast","sdrRolloff","sdrGamut"}) oldValid["context"].erase(name);
         oldValid["context"].erase("hdrPeak"); oldValid["context"].erase("hdrWhite");
         oldValid["context"]["outputSpace"] = color::HDRPQOutput-1;
         oldValid["context"]["outputRendering"] = color::StandardSDR;
         auto oldContext = original.context;
         for (size_t i=0; i<oldContext.size(); ++i) {
             const std::string name = ContextControls[i].name;
+            if (name.rfind("sdr",0)==0) oldContext[i]=0;
             if (name == "hdrPeak" || name == "hdrWhite") oldContext[i] = ContextControls[i].initial;
             if (name == "outputSpace") oldContext[i] = color::HDRPQOutput-1;
             if (name == "outputRendering") oldContext[i] = color::StandardSDR;
@@ -187,7 +199,7 @@ int main()
         rejects([&] { parse(brokenLegacy.dump()); },"Incomplete legacy preset accepted");
         brokenLegacy=legacy; brokenLegacy["controls"]["selectiveAmount"]=1;
         rejects([&] { parse(brokenLegacy.dump()); },"Mixed-schema preset accepted");
-        invalid["formatVersion"] = 6;
+        invalid["formatVersion"] = FormatVersion+1;
         rejects([&] { parse(invalid.dump()); },"Future schema silently accepted");
         invalid = valid; invalid["formatVersion"] = 1.0;
         rejects([&] { parse(invalid.dump()); },"Non-integer schema accepted");
@@ -207,6 +219,12 @@ int main()
             for (auto value : {Json(nullptr),Json("1"),Json(true),Json(c.minimum-1),Json(c.maximum+1)}) {
                 invalid = valid; invalid["controls"][c.name] = value;
                 rejects([&] { parse(invalid.dump()); },"Invalid control value accepted");
+            }
+        }
+        for (const auto& c : ContextControls) {
+            for (auto value : {Json(nullptr),Json("1"),Json(true),Json(c.minimum-1),Json(c.maximum+1)}) {
+                invalid=valid; invalid["context"][c.name]=value;
+                rejects([&] { parse(invalid.dump()); },"Invalid context value accepted");
             }
         }
         rejects([&] { parse("{\"name\":\"duplicate\"," + valid.dump().substr(1)); },"Duplicate root key accepted");

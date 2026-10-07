@@ -153,6 +153,49 @@ decimated, not filtered. Use stride 1 when measuring tiny highlight detail.
 
 ## Interpretation
 
+### SDR Viewing Audit (v0.40)
+
+Preserve the v0.39 native bridge before rebuilding, then run:
+
+```powershell
+python tools/inspect_sdr_viewing.py --reference-bridge build/ofx/bench/ColorBench-v039.dll
+```
+
+This tool expects the retained pre-HDR `analysis/color-bench-v035` arrays/settings
+from all five local LogC3 clips. `--footage`, `--bridge` and `--output` override
+the locations. It renders seven viewing-control variants and stage-isolated
+neutral exposure ramps through native production code. Negative-only/Print-only
+variants disable the other stage's strengths; Combined includes negative and
+print, not development, selective color, grain or glow. It does not simulate
+SpektraFilm, import its shaders or establish stock calibration.
+
+The local audit passed 30 bit-exact v0.39 default frames and 60 bit-exact
+HDR/Conversion Only comparisons. It recorded 1,484 stage/variant ramps and
+seven-panel previews for each of the five clips. Original footage, float results
+and PNGs remain ignored and are not uploaded or packaged.
+
+Example: a neutral-gray exposure ramp through 50D Daylight at default viewing
+settings gives these normalized display-linear luminances (rounded):
+
+| Scene-linear input | Viewing only | Negative only | Print only | Negative + Print |
+| --- | --- | --- | --- | --- |
+| 1 | 0.69 | 0.70 | 0.67 | 0.68 |
+| 4 | 0.92 | 0.86 | 0.75 | 0.73 |
+| 16 | 0.98 | 0.90 | 0.76 | 0.74 |
+| 64 | 1.00 | 0.91 | 0.76 | 0.74 |
+
+This confirms that creative print tone can dominate the final highlight response;
+it is not evidence of source clipping or a failed viewing conversion. To reduce
+that effect, compare lower Print Tone Strength as well as the SDR controls.
+The audit intentionally does not retune existing recipe defaults.
+
+In one 4K GPU-resident run, Full mode measured 6.36 ms/frame at zero and
+6.42-6.46 at control extremes; Color Only measured 5.34 and 5.42-5.45 respectively.
+These are current-build synthetic timings, not a previous-version speed comparison
+or Resolve playback guarantee. Transfers/host work and other GPUs are excluded.
+
+### Reading Results
+
 Open `analysis/color-bench/index.html` directly in a browser. Compare clips,
 frames, presets, render models and cropped regions. Output float `.npy` arrays
 retain values before PNG clipping. The manifest records settings, source hashes,

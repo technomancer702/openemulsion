@@ -1,6 +1,12 @@
-# OpenEmulsion v0.39
+# OpenEmulsion v0.40
 
 Experimental Windows x64 film emulation with SDR and direct HDR PQ output. Stock and movie references remain artistic interpretations, not measured film profiles or exact movie grades. HDR monitor/host validation is still outstanding.
+
+## Changes in v0.40
+
+- Added a collapsed SDR Viewing group: Viewing Contrast, Highlight Rolloff and Gamut Compression. All three default to zero, reproducing v0.39 exactly. Contrast keeps middle gray fixed; positive Rolloff starts the shoulder earlier; Gamut Compression adjusts display-boundary softening independently of Film Color's control.
+- The viewing controls are ignored and greyed out outside SDR rendering. Built-in looks preserve them; format-6 user presets capture them, and complete older presets load with zero adjustments. Preserve Color Spaces also preserves SDR Viewing settings.
+- Shared CPU/OpenCL math remains in the existing composite pass, with no extra buffers/passes/readbacks. Extended checks cover curve continuity, exposure ordering, endpoint combinations, preset migration/capture, shipping-plugin startup and GPU parity. Local five-clip comparisons verify exact zero-default and HDR/Conversion Only preservation; stage ramps separate viewing/negative/print response. Strong creative curves can still compress detail; no source reconstruction or spectral/stock calibration is claimed.
 
 ## Changes in v0.39
 

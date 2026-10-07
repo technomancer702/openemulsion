@@ -24,7 +24,7 @@ def emitter_metrics(rgb, mask):
 
 
 def compare(reference, updated, source, settings):
-    old, new = reference.render(source, settings), updated.render(source, settings)
+    old, new = reference.render(source, settings[:reference.count]), updated.render(source, settings)
     if not np.array_equal(old, new):
         raise ValueError(f"Isolated output changed; max delta {np.max(np.abs(old-new))}")
 
@@ -35,8 +35,8 @@ def run(args):
     output.mkdir(parents=True, exist_ok=True)
     reference = Renderer(args.reference_bridge)
     updated = Renderer(ROOT / "build/ofx/bench/ColorBench.dll")
-    if reference.count != updated.count:
-        raise ValueError("Compare bridges with the same settings layout")
+    if updated.count-reference.count not in (0, 3):
+        raise ValueError("Only the original layout or three appended SDR controls are supported")
     rows = json.loads((root / "results.json").read_text(encoding="utf-8"))
     results, isolated, taillights = [], 0, 0
     for row in rows:
@@ -46,11 +46,13 @@ def run(args):
         source = np.load(root / f"{stem}-input.npy")
         linear = np.load(root / f"{stem}-linear.npy")[..., :3]
         settings = np.array(row["settings"], np.float32)
-        if len(settings) == updated.count-2:
+        if len(settings) == reference.count-2:
             settings = np.concatenate([settings, np.array([1000, 203], np.float32)])
-        if len(settings) != updated.count:
+        if len(settings) != reference.count:
             raise ValueError("Unsupported retained settings layout")
         old = reference.render(source, settings)
+        if updated.count != reference.count:
+            settings = np.concatenate([settings,np.zeros(3,np.float32)])
         retained = np.load(root / row["float_output"])
         if not np.array_equal(old, retained):
             raise ValueError("Reference bridge does not reproduce the retained baseline")
@@ -116,6 +118,6 @@ if __name__ == "__main__":
     parser.add_argument("reference", type=Path, help="Retained pre-v0.38 footage bench directory")
     parser.add_argument("--reference-bridge", type=Path, required=True, help="Retained pre-v0.38 ColorBench.dll")
     parser.add_argument("--reference-label", default="v0.37")
-    parser.add_argument("--updated-label", default="v0.39")
-    parser.add_argument("--output", type=Path, default=ROOT / "analysis/highlight-detail-v039")
+    parser.add_argument("--updated-label", default="v0.40")
+    parser.add_argument("--output", type=Path, default=ROOT / "analysis/highlight-detail-v040")
     run(parser.parse_args())

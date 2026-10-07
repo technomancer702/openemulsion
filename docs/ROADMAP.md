@@ -1,6 +1,8 @@
 # Upgrade Roadmap
 
-## Completed Through v0.39
+## Completed Through v0.40
+
+- Exposed SDR Viewing Contrast, Highlight Rolloff and Gamut Compression, with exact v0.39 zero defaults, fixed middle-gray placement, shared CPU/OpenCL math and inactive-path greying/isolation. Format-6 output-context capture and strict legacy zero migration. Stage-isolated exposure ramps and five-clip comparisons document combined SDR/negative/print compression without changing existing creative recipes. See [Color Spaces](COLOR_SPACES.md) and [Color Bench](COLOR_BENCH.md).
 
 - SDR bright-colored intensity shoulder to retain more lens texture, not merely reduce whitening. Full-resolution source/exposure comparisons, fixed source-keyed spatial contrast diagnostics, independent references and synthetic emitter-contrast checks. Neutral/sub-threshold colors and non-SDR paths are unchanged; no source reconstruction or spatial sharpening. See [Color Spaces](COLOR_SPACES.md) and [Color Bench](COLOR_BENCH.md).
 

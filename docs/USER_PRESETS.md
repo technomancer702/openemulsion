@@ -1,4 +1,4 @@
-# User Presets (v0.36)
+# User Presets (v0.40)
 
 The User Presets group sits below the built-in Preset dropdown. Save Preset and Load Preset open native Windows dialogs for portable `.oepreset` files. The files contain UTF-8 JSON, not executable code or external LUT references. They are separate from Filmbox/Dehancer preset formats.
 
@@ -10,7 +10,7 @@ Load validates the complete document before modifying parameters. Successful imp
 
 Loading restores every saved rendering setting by default, including color spaces, camera balance, and grain seed. Three optional non-animated preservation switches default to off:
 
-- Preserve Color Spaces: keep this node's Input/Output Color Space, Output Rendering, HDR Peak Luminance and HDR Reference White settings and keys.
+- Preserve Color Spaces: keep this node's Input/Output Color Space, Output Rendering, SDR Viewing controls, HDR Peak Luminance and HDR Reference White settings and keys.
 - Preserve Camera Balance: keep Film Color Exposure, Temperature, and Tint settings and keys. Print Exposure/Red/Green/Blue remain part of the imported creative look.
 - Preserve Grain Seed: keep this node's grain seed and keys.
 
@@ -24,7 +24,7 @@ Canceling a dialog changes nothing. Filesystem failures are reported through the
 
 ## File Format and Validation
 
-Format version 5 stores `plugin`, `createdWith`, `name`, `controls`, `modules`, and `context`, alongside `formatVersion`. It adds HDR peak/reference white to output context, and permits PQ output/Standard HDR choices. Format 4 introduced Highlight Color Retention; format 3 introduced Output Rendering. Complete format-1/2/3/4 files remain readable and receive HDR defaults of 1000/203 nits, without changing existing output choices. Versions 1/2 migrate rendering to Conversion Only; 3/4 retain the stored policy. Versions 1/2/3 receive retention zero; version 1 also receives neutral, disabled Selective Color. Mixed/incomplete schemas and legacy files containing new HDR choices are rejected. New files require v0.36 or later; older builds cannot read format 5. Parameter identifiers and numeric choice IDs are stable. Highlight retention is creative, so is restored even with Preserve Color Spaces; HDR context is preserved by that option. New nodes still default to Auto.
+Format version 6 stores `plugin`, `createdWith`, `name`, `controls`, `modules`, and `context`, alongside `formatVersion`. It adds the three SDR Viewing adjustments to output context; complete format-1/2/3/4/5 files remain readable and receive zeros, preserving v0.39's default curve. Format 5 added HDR peak/reference white and PQ choices; earlier files receive HDR defaults of 1000/203 nits without changing their output choices. Format 4 introduced Highlight Color Retention; format 3 introduced Output Rendering. Versions 1/2 migrate rendering to Conversion Only; later files retain the stored policy. Versions 1/2/3 receive retention zero; version 1 also receives neutral, disabled Selective Color. Mixed/incomplete schemas and legacy files containing newer controls/choices are rejected. New files require v0.40 or later; older builds cannot read format 6. Parameter identifiers and numeric choice IDs are stable. Highlight retention is creative, so is restored even with Preserve Color Spaces; SDR/HDR context is preserved by that option. New nodes still default to Auto.
 
 All known controls and switches are required. Parsing rejects unsupported versions/plugins, missing or unknown controls, wrong types, fractional choices, nonfinite/out-of-range numbers, duplicate fields, excessive nesting, trailing data, and files over 64 KiB. Names are limited to 256 UTF-8 bytes; paths use the native Unicode Windows APIs. JSON parsing/serialization use vendored MIT-licensed nlohmann/json v3.12.0, whose release checksum was verified upstream.
 

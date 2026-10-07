@@ -23,6 +23,43 @@ class BenchTests(unittest.TestCase):
         converted = self.renderer.render(frame, self.renderer.settings("Neutral / Clean Slate", 14, 1))
         np.testing.assert_allclose(converted[0, 0, :3], .18 ** (1 / 2.4), atol=2e-6)
 
+    def test_sdr_controls_gray_double_reference(self):
+        x = np.exp2(np.linspace(-16, 14, 2000))
+        frame = rgba(np.repeat(x[None, :, None], 3, axis=2).astype(np.float32))
+        indices = self.renderer.sdr_indices
+        self.assertEqual(set(indices), {"contrast", "rolloff", "gamut"})
+        for contrast in [-1, 0, 1]:
+            for rolloff in [-1, 0, 1]:
+                settings = self.renderer.settings("Neutral / Clean Slate", 14)
+                settings[indices["contrast"]], settings[indices["rolloff"]] = contrast, rolloff
+                slope = (13/15)*(1+.25*contrast)
+                toe = 1.3*(1+.25*contrast)
+                join = .6-.25*rolloff
+                headroom = 1-(.12+slope*(join-.18))
+                expected = np.empty_like(x)
+                low, high = x <= .18, x > join
+                mid = ~(low | high)
+                expected[low] = .12*x[low]/(.18*toe-(toe-1)*x[low])
+                expected[mid] = .12+slope*(x[mid]-.18)
+                expected[high] = 1-headroom**2/(headroom+slope*(x[high]-join))
+                actual = self.renderer.render(frame, settings)
+                np.testing.assert_allclose(actual[0, :, 0], expected**(1/2.4), atol=3e-6)
+
+    def test_sdr_controls_inactive_and_invalid(self):
+        frame = rgba(np.array([[[.18, .18, .18], [32, .1, .3]]], np.float32))
+        for rendering, output in [(1, 1), (3, self.renderer.dll.oe_hdr_output_index()), (0, 2)]:
+            settings = self.renderer.settings("50D Daylight", 14, rendering)
+            settings[27] = output
+            baseline = self.renderer.render(frame, settings)
+            for index in self.renderer.sdr_indices.values():
+                settings[index] = 1
+            np.testing.assert_array_equal(baseline, self.renderer.render(frame, settings))
+        for index in self.renderer.sdr_indices.values():
+            settings = self.renderer.settings("Neutral / Clean Slate", 14)
+            settings[index] = 1.01
+            with self.assertRaises(ValueError):
+                self.renderer.render(frame, settings)
+
     def test_candidate_preserves_grays_and_darker_colors(self):
         frame = rgba(np.array([[[.38, .2, .12], [0, 0, 0], [.18, .18, .18], [4, 4, 4]]], np.float32))
         s = self.renderer.settings("Neutral / Clean Slate", 14)

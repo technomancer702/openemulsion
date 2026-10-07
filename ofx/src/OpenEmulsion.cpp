@@ -26,7 +26,7 @@
 #define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, halation, aura, linear-light bloom, and selective color, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 39
+#define kPluginVersionMinor 40
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -44,6 +44,7 @@ struct Settings {
     int outputSpace = 0;
     int outputRendering = color::Automatic;
     double hdrPeak = 1000, hdrWhite = 203;
+    double sdrContrast = 0, sdrRolloff = 0, sdrGamut = 0;
     bool enableNegative = true;
     bool enableDevelopment = true;
     bool enablePrint = true;
@@ -393,6 +394,9 @@ private:
         out[film::OutputRendering] = static_cast<float>(s.outputRendering);
         out[film::HDRPeak] = static_cast<float>(s.hdrPeak);
         out[film::HDRWhite] = static_cast<float>(s.hdrWhite);
+        out[film::SDRContrast] = static_cast<float>(s.sdrContrast);
+        out[film::SDRRolloff] = static_cast<float>(s.sdrRolloff);
+        out[film::SDRGamut] = static_cast<float>(s.sdrGamut);
         out[film::HighlightRetention] = static_cast<float>(s.highlightRetention);
         out[28] = static_cast<float>(s.negativeShoulder);
         out[29] = static_cast<float>(s.negativeCrosstalk);
@@ -468,6 +472,9 @@ public:
         outputRendering_ = fetchChoiceParam("outputRendering");
         hdrPeak_ = fetchDoubleParam("hdrPeak");
         hdrWhite_ = fetchDoubleParam("hdrWhite");
+        sdrContrast_ = fetchDoubleParam("sdrContrast");
+        sdrRolloff_ = fetchDoubleParam("sdrRolloff");
+        sdrGamut_ = fetchDoubleParam("sdrGamut");
         system_ = fetchChoiceParam("system");
         printStyle_ = fetchChoiceParam("printStyle");
         grainStyle_ = fetchChoiceParam("grainStyle");
@@ -825,6 +832,10 @@ private:
         const bool whiteEnabled = color::hdrWhiteEnabled(cp,active,s.selectiveView);
         hdrWhite_->setEnabled(whiteEnabled);
         hdrPeak_->setEnabled(whiteEnabled && cp.renderHDR);
+        const bool sdrEnabled = color::sdrControlsEnabled(cp,active,s.selectiveView);
+        sdrContrast_->setEnabled(sdrEnabled);
+        sdrRolloff_->setEnabled(sdrEnabled);
+        sdrGamut_->setEnabled(sdrEnabled);
     }
 
     Settings settingsAt(double time) const
@@ -836,6 +847,9 @@ private:
         outputRendering_->getValueAtTime(time, s.outputRendering);
         s.hdrPeak = hdrPeak_->getValueAtTime(time);
         s.hdrWhite = hdrWhite_->getValueAtTime(time);
+        s.sdrContrast = sdrContrast_->getValueAtTime(time);
+        s.sdrRolloff = sdrRolloff_->getValueAtTime(time);
+        s.sdrGamut = sdrGamut_->getValueAtTime(time);
         system_->getValueAtTime(time, s.system);
         printStyle_->getValueAtTime(time, s.printStyle);
         grainStyle_->getValueAtTime(time, s.grainStyle);
@@ -928,6 +942,9 @@ private:
     OFX::ChoiceParam* outputSpace_ = nullptr;
     OFX::ChoiceParam* outputRendering_ = nullptr;
     OFX::DoubleParam* hdrPeak_ = nullptr;
+    OFX::DoubleParam* sdrContrast_ = nullptr;
+    OFX::DoubleParam* sdrRolloff_ = nullptr;
+    OFX::DoubleParam* sdrGamut_ = nullptr;
     OFX::DoubleParam* hdrWhite_ = nullptr;
     OFX::ChoiceParam* system_ = nullptr;
     OFX::ChoiceParam* printStyle_ = nullptr;
@@ -1116,6 +1133,14 @@ public:
                   "PQ rendering ceiling. Default 1000 nits; match the intended mastering target. Only active with PQ output and HDR rendering. Does not configure Resolve monitoring, export tags or HDR metadata.");
         addDouble(desc,page,"hdrWhite","HDR Reference White (nits)",203,80,300,1,nullptr,
                   "Linear white 1 maps to this luminance in PQ; default 203 nits. Active for PQ output, including Conversion Only. Peak Luminance remains higher across the allowed ranges. Creative tone/print can compress highlights before output; lower their tone strengths for more headroom.");
+
+        auto* sdr = addGroup(desc,page,"sdrViewing","SDR Viewing",false);
+        addDouble(desc,page,"sdrContrast","Viewing Contrast",0,-1,1,.01,sdr,
+                  "Adjusts the SDR viewing curve around fixed middle gray, before creative negative/print response. Negative softens contrast; positive deepens shadows and increases midtone separation. Zero preserves the v0.39 curve. Does not replace camera Exposure or recover clipped detail. Built-in looks preserve this output setting.");
+        addDouble(desc,page,"sdrRolloff","Highlight Rolloff",0,-1,1,.01,sdr,
+                  "Moves the SDR shoulder while preserving middle gray and its slope. Positive starts rolloff earlier for darker, softer highlights; negative delays rolloff for brighter highlights. Zero preserves v0.39. Negative and Print tone curves can add further compression. Inactive outside SDR rendering.");
+        addDouble(desc,page,"sdrGamut","Gamut Compression",0,-1,1,.01,sdr,
+                  "Adjusts the SDR display-gamut shoulder independently of Film Color Gamut Compression. Negative reduces in-gamut softening; positive starts compression earlier. Zero preserves v0.39. Minus one still limits out-of-gamut RGB to the display boundary; it does not disable gamut safety. Inactive outside SDR rendering.");
 
         choice = desc.defineChoiceParam("filmGauge");
         choice->setLabels("Film Gauge", "Film Gauge", "Film Gauge");

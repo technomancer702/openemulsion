@@ -122,6 +122,19 @@ int main()
         s[0]=1; s[19]=film::Negative|film::SelectiveColor; s[1]=0;
         s[film::OutputRendering]=color::Automatic; s[film::SelectiveView]=1;
         require(color::prepare(s.data()).highlightRetention==0,"Retention affects selective matte");
+        s[film::SDRContrast]=s[film::SDRRolloff]=s[film::SDRGamut]=1;
+        for (int mode=0; mode<7; ++mode) for (int output : {1,5,color::HDRPQOutput})
+            for (int rendering=0; rendering<color::RenderingCount; ++rendering) for (int view : {0,1}) {
+                s[0]=static_cast<float>(mode); s[27]=static_cast<float>(output);
+                s[film::OutputRendering]=static_cast<float>(rendering); s[film::SelectiveView]=static_cast<float>(view);
+                const auto cp=color::prepare(s.data());
+                const int modules=film::modulesForSettings(s.data());
+                const bool enabled=color::sdrControlsEnabled(cp,modules,view);
+                require((cp.sdrContrast!=0)==enabled && (cp.sdrRolloff!=0)==enabled && (cp.sdrGamut!=0)==enabled,
+                        "SDR controls UI/render policy mismatch");
+                require(!enabled || ((mode==0 || mode==1) && output==1 && rendering!=color::ConversionOnly &&
+                         rendering!=color::StandardHDR && view==0),"SDR controls leak into other paths");
+            }
         std::puts("Module UI: every mode/mask, all control bindings, toggle synchronization, manual-disable policy, print locks, neutral Development, globals, mode transitions and retention UI/render policies pass.");
         return 0;
     } catch (const std::exception& error) {

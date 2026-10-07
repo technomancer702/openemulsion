@@ -1,4 +1,4 @@
-# OFX Color Spaces (v0.39)
+# OFX Color Spaces (v0.40)
 
 ## Resolve Workflow
 
@@ -91,6 +91,46 @@ applies wherever SDR rendering is active, even without Film Color; the extra
 retention adjustment below still requires that module.
 
 Source highlight extraction and selective-color keys still use the original converted scene signal (camera-balanced for selection when Film Color is enabled). Rendering does not change glow extraction thresholds, source hue selection or procedural grain coordinates. Grain tonal weighting follows the image at its selected insertion point, so its amplitude can legitimately change with the improved tone response.
+
+### SDR Viewing Controls
+
+The collapsed **SDR Viewing** group exposes three centered adjustments, each
+from -1 to +1. Zero preserves v0.39, including its colored-emitter detail response.
+They are output context, not stock-recipe values: built-in looks preserve them,
+and user presets capture them in format 6. Preserve Color Spaces also preserves
+these settings when loading a file. Older files receive zero adjustments.
+
+- **Viewing Contrast:** negative softens shadow/midtone contrast; positive deepens
+  shadows and increases midtone separation. Scene gray 0.18 remains display-linear
+  0.12. This is separate from Negative/Print Contrast and does not adjust exposure.
+- **Highlight Rolloff:** positive starts the shoulder earlier, giving darker/softer
+  highlights; negative delays it, giving brighter highlights. Gray and its slope
+  remain fixed. Negative/Print tone curves can add further compression.
+- **Gamut Compression:** positive begins SDR display-boundary softening earlier;
+  negative reduces it. Separate from Film Color Gamut Compression. Minus one
+  removes in-boundary softening, not boundary safety: out-of-gamut RGB is still
+  radially limited to the display boundary.
+
+For contrast adjustment `c` and rolloff `r`, the midtone slope is
+`m = (13/15)*(1+0.25*c)` and shoulder join is `j = 0.6-0.25*r`.
+Below gray the curve is `0.12*x / (0.18*a-(a-1)*x)`, with
+`a = 1.3*(1+0.25*c)`. Between gray and `j` it is `0.12+m*(x-0.18)`.
+Above `j`, let `h = 1-(0.12+m*(j-0.18))`; the curve is
+`1-h*h/(h+m*(x-j))`. These joins retain matching value/slope, bounded monotonic
+output and no black pedestal across the allowed settings. The peak-aware emitter
+shoulder uses the adjusted tone and its derivative too, avoiding a separate,
+inconsistent highlight curve. The automatic emitter input shoulder is unchanged.
+
+For gamut adjustment `g`, the normalized boundary knee is `0.8-0.2*g`.
+The curve and gamut helpers explicitly retain the original arithmetic at zero.
+The controls use the existing shared CPU/OpenCL composite pass, with no new
+image buffers, passes, readbacks or per-pixel iterative gamut searches.
+
+They are greyed out and ignored in Conversion Only, HDR, log/linear destinations,
+display-ready Auto, texture-only/bypass and diagnostic matte paths. They remain
+available in SDR with Film Color, Print, non-neutral Development or Selective Color
+active; Film Color itself need not be enabled. No source reconstruction or
+calibrated ARRI/ACES/SpektraFilm transform match is claimed.
 
 ### Highlight Color Retention
 

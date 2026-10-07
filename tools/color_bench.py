@@ -43,6 +43,12 @@ class Renderer:
         self.dll.oe_render.argtypes = [FLOATS, FLOATS, ctypes.c_size_t, FLOATS, ctypes.c_size_t, ctypes.c_float]
         self.dll.oe_decode_linear.argtypes = [FLOATS, FLOATS, ctypes.c_size_t, ctypes.c_int]
         self.count = self.dll.oe_settings_count()
+        self.sdr_indices = {}
+        for control in ["contrast", "rolloff", "gamut"]:
+            function = getattr(self.dll, f"oe_sdr_{control}_index", None)
+            if function is not None:
+                function.restype = ctypes.c_int
+                self.sdr_indices[control] = function()
         self.presets = {self.dll.oe_preset_label(i).decode(): i for i in range(self.dll.oe_preset_count())}
 
     def settings(self, label: str, source: int, rendering: int = 0, retention: float = 0) -> np.ndarray:

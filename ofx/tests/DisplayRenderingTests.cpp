@@ -156,6 +156,69 @@ static void testHighlightRetention()
     }
 }
 
+static void testSDRControls()
+{
+    auto p=color::prepare(color::LinearRec709,1,false,color::StandardSDR);
+    for (float contrast : {-1.0f,0.0f,1.0f}) for (float rolloff : {-1.0f,0.0f,1.0f}) {
+        p.sdrContrast=contrast; p.sdrRolloff=rolloff;
+        near(color_sdr_view_tone(0,p),0,0,"SDR controls lift black");
+        near(color_sdr_view_tone(.18f,p),.12f,2e-7f,"SDR controls move middle gray");
+        const float join=.6f-.25f*rolloff;
+        for (float x : {.18f,join}) {
+            const float h=1e-4f;
+            near((color_sdr_view_tone(x,p)-color_sdr_view_tone(x-h,p))/h,
+                 (color_sdr_view_tone(x+h,p)-color_sdr_view_tone(x,p))/h,.006f,"Adjusted curve has a slope discontinuity");
+            near(color_sdr_view_slope(x,p),
+                 (color_sdr_view_tone(x+h,p)-color_sdr_view_tone(x-h,p))/(2*h),.006f,"Adjusted slope mismatch");
+        }
+        float previous=-1;
+        for (int i=0; i<2000; ++i) {
+            const float x=std::exp2(-20.0f+i*.017f), mapped=color_sdr_view_tone(x,p);
+            require(std::isfinite(mapped) && mapped>=previous && mapped>=0 && mapped<=1,"Adjusted tone is not bounded/monotonic");
+            if (x<=1) require(mapped<x,"Adjusted curve exceeds emitter ceiling below scene white");
+            previous=mapped;
+            if (contrast==0 && rolloff==0) require(mapped==color_sdr_tone(x),"Default curve changed");
+        }
+        for (float gamut : {-1.0f,0.0f,1.0f}) for (float retention : {0.0f,1.0f}) {
+            p.sdrGamut=gamut; p.highlightRetention=retention;
+            for (const auto ray : std::array<ColorRgb,7>{{{1,1,1},{1,.01f,.025f},{.01f,1,.02f},
+                    {.01f,.03f,1},{1,1,.01f},{1,-.05f,.25f},{.38f,.2f,.12f}}}) {
+                float previousY=-1;
+                for (int i=0; i<1800; ++i) {
+                    const float e=std::exp2(-16.0f+i*.018f);
+                    const ColorRgb source {ray.r*e,ray.g*e,ray.b*e};
+                    const auto result=color_curve_rgb(color_render_work(color_curve_rgb(source,ColorSRGB,1),p),ColorSRGB,0);
+                    for (float v : {result.r,result.g,result.b}) require(std::isfinite(v) && v>=0 && v<=1.000001f,"Adjusted SDR RGB boundary");
+                    require(luma(result)+3e-6f>=previousY,"Adjusted SDR reverses exposure brightness");
+                    previousY=luma(result);
+                }
+            }
+        }
+    }
+    p=color::prepare(color::LinearRec709,1,false,color::StandardSDR);
+    const float shadow=color_sdr_view_tone(.01f,p), highlight=color_sdr_view_tone(1,p);
+    p.sdrContrast=1;
+    require(color_sdr_view_tone(.01f,p)<shadow*.85f && color_sdr_view_tone(1,p)>highlight+.03f,"Viewing Contrast is ineffective");
+    p.sdrContrast=0; p.sdrRolloff=1;
+    require(color_sdr_view_tone(.2f,p)==color_sdr_tone(.2f),"Rolloff affects lower midtones");
+    require(color_sdr_view_tone(1,p)<highlight-.04f,"Highlight Rolloff is ineffective");
+    const ColorRgb chip {.7f,.04f,.02f};
+    const float y=luma(chip);
+    p.sdrGamut=-1; const auto less=color_sdr_view_gamut(chip,y,p);
+    p.sdrGamut=1; const auto more=color_sdr_view_gamut(chip,y,p);
+    require(more.r<less.r-.02f && more.g>less.g,"SDR gamut control is ineffective");
+    near(luma(more),luma(less),2e-6f,"SDR gamut control moves luminance");
+    // Centered controls should change smoothly, including at the default fast path.
+    ColorRgb last {};
+    for (int i=0; i<=200; ++i) {
+        p.sdrContrast=p.sdrRolloff=p.sdrGamut=-1+i*.01f;
+        const auto c=color_render_work(color_curve_rgb({4,.1f,.2f},ColorSRGB,1),p);
+        if (i) for (float d : {c.r-last.r,c.g-last.g,c.b-last.b}) require(std::abs(d)<.025f,"SDR control jump");
+        last=c;
+    }
+    std::puts("SDR viewing controls: fixed gray/black, C1 joins, visible smooth changes, all endpoint combinations, exposure order, gamut bounds and zero-default curve pass.");
+}
+
 static void testHDR()
 {
     // Independent ST 2084 numerical anchors (normalized float code values).
@@ -260,6 +323,7 @@ int main()
 {
     try {
         testHDR();
+        testSDRControls();
         testEmitterShoulder();
         testEmitterDetail();
         testHighlightRetention();

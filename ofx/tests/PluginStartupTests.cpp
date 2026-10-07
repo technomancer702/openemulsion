@@ -255,6 +255,14 @@ void testContext(OfxPlugin& plugin, const char* context)
     }
     require(value<double>(descriptor.parameters.at("hdrPeak").properties, kOfxParamPropDefault) == 1000, "Peak default");
     require(value<double>(descriptor.parameters.at("hdrWhite").properties, kOfxParamPropDefault) == 203, "White default");
+    require(value<int>(descriptor.parameters.at("sdrViewing").properties,kOfxParamPropGroupOpen)==0,"SDR group starts expanded");
+    for (const char* name : {"sdrContrast","sdrRolloff","sdrGamut"}) {
+        auto& p=descriptor.parameters.at(name).properties;
+        require(value<std::string>(p,kOfxParamPropParent)=="sdrViewing","SDR slider parent");
+        require(value<std::string>(p,kOfxParamPropType)==kOfxParamTypeDouble,"SDR slider type");
+        require(value<double>(p,kOfxParamPropDefault)==0 && value<double>(p,kOfxParamPropMin)==-1 &&
+                value<double>(p,kOfxParamPropMax)==1,"SDR slider default/range");
+    }
     for (auto& entry : descriptor.parameters) {
         const auto parent = value<std::string>(entry.second.properties, kOfxParamPropParent);
         if (parent.empty()) continue;
@@ -272,18 +280,21 @@ void testContext(OfxPlugin& plugin, const char* context)
     }
     require(peak < white && white < gauge, "HDR sliders must precede Film Gauge");
 
-    for (bool hdr : {false, true}) {
+    for (int rendering : {0,1,2}) {
+        const bool hdr=rendering==2, sdr=rendering==1;
         Effect instance = descriptor;
         setString(handle(instance.properties), kOfxImageEffectPropContext, 0, context);
-        if (hdr) {
+        if (hdr || sdr) {
             // Scene LogC3 + Auto activates both HDR sliders on the first UI refresh.
             set(handle(instance.parameters.at("sourceSpace").properties), kOfxParamPropDefault, 0, int(color::AlexaLogC3));
-            set(handle(instance.parameters.at("outputSpace").properties), kOfxParamPropDefault, 0, color::HDRPQOutput);
+            set(handle(instance.parameters.at("outputSpace").properties), kOfxParamPropDefault, 0, hdr ? color::HDRPQOutput : 1);
         }
         action(kOfxActionCreateInstance, instance);
         require(value<void*>(instance.properties, kOfxPropInstanceData) != nullptr, "Missing instance data");
         for (const char* name : {"hdrPeak", "hdrWhite"})
             require(value<int>(instance.parameters.at(name).properties, kOfxParamPropEnabled) == int(hdr), "HDR enable state");
+        for (const char* name : {"sdrContrast","sdrRolloff","sdrGamut"})
+            require(value<int>(instance.parameters.at(name).properties,kOfxParamPropEnabled)==int(sdr),"SDR enable state");
         action(kOfxActionDestroyInstance, instance);
         require(value<void*>(instance.properties, kOfxPropInstanceData) == nullptr, "Instance not destroyed");
     }

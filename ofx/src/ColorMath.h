@@ -43,6 +43,7 @@ typedef struct ColorParameters {
     float highlightRetention;
     int renderHDR;
     float hdrPeak, hdrWhite;
+    float sdrContrast, sdrRolloff, sdrGamut;
 } ColorParameters;
 
 static inline float color_signed_power(float x, float exponent)
@@ -213,6 +214,38 @@ static inline float color_sdr_slope(float x)
     return 0.8666666667f*0.516f*0.516f/(denominator*denominator);
 }
 
+// Centered controls preserve the established curve exactly at zero. Changing
+// contrast pivots at scene gray; rolloff moves only the C1 shoulder join.
+static inline float color_sdr_view_tone(float x, ColorParameters p)
+{
+    if (p.sdrContrast == 0.0f && p.sdrRolloff == 0.0f) return color_sdr_tone(x);
+    if (x <= 0.0f) return 0.0f;
+    const float contrast = 1.0f + 0.25f*p.sdrContrast;
+    const float toe = 1.3f*contrast;
+    if (x <= 0.18f) return 0.12f*x/(0.18f*toe-(toe-1.0f)*x);
+    const float slope = 0.8666666667f*contrast;
+    const float join = 0.60f-0.25f*p.sdrRolloff;
+    if (x <= join) return 0.12f+slope*(x-0.18f);
+    const float knee = 0.12f+slope*(join-0.18f), headroom = 1.0f-knee;
+    return 1.0f-headroom*headroom/(headroom+slope*(x-join));
+}
+
+static inline float color_sdr_view_slope(float x, ColorParameters p)
+{
+    if (p.sdrContrast == 0.0f && p.sdrRolloff == 0.0f) return color_sdr_slope(x);
+    const float contrast = 1.0f+0.25f*p.sdrContrast;
+    const float toe = 1.3f*contrast;
+    if (x <= 0.18f) {
+        const float denominator = 0.18f*toe-(toe-1.0f)*x;
+        return 0.12f*0.18f*toe/(denominator*denominator);
+    }
+    const float slope = 0.8666666667f*contrast, join = 0.60f-0.25f*p.sdrRolloff;
+    if (x <= join) return slope;
+    const float headroom = 1.0f-(0.12f+slope*(join-0.18f));
+    const float denominator = headroom+slope*(x-join);
+    return slope*headroom*headroom/(denominator*denominator);
+}
+
 // Join the existing tone at peak RGB = 1 with a matching slope. Along a
 // fixed chromatic ray, ratio is constant and both shoulders are monotonic.
 // Limiting headroom by that ratio avoids forcing a saturated emitter to white.
@@ -228,6 +261,18 @@ static inline float color_sdr_emitter_tone(float y, float peak)
     return knee + headroom*(high/(headroom+high));
 }
 
+static inline float color_sdr_view_emitter_tone(float y, float peak, ColorParameters p)
+{
+    if (p.sdrContrast == 0.0f && p.sdrRolloff == 0.0f) return color_sdr_emitter_tone(y,peak);
+    if (peak <= 1.0f) return color_sdr_view_tone(y,p);
+    const float ratio = COLOR_MIN(1.0f,y/peak);
+    if (ratio <= 0.0f) return 0.0f;
+    const float knee = color_sdr_view_tone(ratio,p), headroom = ratio-knee;
+    if (headroom <= 0.0f) return knee;
+    const float high = color_sdr_view_slope(ratio,p)*COLOR_MAX(0.0f,y-ratio);
+    return knee+headroom*(high/(headroom+high));
+}
+
 static inline ColorRgb color_sdr_gamut(ColorRgb c, float mapped)
 {
     const float hi = COLOR_MAX(c.r, COLOR_MAX(c.g,c.b)) - mapped;
@@ -241,6 +286,26 @@ static inline ColorRgb color_sdr_gamut(ColorRgb c, float mapped)
         c.b = mapped + (c.b-mapped) * scale;
     }
     // Only guard rounding at the display boundary; radial mapping does the compression.
+    c.r = COLOR_MAX(0.0f,COLOR_MIN(1.0f,c.r));
+    c.g = COLOR_MAX(0.0f,COLOR_MIN(1.0f,c.g));
+    c.b = COLOR_MAX(0.0f,COLOR_MIN(1.0f,c.b));
+    return c;
+}
+
+static inline ColorRgb color_sdr_view_gamut(ColorRgb c, float mapped, ColorParameters p)
+{
+    if (p.sdrGamut == 0.0f) return color_sdr_gamut(c,mapped);
+    const float hi = COLOR_MAX(c.r,COLOR_MAX(c.g,c.b))-mapped;
+    const float lo = mapped-COLOR_MIN(c.r,COLOR_MIN(c.g,c.b));
+    const float distance = COLOR_MAX(hi/COLOR_MAX(1.0f-mapped,1e-7f),lo/COLOR_MAX(mapped,1e-7f));
+    const float knee = 0.8f-0.2f*p.sdrGamut, headroom = 1.0f-knee;
+    if (distance > knee) {
+        const float excess = distance-knee;
+        const float scale = (knee+headroom*excess/(headroom+excess))/distance;
+        c.r = mapped+(c.r-mapped)*scale;
+        c.g = mapped+(c.g-mapped)*scale;
+        c.b = mapped+(c.b-mapped)*scale;
+    }
     c.r = COLOR_MAX(0.0f,COLOR_MIN(1.0f,c.r));
     c.g = COLOR_MAX(0.0f,COLOR_MIN(1.0f,c.g));
     c.b = COLOR_MAX(0.0f,COLOR_MIN(1.0f,c.b));
@@ -276,17 +341,17 @@ static inline ColorRgb color_render_work(ColorRgb work, ColorParameters p)
     }
     const float y = linear.r * 0.2126f + linear.g * 0.7152f + linear.b * 0.0722f;
     if (y <= 0.0f) { ColorRgb black = {0,0,0}; return black; }
-    const float mapped = color_sdr_tone(y), gain = mapped / y;
+    const float mapped = color_sdr_view_tone(y,p), gain = mapped / y;
     ColorRgb c = {linear.r * gain, linear.g * gain, linear.b * gain};
-    c = color_sdr_gamut(c,mapped);
+    c = color_sdr_view_gamut(c,mapped,p);
     if (peak > 1.0f) {
         // The chroma gate is exposure invariant; an intensity-ramped blend can
         // reverse brightness as its weight rises, hiding detail rather than saving it.
         const float weight = (0.50f+0.30f*p.highlightRetention)*gate;
         if (weight > 0.0f) {
-            const float retainedY = color_sdr_emitter_tone(y,peak), retainedGain = retainedY/y;
+            const float retainedY = color_sdr_view_emitter_tone(y,peak,p), retainedGain = retainedY/y;
             ColorRgb retained = {linear.r*retainedGain,linear.g*retainedGain,linear.b*retainedGain};
-            retained = color_sdr_gamut(retained,retainedY);
+            retained = color_sdr_view_gamut(retained,retainedY,p);
             c.r += (retained.r-c.r)*weight;
             c.g += (retained.g-c.g)*weight;
             c.b += (retained.b-c.b)*weight;
