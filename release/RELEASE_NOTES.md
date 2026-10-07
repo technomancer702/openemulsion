@@ -1,6 +1,17 @@
-# OpenEmulsion v0.31
+# OpenEmulsion v0.32
 
-Experimental Windows x64 genre preset expansion. Stock and movie references are artistic interpretations, not measured film profiles or exact movie grades. Existing recipes, renderer math and default controls are unchanged.
+Experimental Windows x64 genre presets and Selective Color. Stock and movie references are artistic interpretations, not measured film profiles or exact movie grades. Existing response math and recipe values are unchanged; the new finishing operation is neutral by default.
+
+## Changes in v0.32
+
+- Added Winter Crime (Fargo 1996), Steel Blue (Terminator 2) and Nostromo (Alien 1979), based on primary production interviews and original editable recipes.
+- Added Graphic Noir category and red, blue and yellow Sin City interpretations, bringing the library to 52 named looks plus Custom. IDs are appended; older recipe values are unchanged.
+- Added independent Selective Color with Amount, Keep Hue, Hue Range, Hue Feather, Minimum Saturation and Image/Selection Matte. Available in Full/Color Only, with Enable first and normal disabled-control greying. Amount defaults to zero.
+- Source-keyed selection before film/texture avoids added grain or print shifts changing the key. Final desaturation after print/glow/grain keeps rejected pixels neutral. One hue interval, not object recognition, recoloring or automatic comic-book lighting.
+- CPU/OpenCL share the new per-pixel operation in the existing composite pass; no extra buffers, blur passes or readbacks. Exact zero/disabled/bypass behavior remains, and selective-only output conversion is supported. Matte preserves alpha and is not gamma/log-encoded.
+- Portable presets now use format version 2. Complete version-1 files migrate with all prior settings retained and Selective Color neutral/disabled. New files require v0.32 or later. Strict incomplete/mixed-schema rejection is retained.
+- Added hue wrap/feather, neutral/HDR/negative handling, working-luminance, exact retention/zero, raw matte/alpha, independent output conversion, grain/glow finishing, all-space/mode/queue parity and legacy-file migration checks. Full recipe coverage and 4K timing include all 52 looks.
+- Film-name references remain artistic interpretations, not exact matches or endorsements. Native UI, moving/noisy footage, Undo and project reload still need Resolve evaluation. See `docs/SELECTIVE_COLOR.md` and `docs/CREATIVE_LOOK_RESEARCH.md`.
 
 ## Changes in v0.31
 
@@ -52,10 +63,10 @@ Experimental Windows x64 genre preset expansion. Stock and movie references are 
 
 ## Included
 
-- Thirty-seven categorized editable recipes, including Neutral, stock-inspired and creative looks, plus non-destructive Custom.
+- Fifty-two categorized editable recipes, including Neutral, stock and creative interpretations, plus non-destructive Custom.
 - Portable user preset snapshots with selective context preservation.
 - Six original creative negative families, including monochrome finishing.
-- Independent Film Color, Film Development, Print, Halation, Aura, Bloom, and Grain modules, with mode-driven toggles and disabled-control greying.
+- Independent Film Color, Film Development, Print, Halation, Aura, Bloom, Grain and Selective Color modules, with mode-driven toggles and disabled-control greying.
 - Film Color's continuous gamut-compression amount, with the near-zero jump fixed.
 - Full, Standard, Extended, and Custom print styles, with inherited and locked preset recipes.
 - LogC3 EI-800, LogC4, Sony, Blackmagic, RED, Canon, Panasonic, ACES, DaVinci Wide Gamut, and standard display/linear input choices.

@@ -10,7 +10,7 @@
 - Your own camera LUT after this node: choose its camera input and `Halation, Bloom & Grain Only` or `Grain Only`. Those modes retain the camera encoding for the LUT.
 - Your own LUT before this node: select the LUT's output space, not the original camera space.
 
-Texture-only processing always returns the input gamut and encoding, regardless of the output dropdown. This also applies to Full mode with Film Color, Film Development, and Print disabled. Texture still changes pixels, but no film color or print curves are applied. Bypass, all-disabled processing, and zero-strength texture preserve incoming RGBA exactly. Halation Matte and Bloom Matte are direct diagnostic images, not camera-log images.
+Texture-only processing always returns the input gamut and encoding, regardless of the output dropdown. This also applies to Full mode with Film Color, Film Development, Print and Selective Color inactive. Texture still changes pixels, but no film color or print curves are applied. Bypass, all-disabled processing, and zero-strength texture preserve incoming RGBA exactly. Halation Matte, Bloom Matte and Selection Matte are direct diagnostic images, not camera-log images.
 
 New instances default to input `Rec.709 / Gamma 2.4` and output `Same as Input`. Select the actual space entering the node; the plugin does not auto-detect it. There is no unmanaged input path. Input choice indices changed in this development update: recreate older test instances and select their input explicitly.
 
@@ -36,7 +36,7 @@ The input dropdown contains these 15 combinations:
 | ACES AP1 | Linear (ACEScg) |
 | Rec.709 | Linear |
 
-Outputs: Same as Input, Rec.709/Gamma 2.4, DaVinci Wide Gamut/Intermediate, ACEScct/AP1, sRGB, and Linear/Rec.709. Output conversion runs only while Film Color, non-neutral Film Development, or Print is active. This is not a standalone CST: disabling all effects means pass-through, not input-to-output conversion.
+Outputs: Same as Input, Rec.709/Gamma 2.4, DaVinci Wide Gamut/Intermediate, ACEScct/AP1, sRGB, and Linear/Rec.709. Output conversion runs only while Film Color, non-neutral Film Development, Print, or non-neutral Selective Color is active. Diagnostic mattes are not output-encoded. This is not a standalone CST: disabling all effects means pass-through, not input-to-output conversion.
 
 ## Math and Limits
 

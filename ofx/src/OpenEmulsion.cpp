@@ -23,10 +23,10 @@
 
 #define kPluginName "OpenEmulsion"
 #define kPluginGrouping "OpenEmulsion"
-#define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, halation, aura, and linear-light bloom, with OpenCL acceleration."
+#define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, halation, aura, linear-light bloom, and selective color, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 31
+#define kPluginVersionMinor 32
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -49,6 +49,9 @@ struct Settings {
     bool enableAura = true;
     bool enableBloom = true;
     bool enableGrain = true;
+    bool enableSelectiveColor = true;
+    double selectiveAmount = 0, selectiveHue = 0, selectiveRange = 15, selectiveSoftness = 15, selectiveSaturation = .25;
+    int selectiveView = 0;
     double exposure = 0.0;
     double temperature = 0.0;
     double tint = 0.0;
@@ -119,7 +122,8 @@ int moduleMask(const Settings& s)
 {
     return (s.enableNegative ? film::Negative : 0) | (s.enablePrint ? film::Print : 0) |
            (s.enableDevelopment && (s.pushPull != 0 || s.colorRichness != 0 || s.splitTone != 0) ? film::Development : 0) |
-           (s.enableHalation ? film::Halation : 0) | (s.enableAura ? film::Aura : 0) | (s.enableGrain ? film::Grain : 0) | (s.enableBloom ? film::Bloom : 0);
+           (s.enableHalation ? film::Halation : 0) | (s.enableAura ? film::Aura : 0) | (s.enableGrain ? film::Grain : 0) | (s.enableBloom ? film::Bloom : 0) |
+           (s.enableSelectiveColor && (s.selectiveAmount > 0 || s.selectiveView != 0) ? film::SelectiveColor : 0);
 }
 
 bool colorEnabled(const Settings& s)
@@ -154,7 +158,7 @@ bool grainEnabled(const Settings& s)
 
 bool isIdentitySettings(const Settings& s)
 {
-    return film::isIdentity(s.mode, moduleMask(s), static_cast<float>(s.halation), static_cast<float>(s.aura), static_cast<float>(s.grain), static_cast<float>(s.bloom));
+    return film::isIdentity(s.mode, moduleMask(s), static_cast<float>(s.halation), static_cast<float>(s.aura), static_cast<float>(s.grain), static_cast<float>(s.bloom), static_cast<float>(s.selectiveAmount), s.selectiveView);
 }
 
 float clampf(float v, float lo, float hi)
@@ -290,8 +294,10 @@ public:
                     }
                     const Rgb work = color_to_work(original, colorParameters_);
                     Rgb c = work;
+                    Rgb selectionSource = work;
                     if (colorEnabled(settings_)) {
                         c = cameraStage(c, settings_);
+                        selectionSource = c;
                         c = response_negative_stage(c, responseParameters_);
                     }
                     if (modules & film::Development) c = response_development(c, responseParameters_);
@@ -331,9 +337,10 @@ public:
                         c.b += delta.b;
                     }
                     c = response_finish(c, modules, responseParameters_);
+                    if (modules & film::SelectiveColor) c = response_selective(c, selectionSource, responseParameters_);
                     if (clampOutput) c = {std::max(c.r, 0.0f), std::max(c.g, 0.0f), std::max(c.b, 0.0f)};
-                    if (settings_.mode != 5 && settings_.mode != 6) {
-                        const bool unchanged = !(modules & (film::Negative | film::Development | film::Print)) && c.r == work.r && c.g == work.g && c.b == work.b;
+                    if (settings_.mode != 5 && settings_.mode != 6 && !((modules & film::SelectiveColor) && settings_.selectiveView == 1)) {
+                        const bool unchanged = !(modules & (film::Negative | film::Development | film::Print | film::SelectiveColor)) && c.r == work.r && c.g == work.g && c.b == work.b;
                         c = unchanged ? original : color_from_work(c, colorParameters_);
                     }
                     dstPix[0] = c.r;
@@ -420,6 +427,12 @@ private:
         out[film::BloomColor] = static_cast<float>(s.bloomColor);
         out[film::BloomProtection] = static_cast<float>(s.bloomProtection);
         out[film::GrainResponse] = static_cast<float>(s.grainResponse);
+        out[film::SelectiveAmount] = static_cast<float>(s.selectiveAmount);
+        out[film::SelectiveHue] = static_cast<float>(s.selectiveHue);
+        out[film::SelectiveRange] = static_cast<float>(s.selectiveRange);
+        out[film::SelectiveSoftness] = static_cast<float>(s.selectiveSoftness);
+        out[film::SelectiveSaturation] = static_cast<float>(s.selectiveSaturation);
+        out[film::SelectiveView] = static_cast<float>(s.selectiveView);
     }
 
     OFX::Image* src_ = nullptr;
@@ -502,6 +515,13 @@ public:
             if (control.kind == look::Choice) lookControls_[i].choice = fetchChoiceParam(control.name);
             else lookControls_[i].number = fetchDoubleParam(control.name);
         }
+        enableSelectiveColor_ = fetchBooleanParam("enableSelectiveColor");
+        selectiveAmount_ = fetchDoubleParam("selectiveAmount");
+        selectiveHue_ = fetchDoubleParam("selectiveHue");
+        selectiveRange_ = fetchDoubleParam("selectiveRange");
+        selectiveSoftness_ = fetchDoubleParam("selectiveSoftness");
+        selectiveSaturation_ = fetchDoubleParam("selectiveSaturation");
+        selectiveView_ = fetchChoiceParam("selectiveView");
         for (size_t i = 0; i < std::size(userpreset::ContextControls); ++i) {
             const auto& control = userpreset::ContextControls[i];
             if (control.kind == userpreset::Choice) contextControls_[i].choice = fetchChoiceParam(control.name);
@@ -536,7 +556,7 @@ public:
         for (int control = 0; control < printstyle::ControlCount; ++control)
             printRecipeControls_[control] = fetchDoubleParam(printstyle::Parameters[control].name);
         moduleToggles_ = {{enableNegative_, enableDevelopment_, enablePrint_, enableHalation_,
-                          enableAura_, enableBloom_, enableGrain_}};
+                          enableAura_, enableBloom_, enableGrain_, enableSelectiveColor_}};
         for (size_t i = 0; i < std::size(moduleui::Controls); ++i)
             moduleControls_[i] = getParam(moduleui::Controls[i].name);
         printStyle_->getValue(printStyleForUI_);
@@ -793,6 +813,13 @@ private:
         s.enableAura = enableAura_->getValueAtTime(time);
         s.enableBloom = enableBloom_->getValueAtTime(time);
         s.enableGrain = enableGrain_->getValueAtTime(time);
+        s.enableSelectiveColor = enableSelectiveColor_->getValueAtTime(time);
+        s.selectiveAmount = selectiveAmount_->getValueAtTime(time);
+        s.selectiveHue = selectiveHue_->getValueAtTime(time);
+        s.selectiveRange = selectiveRange_->getValueAtTime(time);
+        s.selectiveSoftness = selectiveSoftness_->getValueAtTime(time);
+        s.selectiveSaturation = selectiveSaturation_->getValueAtTime(time);
+        selectiveView_->getValueAtTime(time,s.selectiveView);
         s.exposure = exposure_->getValueAtTime(time);
         s.temperature = temperature_->getValueAtTime(time);
         s.tint = tint_->getValueAtTime(time);
@@ -900,6 +927,13 @@ private:
     OFX::BooleanParam* enableAura_ = nullptr;
     OFX::BooleanParam* enableBloom_ = nullptr;
     OFX::BooleanParam* enableGrain_ = nullptr;
+    OFX::BooleanParam* enableSelectiveColor_ = nullptr;
+    OFX::DoubleParam* selectiveAmount_ = nullptr;
+    OFX::DoubleParam* selectiveHue_ = nullptr;
+    OFX::DoubleParam* selectiveRange_ = nullptr;
+    OFX::DoubleParam* selectiveSoftness_ = nullptr;
+    OFX::DoubleParam* selectiveSaturation_ = nullptr;
+    OFX::ChoiceParam* selectiveView_ = nullptr;
     OFX::DoubleParam* exposure_ = nullptr;
     OFX::DoubleParam* temperature_ = nullptr;
     OFX::DoubleParam* tint_ = nullptr;
@@ -1104,6 +1138,8 @@ public:
         addToggle(desc, page, bloom, "enableBloom", "Enable");
         GroupParamDescriptor* grain = addGroup(desc, page, "grainControls", "Grain", true);
         addToggle(desc, page, grain, "enableGrain", "Enable");
+        GroupParamDescriptor* selective = addGroup(desc, page, "selectiveColorControls", "Selective Color", false);
+        addToggle(desc, page, selective, "enableSelectiveColor", "Enable");
 
         choice = desc.defineChoiceParam("system");
         choice->setLabels("Film System", "Film System", "Film System");
@@ -1204,6 +1240,17 @@ public:
         addDouble(desc, page, "bloomSoftness", "Highlight Transition", 0.35, 0.01, 2, 0.01, bloom, "Width above the threshold over which source contribution rises smoothly.");
         addDouble(desc, page, "bloomColor", "Source Color", 1, 0, 1, 0.01, bloom, "One retains source-highlight color. Zero makes diffusion neutral at the same linear luminance. Mono Negative still finishes monochrome.");
         addDouble(desc, page, "bloomProtection", "Protect Highlights", 0.8, 0, 1, 0.01, bloom, "Reduces bloom added to already bright destination pixels; does not reduce its spread into nearby shadows. One fully protects linear peaks at or above one.");
+        addDouble(desc, page, "selectiveAmount", "Amount", 0, 0, 1, .01, selective, "Zero leaves color unchanged; one makes unselected colors monochrome. Runs after print, glow and grain. Cannot restore color removed by Mono Negative or prior nodes.");
+        addDouble(desc, page, "selectiveHue", "Keep Hue", 0, 0, 360, 1, selective, "Source hue in managed Rec.709/sRGB: red 0/360, yellow 60, green 120, cyan 180, blue 240, magenta 300. Keyed before film/development/print and texture, after enabled camera balance. Selects colors, not objects.");
+        addDouble(desc, page, "selectiveRange", "Hue Range", 15, 0, 180, 1, selective, "Fully retained hue range on either side of Keep Hue, in degrees. 180 retains all hues meeting Minimum Saturation. Red selection wraps around zero.");
+        addDouble(desc, page, "selectiveSoftness", "Hue Feather", 15, 0, 90, 1, selective, "Smooth transition outside the retained range, in degrees. Zero makes a hard hue cutoff and can reveal noise or edge artifacts.");
+        addDouble(desc, page, "selectiveSaturation", "Minimum Saturation", .25, 0, 1, .01, selective, "Rejects pale/near-neutral source colors with a smooth 0.05 transition below the cutoff. Increase to reduce skin contamination when keeping red. Not face detection.");
+        choice = desc.defineChoiceParam("selectiveView");
+        choice->setLabels("View", "View", "View");
+        choice->appendOption("Image"); choice->appendOption("Selection Matte");
+        choice->setDefault(0); choice->setParent(*selective);
+        choice->setHint("White retains color, black becomes monochrome, gray is a partial selection. Shows the raw selection independently of Amount and Output Color Space; alpha is unchanged. Disabled and texture-only modes ignore this preview.");
+        page->addChild(*choice);
         IntParamDescriptor* seed = desc.defineIntParam("grainSeed");
         seed->setLabels("Grain Seed", "Grain Seed", "Grain Seed");
         seed->setDefault(0);

@@ -16,7 +16,7 @@ int main()
 {
     try {
         const std::array<int, 7> modeMasks {{
-            film::All, film::Negative | film::Development | film::Print,
+            film::All, film::Negative | film::Development | film::Print | film::SelectiveColor,
             film::Halation | film::Aura | film::Bloom | film::Grain, film::Grain,
             0, film::Halation | film::Aura, film::Bloom
         }};
@@ -45,7 +45,7 @@ int main()
                     changedMask = on ? changedMask | bit : changedMask & ~bit;
                     ++writes;
                 });
-                require(writes == 7 && changedMask == modeMasks[mode],"Mode does not synchronize all toggles");
+                require(writes == moduleui::Toggles.size() && changedMask == modeMasks[mode],"Mode does not synchronize all toggles");
                 const int active = modeMasks[mode] & enabled;
                 for (const auto& toggle : moduleui::Toggles) {
                     require(moduleui::controlEnabled(static_cast<int>(mode),film::All,toggle.module) ==

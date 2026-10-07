@@ -1,6 +1,6 @@
 # Upgrade Roadmap
 
-## Completed Through v0.31
+## Completed Through v0.32
 
 - Independent film/print color and tone strengths and in-module Enable toggles.
 - Disabled-module control greying, mode-driven Enable toggles, and mode-aware print-preset locks.
@@ -13,7 +13,8 @@
 - Monochrome finishing that includes print and texture.
 - Independently enabled Film Development: Push/Pull with grain-strength coupling and stable grain geometry, Richness, and Split Tone.
 - Advanced grain: horizontal desqueeze and independent RGB intensity.
-- Categorized top-level preset browser with 46 complete editable recipes, including Neutral, stock and creative interpretations. Non-destructive category/Custom browsing, stable stored IDs, preserved context and category/recipe/edit-policy plus CPU/OpenCL checks.
+- Categorized top-level preset browser with 52 complete editable recipes, including Neutral, stock and creative interpretations. Non-destructive category/Custom browsing, stable stored IDs, preserved context and category/recipe/edit-policy plus CPU/OpenCL checks.
+- Fargo, Terminator 2, Alien and three Sin City graphic-noir interpretations, with primary production research. Independent source-keyed Selective Color with raw matte, smooth hue wrap/feather and final texture-neutralizing desaturation, in the existing CPU/OpenCL composite pass. Neutral by default, with portable format-version-2 save/load and strict version-1 migration. See [Selective Color](SELECTIVE_COLOR.md).
 - Nine researched genre interpretations in Thriller, Horror and Sci-Fi; simplified stock labels without changing their artistic-approximation status. Synthetic color-only separation and shadow/palette intent checks, unchanged renderer math and existing recipes. See [Creative Look Research](CREATIVE_LOOK_RESEARCH.md).
 - Revised creative recipes with clearer cinema/neon/vintage/reversal-home-movie separation, restrained modern stock-family refinements, synthetic intent/skin/neutral checks, and per-look 4K timings. Existing saved tuning and Custom defaults remain unchanged. See [Look Presets](LOOK_PRESETS.md).
 - Targeted slider range expansion with unchanged defaults/presets, variance-normalized primary grain smoothing above Softness one, full-strength Mono semantic greying, historical response anchors, and expanded CPU/OpenCL/performance checks.

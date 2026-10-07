@@ -114,7 +114,7 @@ int main()
             apply(decoded,options,[&](size_t i, double v) { applied.controls[i] = v; ++controls; },
                 [&](size_t i, bool v) { applied.modules[i] = v; ++toggles; },
                 [&](size_t i, double v) { applied.context[i] = v; });
-            require(controls == std::size(look::Controls) && toggles == 7,"Incomplete preset import");
+            require(controls == std::size(look::Controls) && toggles == moduleui::Toggles.size(),"Incomplete preset import");
             require(applied.controls == original.controls && applied.modules == original.modules,"Creative tuning not restored");
             for (size_t i = 0; i < applied.context.size(); ++i)
                 require(applied.context[i] == (options.preserves(ContextControls[i].group) ? before.context[i] : original.context[i]),
@@ -135,7 +135,20 @@ int main()
             require(toJson(parse(older.dump())) == valid,"Older preset settings no longer load");
         }
         auto invalid = valid;
-        invalid["formatVersion"] = 2;
+        auto legacy = valid;
+        legacy["formatVersion"] = 1;
+        for (const auto& c : look::Controls) if (c.setting >= film::SelectiveAmount) legacy["controls"].erase(c.name);
+        legacy["modules"].erase("enableSelectiveColor");
+        const auto migrated = parse(legacy.dump());
+        for (size_t i=0; i<migrated.controls.size(); ++i)
+            require(migrated.controls[i] == (look::Controls[i].setting >= film::SelectiveAmount ?
+                look::Controls[i].initial : original.controls[i]),"Legacy migration changes existing settings");
+        require(!migrated.modules.back() && migrated.context == original.context,"Legacy import enables selective color or changes context");
+        auto brokenLegacy=legacy; brokenLegacy["controls"].erase("grain");
+        rejects([&] { parse(brokenLegacy.dump()); },"Incomplete legacy preset accepted");
+        brokenLegacy=legacy; brokenLegacy["controls"]["selectiveAmount"]=1;
+        rejects([&] { parse(brokenLegacy.dump()); },"Mixed-schema preset accepted");
+        invalid["formatVersion"] = 3;
         rejects([&] { parse(invalid.dump()); },"Future schema silently accepted");
         invalid = valid; invalid["formatVersion"] = 1.0;
         rejects([&] { parse(invalid.dump()); },"Non-integer schema accepted");

@@ -25,6 +25,8 @@ typedef struct FilmResponseParameters {
     float push, developmentContrast, richness, splitAmount;
     float splitPivot, splitWidth, splitShadows, splitHighlights;
     ColorRgb splitTint;
+    float selectiveAmount, selectiveHue, selectiveRange, selectiveSoftness, selectiveSaturation;
+    int selectiveView;
 } FilmResponseParameters;
 
 static inline float response_clamp(float x, float lo, float hi)
@@ -251,6 +253,41 @@ static inline ColorRgb response_print(ColorRgb c, FilmResponseParameters p)
     c.r += bias.r - correction; c.g += bias.g - correction; c.b += bias.b - correction;
     const float ceiling = p.printToneStrength >= 1.0f ? 1.0f : RESPONSE_MAX(1.0f, response_luma(c) + 0.05f);
     return response_mix(beforeCast, response_gamut(c, ceiling, p.printGamutKnee), p.printColorStrength);
+}
+
+// Source-keyed hue selection avoids grain and creative print shifts changing the matte.
+static inline float response_selective_mask(ColorRgb source, FilmResponseParameters p)
+{
+    source.r = RESPONSE_MAX(source.r, 0.0f);
+    source.g = RESPONSE_MAX(source.g, 0.0f);
+    source.b = RESPONSE_MAX(source.b, 0.0f);
+    const float high = RESPONSE_MAX(source.r, RESPONSE_MAX(source.g, source.b));
+    const float low = RESPONSE_MIN(source.r, RESPONSE_MIN(source.g, source.b));
+    const float chroma = high - low;
+    if (high <= 1e-7f || chroma <= 1e-7f) return 0.0f;
+    const float saturation = chroma / high;
+    const float saturationMask = p.selectiveSaturation <= 0.0f ? 1.0f :
+        response_smooth(RESPONSE_MAX(0.0f, p.selectiveSaturation - 0.05f), p.selectiveSaturation, saturation);
+    float hue = source.r == high ? (source.g - source.b) / chroma :
+        source.g == high ? 2.0f + (source.b - source.r) / chroma : 4.0f + (source.r - source.g) / chroma;
+    hue *= 60.0f;
+    if (hue < 0.0f) hue += 360.0f;
+    const float difference = COLOR_ABS(hue - p.selectiveHue);
+    const float distance = RESPONSE_MIN(difference, 360.0f - difference);
+    if (p.selectiveRange >= 180.0f) return saturationMask;
+    const float edge = RESPONSE_MIN(180.0f, p.selectiveRange + p.selectiveSoftness);
+    const float hueMask = edge <= p.selectiveRange ? (distance <= p.selectiveRange ? 1.0f : 0.0f) :
+        1.0f - response_smooth(p.selectiveRange, edge, distance);
+    return hueMask * saturationMask;
+}
+
+static inline ColorRgb response_selective(ColorRgb c, ColorRgb source, FilmResponseParameters p)
+{
+    if (p.selectiveAmount <= 0.0f && p.selectiveView == 0) return c;
+    const float mask = response_selective_mask(source, p);
+    if (p.selectiveView != 0) { ColorRgb matte = {mask,mask,mask}; return matte; }
+    if (mask >= 1.0f) return c;
+    return response_saturation(c, 1.0f - p.selectiveAmount * (1.0f - mask));
 }
 
 #ifndef __cplusplus

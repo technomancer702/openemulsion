@@ -1051,6 +1051,55 @@ static void writeResponsePreview(const char* path, bool development = false)
         "columns Full/Standard/Extended/Custom; bands gray/skin/colors/HDR");
 }
 
+static ColorRgb hueSample(float hue)
+{
+    const float h=std::fmod(hue+360,360)/60;
+    const float x=1-std::abs(std::fmod(h,2.0f)-1);
+    if (h<1) return {1,x,0}; if (h<2) return {x,1,0}; if (h<3) return {0,1,x};
+    if (h<4) return {0,x,1}; if (h<5) return {x,0,1}; return {1,0,x};
+}
+
+static void testSelectiveColor()
+{
+    auto s=filmSettings();
+    s[film::SelectiveAmount]=1; s[film::SelectiveRange]=12; s[film::SelectiveSoftness]=14;
+    s[film::SelectiveSaturation]=.45;
+    auto p=response::prepare(s.data());
+    const ColorRgb red{.8f,.01f,.01f}, green{.01f,.8f,.01f};
+    requireRgbNear(response_selective(red,red,p),red,0,"Selected red changes");
+    const float y=response_luma(green);
+    requireRgbNear(response_selective(green,green,p),{y,y,y},1e-7f,"Unselected green is not neutral");
+    for (const auto input : std::array<ColorRgb,5>{{{0,0,0},{.5f,.5f,.5f},{-.1f,-.2f,-.3f},{8,0,0},{0,8,0}}}) {
+        const float mask=response_selective_mask(input,p);
+        require(std::isfinite(mask) && mask >= 0 && mask <= 1,"Selective mask is unbounded");
+        const auto c=response_selective(input,input,p);
+        requireNear(response_luma(c),response_luma(input),2e-6f,"Selective changes working luminance");
+    }
+    require(response_selective_mask({.5f,.49f,.49f},p)==0,"Near-neutral source leaks into selection");
+    requireNear(response_selective_mask(hueSample(-20),p),response_selective_mask(hueSample(20),p),1e-6f,"Red seam is asymmetric");
+    for (float hue : {0.0f,60.0f,120.0f,180.0f,240.0f,300.0f,360.0f}) {
+        s[film::SelectiveHue]=hue; p=response::prepare(s.data());
+        require(response_selective_mask(hueSample(hue),p)==1,"Hue centers miss their color");
+        require(response_selective_mask(hueSample(hue+120),p)==0,"Hue selection keeps a distant color");
+        float previous=1;
+        for (int step=0; step<=280; ++step) {
+            const float mask=response_selective_mask(hueSample(hue+step*.1f),p);
+            require(mask <= previous+1e-6f && std::abs(mask-previous)<.02f,"Feather is discontinuous/nonmonotonic");
+            previous=mask;
+        }
+    }
+    s[film::SelectiveAmount]=0; s[film::SelectiveView]=0; p=response::prepare(s.data());
+    requireRgbNear(response_selective(green,red,p),green,0,"Zero selective amount changes pixels");
+    require(!(film::modulesForSettings(s.data())&film::SelectiveColor),"Neutral selection retains processing");
+    require(film::isIdentity(0,film::SelectiveColor,0,0,0,0,0,0),"Zero selection is not identity");
+    s[film::SelectiveView]=1; p=response::prepare(s.data());
+    const float mask=response_selective_mask(red,p);
+    requireRgbNear(response_selective(green,red,p),{mask,mask,mask},0,"Matte depends on destination or Amount");
+    require(!film::isIdentity(0,film::SelectiveColor,0,0,0,0,0,1),"Matte incorrectly bypasses");
+    for (int mode : {2,3,4,5,6}) require(!(film::modulesForMode(mode,film::All)&film::SelectiveColor),"Selection enters texture/bypass mode");
+    std::puts("Selective color: hue centers/wrap, smooth feather, gray/negative/HDR safety, neutral output, preserved working luminance, exact zero/retention, matte and mode isolation pass.");
+}
+
 class Gpu {
 public:
     using UInt = unsigned int;
@@ -1155,7 +1204,8 @@ public:
         const auto responseParameters = response::prepare(s.data());
         const auto halo = halation::prepare(s.data(), height);
         const auto bloomConfig = bloom::prepare(s.data(),height);
-        const bool identity = film::isIdentity(static_cast<int>(s[0]), modules, effective[13], effective[15], s[16], bloomConfig.parameters.amount);
+        const bool identity = film::isIdentity(static_cast<int>(s[0]), modules, effective[13], effective[15], s[16], bloomConfig.parameters.amount,
+                                               responseParameters.selectiveAmount,responseParameters.selectiveView);
         for (int y = 0; y < height; ++y) {
             for (int x = 0; x < width; ++x) {
                 const size_t i = (static_cast<size_t>(y) * width + x) * 4;
@@ -1166,7 +1216,8 @@ public:
                 if (spatial)
                     h = halation::signal(blur.sample(x, y), halation_key(work.r, work.g, work.b, halo.key), effective[13], effective[15]);
                 ColorRgb processed = work;
-                if (modules & film::Negative) processed = response_negative_stage(color_balance(processed, {s[4],s[5],s[6]}), responseParameters);
+                const auto selectionSource = modules & film::Negative ? color_balance(work,{s[4],s[5],s[6]}) : work;
+                if (modules & film::Negative) processed = response_negative_stage(selectionSource, responseParameters);
                 if (modules & film::Development) processed = response_development(processed, responseParameters);
                 if (grainParameters.prePrint && s[16] > 0) {
                     const auto delta = grain_delta(x,y,response_luma(processed),grainParameters);
@@ -1191,11 +1242,13 @@ public:
                     rgb[2] += delta.b;
                 }
                 if (s[0] != 5.0f && s[0] != 6.0f) {
-                    const auto finished = response_finish({rgb[0],rgb[1],rgb[2]}, modules, responseParameters);
+                    auto finished = response_finish({rgb[0],rgb[1],rgb[2]}, modules, responseParameters);
+                    if (modules & film::SelectiveColor) finished = response_selective(finished,selectionSource,responseParameters);
                     rgb = {finished.r,finished.g,finished.b};
                     if (response_clamps_negative(modules, responseParameters)) for (auto& v : rgb) v = std::max(v, 0.0f);
-                    const bool unchanged = identity || (!(modules & (film::Negative | film::Development | film::Print)) && rgb[0] == work.r && rgb[1] == work.g && rgb[2] == work.b);
-                    const auto encoded = unchanged ? original : color_from_work({rgb[0], rgb[1], rgb[2]}, colorParameters);
+                    const bool unchanged = identity || (!(modules & (film::Negative | film::Development | film::Print | film::SelectiveColor)) && rgb[0] == work.r && rgb[1] == work.g && rgb[2] == work.b);
+                    const auto encoded = unchanged ? original : (modules & film::SelectiveColor) && responseParameters.selectiveView ?
+                        ColorRgb{rgb[0],rgb[1],rgb[2]} : color_from_work({rgb[0], rgb[1], rgb[2]}, colorParameters);
                     rgb = {encoded.r, encoded.g, encoded.b};
                 }
                 for (int channel = 0; channel < 4; ++channel) {
@@ -1204,16 +1257,22 @@ public:
                     // Wide-gamut cancellation near zero is amplified by gamma's infinite slope.
                     // Bound both linear error and displayed code error there, not all dark pixels.
                     const float actual = output[i + channel];
+                    const bool neutralColorResponse =
+                        (responseParameters.colorStrength == 0 && responseParameters.toneStrength == 0 &&
+                         responseParameters.printColorStrength == 0 && responseParameters.printToneStrength == 0) ||
+                        (!(modules & (film::Negative | film::Development | film::Print)) && (modules & film::SelectiveColor));
                     const bool nearGammaBlack = channel < 3 && !identity && s[0] != 5 && s[0] != 6 &&
-                        responseParameters.colorStrength == 0 && responseParameters.toneStrength == 0 &&
-                        responseParameters.printColorStrength == 0 && responseParameters.printToneStrength == 0 &&
+                        neutralColorResponse && (!(modules & film::SelectiveColor) || responseParameters.selectiveView == 0) &&
                         colorParameters.outputCurve == ColorGamma24 &&
                         std::max(std::abs(actual),std::abs(expected)) < .01f &&
                         std::abs(actual-expected) < 1.0f/255 &&
                         std::abs(color_decode(actual,ColorGamma24)-color_decode(expected,ColorGamma24)) < 1e-6f;
                     if (!std::isfinite(actual) || (std::abs(actual - expected) >= tolerance && !nearGammaBlack)) {
-                        std::fprintf(stderr, "Mismatch at (%d,%d), channel %d, source %.0f, mode %.0f, mask %.0f, style %.0f, time %.2f, strengths %.2f/%.2f/%.2f/%.2f: GPU %.8f, CPU %.8f\n",
-                                     x, y, channel, s[26], s[0], s[19], s[3], time, s[41], s[42], s[43], s[44], output[i + channel], expected);
+                        std::fprintf(stderr, "Mismatch at (%d,%d), channel %d, source %.0f, output %.0f, mode %.0f, mask %.0f, style %.0f, time %.2f, strengths %.2f/%.2f/%.2f/%.2f: GPU %.8f, CPU %.8f\n",
+                                     x, y, channel, s[26], s[27], s[0], s[19], s[3], time, s[41], s[42], s[43], s[44], output[i + channel], expected);
+                        std::fprintf(stderr, "Working RGB %.9g/%.9g/%.9g, selection %.9g, output curve %d, decoded error %.9g\n",
+                                     work.r,work.g,work.b,response_selective_mask(selectionSource,responseParameters),colorParameters.outputCurve,
+                                     std::abs(color_decode(actual,colorParameters.outputCurve)-color_decode(expected,colorParameters.outputCurve)));
                         require(false, "CPU/GPU mismatch or broken mode/alpha");
                     }
                 }
@@ -2225,6 +2284,7 @@ int main(int argc, char** argv)
         testHalationControls();
         testDevelopmentAndGrain();
         testBloom();
+        testSelectiveColor();
         if (argc > 1) writePreview(argv[1]);
         if (argc > 2) writeResponsePreview(argv[2]);
         if (argc > 5) writeResponsePreview(argv[5],true);
@@ -2337,12 +2397,69 @@ int main(int argc, char** argv)
             gpu.test(17,19,s,false);
         }
         std::printf("OpenCL: all %d look recipes match CPU across input/output spaces, mode overrides, alpha, and all-disabled bypass.\n",look::Count-1);
+        for (int source=0; source<color::SpaceCount; ++source) for (int output=0; output<static_cast<int>(color::OutputSpaces.size()); ++output) {
+            auto s=filmSettings(); s[26]=static_cast<float>(source); s[27]=static_cast<float>(output);
+            s[film::SelectiveAmount]=.65; s[film::SelectiveHue]=355; s[film::SelectiveRange]=12;
+            s[film::SelectiveSoftness]=14; s[film::SelectiveSaturation]=.35;
+            s[4]=1.2f; s[5]=.9f; s[6]=1.1f;
+            for (int mask : std::array<int,4>{film::SelectiveColor,film::All,film::All & ~film::SelectiveColor,0}) {
+                s[film::ModuleIndex]=static_cast<float>(mask);
+                for (int view : {0,1}) {
+                    s[film::SelectiveView]=static_cast<float>(view);
+                    gpu.test(17,19,s,false);
+                }
+            }
+        }
+        for (int mode=0; mode<7; ++mode) {
+            auto s=filmSettings(); s[0]=static_cast<float>(mode); s[film::SelectiveAmount]=1;
+            s[film::SelectiveRange]=0; s[film::SelectiveSoftness]=0; s[film::SelectiveView]=1;
+            gpu.test(33,31,s,false);
+            if (gpu.unordered) gpu.test(33,31,s,true);
+        }
+        std::puts("OpenCL: selective image/matte, partial amount, wrap, camera balance, every encoding, independent/disabled modules, mode overrides and queue ordering match CPU.");
+        {
+            auto s=filmSettings(); s[0]=0; s[26]=color::SRGB;
+            s[film::ModuleIndex]=film::SelectiveColor; s[film::SelectiveView]=1;
+            s[film::SelectiveRange]=12; s[film::SelectiveSoftness]=14; s[film::SelectiveSaturation]=.45;
+            std::vector<float> input;
+            for (const auto c : std::array<ColorRgb,5>{{hueSample(0),hueSample(20),hueSample(120),{.5f,.5f,.5f},{0,0,0}}})
+                input.insert(input.end(),{c.r,c.g,c.b,.37f});
+            const auto p=response::prepare(s.data());
+            for (int output=0; output<static_cast<int>(color::OutputSpaces.size()); ++output) {
+                s[27]=static_cast<float>(output);
+                const auto result=gpu.render(input,5,1,s);
+                for (int x=0; x<5; ++x) {
+                    const auto i=x*4;
+                    const float mask=response_selective_mask({input[i],input[i+1],input[i+2]},p);
+                    for (int channel=0; channel<3; ++channel)
+                        requireNear(result[i+channel],mask,1e-6f,"Selection matte is color-space encoded or tinted");
+                    require(result[i+3]==input[i+3],"Selection matte changes alpha");
+                }
+                s[film::SelectiveView]=0; s[film::SelectiveAmount]=0;
+                require(gpu.render(input,5,1,s)==input,"Zero selective-only render is not exact identity");
+                s[film::SelectiveView]=1;
+            }
+            s[film::SelectiveView]=0; s[film::SelectiveAmount]=1; s[27]=1;
+            const auto cp=color::prepare(s.data());
+            require(cp.outputCurve == ColorGamma24,"Selective-only ignores requested output encoding");
+            const std::vector<float> accent{.8f,0,0,.37f};
+            const auto converted=gpu.render(accent,1,1,s);
+            requireNear(converted[0],color_encode(color_decode(.8f,ColorSRGB),ColorGamma24),1e-6f,
+                "Retained accent skips output conversion");
+            s[film::ModuleIndex]=film::All; s[13]=.3f; s[15]=.1f; s[16]=.2f; s[21]=1;
+            s[film::BloomAmount]=.2f;
+            const std::vector<float> green{.01f,.8f,.01f,.37f};
+            const auto neutral=gpu.render(green,1,1,s);
+            requireNear(neutral[0],neutral[1],1e-6f,"Grain/glow recolors rejected source");
+            requireNear(neutral[1],neutral[2],1e-6f,"Selective finish retains colored texture");
+        }
         if (argc > 3) gpu.writeTexturePreview(argv[3]);
         if (argc > 4) gpu.writeTexturePreview(argv[4],true);
         if (argc > 6) gpu.writeBloomPreview(argv[6]);
         if (argc > 7) gpu.writeLookPreview(argv[7]);
         if (argc > 9) gpu.writeGrainResponsePreview(argv[9]);
         if (argc > 10) gpu.writeLookPreview(argv[10],look::ArchiveThriller);
+        if (argc > 11) gpu.writeLookPreview(argv[11],look::WinterCrime);
         gpu.benchmark();
         return 0;
     } catch (const std::exception& error) {

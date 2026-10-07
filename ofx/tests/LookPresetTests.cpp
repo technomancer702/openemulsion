@@ -37,7 +37,9 @@ static ColorRgb renderColorOnly(ColorRgb linear, int preset)
     if (modules & film::Negative) c = response_negative_stage(c,rp);
     if (modules & film::Development) c = response_development(c,rp);
     if (modules & film::Print) c = response_print(c,rp);
-    return color_from_work(response_finish(c,modules,rp),cp);
+    c=response_finish(c,modules,rp);
+    if (modules & film::SelectiveColor) c=response_selective(c,color_to_work(linear,cp),rp);
+    return color_from_work(c,cp);
 }
 
 static double colorDistance(int a, int b)
@@ -100,11 +102,12 @@ static void testLookIntent()
 
 static void testCategoriesAndNeutral()
 {
-    require(look::Count == 47,"Expected 46 named recipes plus Custom");
-    require(look::Neutral == 13 && look::FadedInstant == 37 && look::Creative == 7,
+    require(look::Count == 53,"Expected 52 named recipes plus Custom");
+    require(look::Neutral == 13 && look::FadedInstant == 37 && look::AmberWasteland == 46 &&
+        look::Creative == 7 && look::ScienceFiction == 10,
         "Existing preset/category IDs changed");
-    require(look::optionCount(look::Thriller) == 4 && look::optionCount(look::Horror) == 5 &&
-        look::optionCount(look::ScienceFiction) == 3,"Genre categories omit recipes");
+    require(look::optionCount(look::Thriller) == 5 && look::optionCount(look::Horror) == 5 &&
+        look::optionCount(look::ScienceFiction) == 5 && look::optionCount(look::GraphicNoir) == 4,"Genre categories omit recipes");
     const std::set<int> order(look::MenuOrder.begin(),look::MenuOrder.end());
     require(order.size() == look::Count && *order.begin() == 0 && *order.rbegin() == look::Count-1,
         "Menu order duplicates or omits a stable preset ID");
@@ -215,6 +218,24 @@ static void testGenreIntent()
     require(look::recipe(look::CrimsonDream)[film::BloomAmount] >
         look::recipe(look::GialloCrimson)[film::BloomAmount],"Dream and giallo diffusion identities collapse");
     std::printf("Closest genre color/tone separation: %.3f codes (synthetic, not film-match validation).\n",closest);
+    for (const auto pair : std::array<std::array<int,2>,5>{{{look::WinterCrime,look::FolkDread},
+        {look::WinterCrime,look::ArcticDusk},{look::SteelBlue,look::NeonNights},
+        {look::Nostromo,look::SteelBlue},{look::Nostromo,look::SilverThriller}}})
+        require(colorDistance(pair[0],pair[1])>3,"New movie direction overlaps a related existing recipe");
+    for (int preset : {look::ComicRed,look::ComicBlue,look::ComicYellow}) {
+        const auto recipe=look::recipe(preset);
+        require(recipe[1] != 4 && recipe[film::SelectiveAmount] == 1 &&
+            recipe[film::SelectiveView] == 0 && (static_cast<int>(recipe[film::ModuleIndex])&film::SelectiveColor),
+            "Graphic noir loses color before selection or loads a matte");
+        const ColorRgb kept = preset == look::ComicRed ? ColorRgb{.8f,.01f,.01f} :
+            preset == look::ComicBlue ? ColorRgb{.01f,.01f,.8f} : ColorRgb{.8f,.8f,.01f};
+        const ColorRgb rejected{.01f,.8f,.01f};
+        const auto accent=renderColorOnly(kept,preset), mono=renderColorOnly(rejected,preset);
+        require(std::max({accent.r,accent.g,accent.b})-std::min({accent.r,accent.g,accent.b})>.1f,
+            "Graphic noir loses selected accent");
+        require(std::abs(mono.r-mono.g)<1e-6f && std::abs(mono.g-mono.b)<1e-6f,
+            "Graphic noir recolors rejected pixels");
+    }
 }
 
 int main()
@@ -267,7 +288,7 @@ int main()
                 require(writes == 0 && toggles == 0 && packed == before, "Custom/invalid preset changes settings");
                 continue;
             }
-            require(writes == std::size(look::Controls) && toggles == 7, "Incomplete recipe application");
+            require(writes == std::size(look::Controls) && toggles == moduleui::Toggles.size(), "Incomplete recipe application");
             require(mask == static_cast<int>(look::recipe(preset)[film::ModuleIndex]), "Incorrect module switches");
             require(packed[0] == 0 && packed[2] == printstyle::Custom, "Preset is masked by mode or locked print");
             for (int preserved : {4,5,6,25,26,27})

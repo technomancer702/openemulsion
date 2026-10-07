@@ -219,10 +219,12 @@ __kernel void OpenEmulsionKernel(
     }
     float3 work = to_work(original, color);
     float3 c = work;
+    ColorRgb selectionSource = {work.x,work.y,work.z};
 
     if (modules & 1) {
         ColorRgb rgb = {c.x, c.y, c.z}, gain = {gainR, gainG, gainB};
         rgb = color_balance(rgb, gain);
+        selectionSource = rgb;
         rgb = response_negative_stage(rgb, response);
         c = (float3)(rgb.r, rgb.g, rgb.b);
     }
@@ -266,9 +268,11 @@ __kernel void OpenEmulsionKernel(
     }
 
     ColorRgb finished = response_finish((ColorRgb){c.x, c.y, c.z}, modules, response);
+    if (modules & 128) finished = response_selective(finished, selectionSource, response);
     c = (float3)(finished.r, finished.g, finished.b);
     if (response_clamps_negative(modules, response)) c = fmax(c, (float3)(0.0f));
-    if (mode != 5 && mode != 6) c = !(modules & 35) && all(c == work) ? original : from_work(c, color);
+    if (mode != 5 && mode != 6 && !((modules & 128) && response.selectiveView))
+        c = !(modules & 163) && all(c == work) ? original : from_work(c, color);
     output[idx] = c.x;
     output[idx + 1] = c.y;
     output[idx + 2] = c.z;
@@ -415,14 +419,15 @@ bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, c
     const GrainParameters grainParameters = grain::prepare(settings, height, time);
     const ColorParameters colorParameters = color::prepare(settings);
     const FilmResponseParameters responseParameters = response::prepare(settings);
-    static_assert(sizeof(FilmResponseParameters) == 212, "OpenCL response structure layout mismatch");
+    static_assert(sizeof(FilmResponseParameters) == 236, "OpenCL response structure layout mismatch");
     const auto haloConfig = halation::prepare(settings, height);
     const int step = haloConfig.downsample;
     static_assert(sizeof(HalationParameters) == 20, "OpenCL halation structure layout mismatch");
     const auto bloomConfig = bloom::prepare(settings, height);
     static_assert(sizeof(BloomParameters) == 20, "OpenCL bloom structure layout mismatch");
     static_assert(sizeof(bloom::Pixel) == 16, "OpenCL bloom float4 layout mismatch");
-    const int identity = film::isIdentity(mode, modules, halation, aura, settings[16], bloomConfig.parameters.amount);
+    const int identity = film::isIdentity(mode, modules, halation, aura, settings[16], bloomConfig.parameters.amount,
+                                          responseParameters.selectiveAmount, responseParameters.selectiveView);
     static_assert(sizeof(ColorParameters) == 88, "OpenCL color structure layout mismatch");
     static_assert(sizeof(GrainParameters) == 64, "OpenCL grain structure layout mismatch");
     cl_mem blurMem = inputMem;

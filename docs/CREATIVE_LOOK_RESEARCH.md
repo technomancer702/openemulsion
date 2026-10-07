@@ -1,6 +1,6 @@
 # Creative Look Research
 
-Research and original recipe design for v0.31. The goal is a useful range of
+Research and original recipe design for v0.31-v0.32. The goal is a useful range of
 editable looks, not a film-frame matching claim. Sources are interviews with the
 cinematographers and production collaborators, rather than commercial look-pack
 descriptions. No third-party LUT, preset, image, profile dataset or source code
@@ -17,8 +17,8 @@ was incorporated.
   hiding a fixed camera exposure change inside a recipe.
 - Grain is secondary, especially for digitally photographed references. Glow is
   selective, not a default way to announce that a look is cinematic.
-- Use existing modules for this pass. No spectral renderer, extra blur pass or
-  new per-pixel palette operation is introduced.
+- v0.31 uses existing modules. v0.32 adds a small Selective Color finishing
+  operation for graphic noir, but no spectral renderer, extra blur pass or buffer.
 
 ## Thriller
 
@@ -155,6 +155,70 @@ grain. Unlike Desert Chrome, it does not introduce a contrasting cyan-shadow
 direction. Bloom is not depth-dependent atmospheric fog, and the broad channel
 trims are not a selective hue remap to one orange palette.
 
+## Additional Directions In v0.32
+
+### Winter Crime (Fargo 1996)
+
+**Source facts:** Roger Deakins and the Coens describe bland, whiteout winter
+exteriors, avoiding blue skies, naturalistic practical-source lighting and the
+contrast between snow-white days and dark nights. The reference is the original
+1996 feature, not the later television series.
+[Original production interviews, ASC](https://theasc.com/article/fargo-cold-blooded-scheming/).
+
+**Our interpretation:** restrained chroma, near-neutral slightly cool whites,
+readable lower tones, gentle highlight shaping and moderate fine grain without
+diffusion. Unlike Folk Dread, it retains more ordinary color, and unlike Arctic
+Dusk it does not apply an obvious blue development split. It cannot manufacture
+snow, overcast light or a blank horizon, and is not the night chase's lighting.
+
+### Steel Blue (Terminator 2)
+
+**Source facts:** Adam Greenberg describes hard cold light on the Terminator,
+blue/cyan gels, richer colors and a contrast between cold blue and warm orange
+directions. He differentiated lighting for other actors and used different stocks
+for day and night settings. The hospital and steel mill are not one uniform blue
+grade.
+[Greenberg production interview, ASC](https://theasc.com/article/terminator-2-he-said-he-039-d-be-back/).
+
+**Our interpretation:** firmer print contrast, a pronounced blue/cyan shadow split
+against warm highlights, maintained chroma, restrained halation and Super 35
+texture. Stronger contrast and split separation distinguish it from Neon Nights.
+This evokes the cold-metal/firelight direction, not every daylight scene or any
+particular restored video master; it cannot locally light an actor differently.
+
+### Nostromo (Alien 1979)
+
+**Source facts:** Derek Vanlint describes unusual practical and effects lighting,
+including aircraft lights, fluorescents and neon, with harder light in the panic
+sequences. The Mother room's warm color came from low-temperature bulbs and
+matching additions. Ridley Scott describes low-key directional lighting and the
+difficulty of balancing mixed sources.
+[Vanlint's original account, ASC](https://theasc.com/article/alien-and-its-photographic-challenges/),
+[Scott's original account, ASC](https://theasc.com/article/the-filming-of-alien-directing/).
+
+**Our interpretation:** muted industrial color, cyan/green-leaning shadows,
+restrained warm-highlight separation, firm but graduated dark tones and visible
+conventional grain, without broad diffusion. It is less saturated and less blue
+than Steel Blue. This is an artistic Nostromo direction, not a claim that all
+1979 scenes share a green cast, nor a look for Aliens or later sequels.
+
+### Graphic Noir (Sin City): Red, Blue And Yellow
+
+**Source facts:** Troublemaker and VFX collaborators describe color capture,
+high-contrast monochrome previews on set, and compositing/color work restoring
+selected accents. Some elements were recolored; others were colored on set and
+restored in post. Curves and consistency were adjusted shot by shot, not produced
+by one uniform black-and-white conversion.
+[Primary production/VFX interviews, Post Magazine](https://www.postmagazine.com/publications/2005/april-1-2005/cover-story-sin-city/).
+
+**Our interpretation:** three high-contrast, minimally textured color-negative
+recipes finished by the new [Selective Color](SELECTIVE_COLOR.md) module. Red,
+blue or yellow source hues survive, with feathered transitions and rejection of
+pale near-neutral colors. The family uses no Mono Negative stage, which would
+remove those accents too early. It cannot identify a particular dress or face,
+recolor blue to yellow, reconstruct silhouette lighting or generate the film's
+graphic backgrounds. The adjustable feature is also usable on less extreme looks.
+
 ## Verification And Next Steps
 
 All nine recipes pass full parameter/range and repeatability checks, synthetic
@@ -164,6 +228,12 @@ grain/glow omitted, check selected existing-creative overlaps, low-end gradation
 relative shadow/midtone brightness, and green/amber/violet identities. These are
 engineering checks, not proof of a perceptual film match. Neutral input, source
 normalization and output gamma materially affect appearance.
+
+v0.32 adds six recipes and checks related-look overlap, retained graphic-noir
+accents, neutral rejected colors and standalone selective math. All 52 named
+recipes receive CPU/OpenCL color-space/mode coverage and 4K timing. Additional
+selection tests cover camera balance, raw matte/alpha, requested output encoding,
+colored texture finishing, zero/disabled behavior and version-1 file migration.
 
 Before claiming closer resemblance, compare normalized real footage: daylight
 foliage/white clothing, skin, low-light practicals, saturated red/blue light and

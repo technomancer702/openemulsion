@@ -1,4 +1,4 @@
-OpenEmulsion v0.31 - Windows x64
+OpenEmulsion v0.32 - Windows x64
 Experimental development release
 
 INSTALL
@@ -14,9 +14,10 @@ a compiler, Python, DCTL, or this project's development folder to install it.
 Read INSTALL.md for updates, uninstalling, quick-start settings, and caveats.
 
 WHAT IS INCLUDED
-Film Color, Film Development, Print, Halation, Aura, Bloom, and Grain.
+Film Color, Film Development, Print, Halation, Aura, Bloom, Grain, Selective Color.
 Modules are independently switchable. Texture-only modes work with your own LUT.
 Bloom defaults to zero; raise its strength to use it.
+Selective Color defaults to zero; Graphic Noir presets retain red/blue/yellow.
 User Presets can save/load portable look snapshots. Grain Response optionally
 adds negative-driven grain before Print; Post Print remains the default.
 
@@ -35,7 +36,7 @@ The film profiles are original creative approximations, not measured stocks.
 SOURCE AND LICENSE
 Free and open source, MPL-2.0. See LICENSE and THIRD_PARTY_NOTICES.md.
 Compiler runtime notices travel with the plugin in Contents/Licenses.
-Source/OpenEmulsion-v0.31-source.zip contains the matching project source;
+Source/OpenEmulsion-v0.32-source.zip contains the matching project source;
 external OpenFX SDK files are not included. See manifest.json for the exact
 source revision and SHA-256 hashes.
 

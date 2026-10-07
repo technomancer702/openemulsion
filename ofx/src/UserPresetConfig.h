@@ -16,7 +16,7 @@ namespace userpreset {
 
 using Json = nlohmann::json;
 constexpr size_t MaximumBytes = 65536;
-constexpr int FormatVersion = 1;
+constexpr int FormatVersion = 2;
 constexpr const char* Plugin = "org.openemulsion.film";
 
 enum ContextKind { Choice, Number, Integer };
@@ -100,7 +100,7 @@ inline Json toJson(const Snapshot& preset)
         const auto& c = ContextControls[i];
         context[c.name] = validateNumber(preset.context[i], c.minimum, c.maximum, c.kind != Number, c.name);
     }
-    return {{"formatVersion",FormatVersion}, {"plugin",Plugin}, {"createdWith","0.31"},
+    return {{"formatVersion",FormatVersion}, {"plugin",Plugin}, {"createdWith","0.32"},
             {"name",preset.name}, {"controls",controls}, {"modules",modules}, {"context",context}};
 }
 
@@ -126,8 +126,8 @@ inline Snapshot parse(const std::string& input)
     });
     if (!document.is_object() || document.size() != 7 ||
         !document.contains("formatVersion") || !document["formatVersion"].is_number_integer() ||
-        document["formatVersion"] != FormatVersion || document.value("plugin",std::string()) != Plugin)
-        throw std::runtime_error("Not a supported OpenEmulsion preset (format version 1 required).");
+        (document["formatVersion"] != 1 && document["formatVersion"] != FormatVersion) || document.value("plugin",std::string()) != Plugin)
+        throw std::runtime_error("Not a supported OpenEmulsion preset (format version 1 or 2 required).");
     if (!document.at("createdWith").is_string() || document.at("createdWith").get<std::string>().size() > 64 ||
         !document.at("name").is_string() || document.at("name").get<std::string>().size() > 256)
         throw std::runtime_error("Invalid preset metadata.");
@@ -136,15 +136,21 @@ inline Snapshot parse(const std::string& input)
     const auto& controls = document.at("controls");
     const auto& modules = document.at("modules");
     const auto& context = document.at("context");
-    if (!controls.is_object() || controls.size() != preset.controls.size() ||
-        !modules.is_object() || modules.size() != preset.modules.size() ||
+    const bool legacy = document["formatVersion"] == 1;
+    if (!controls.is_object() || controls.size() != preset.controls.size() - (legacy ? 6 : 0) ||
+        !modules.is_object() || modules.size() != preset.modules.size() - (legacy ? 1 : 0) ||
         !context.is_object() || context.size() != preset.context.size())
         throw std::runtime_error("Incomplete or unsupported preset controls.");
     for (size_t i = 0; i < preset.controls.size(); ++i) {
         const auto& c = look::Controls[i];
+        if (legacy && c.setting >= film::SelectiveAmount) continue;
         preset.controls[i] = readNumber(controls,c.name,c.minimum,c.maximum,c.kind == look::Choice);
     }
     for (size_t i = 0; i < preset.modules.size(); ++i) {
+        if (legacy && moduleui::Toggles[i].module == film::SelectiveColor) {
+            preset.modules[i] = false;
+            continue;
+        }
         const auto& value = modules.at(moduleui::Toggles[i].name);
         if (!value.is_boolean()) throw std::runtime_error("Preset module switches must be booleans.");
         preset.modules[i] = value.get<bool>();

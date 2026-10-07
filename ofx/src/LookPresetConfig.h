@@ -20,7 +20,8 @@ enum Preset { Custom, Daylight50, Daylight250, Tungsten200, Tungsten500,
               Print2383, Print2393, TriX400, Hp5Plus400,
               DesertChrome, ArcticDusk, GoldenHour, FadedInstant,
               ArchiveThriller, SilverThriller, SodiumNoir, FolkDread, DaylightDread,
-              GialloCrimson, CrimsonDream, SimulationGreen, AmberWasteland, Count };
+              GialloCrimson, CrimsonDream, SimulationGreen, AmberWasteland,
+              WinterCrime, SteelBlue, Nostromo, ComicRed, ComicBlue, ComicYellow, Count };
 
 inline constexpr std::array<const char*, Count> Labels {{
     "Custom", "50D Daylight", "250D Daylight",
@@ -40,16 +41,18 @@ inline constexpr std::array<const char*, Count> Labels {{
     "Archive Thriller (Zodiac)", "Silver Thriller (Se7en)", "Sodium Noir (Nightcrawler)",
     "Folk Dread (The Witch)", "Daylight Dread (Midsommar)",
     "Giallo Crimson (Suspiria 1977)", "Crimson Dream (Mandy)",
-    "Simulation Green (The Matrix)", "Amber Wasteland (2049 Vegas)"
+    "Simulation Green (The Matrix)", "Amber Wasteland (2049 Vegas)",
+    "Winter Crime (Fargo 1996)", "Steel Blue (Terminator 2)", "Nostromo (Alien 1979)",
+    "Graphic Noir / Red (Sin City)", "Graphic Noir / Blue (Sin City)", "Graphic Noir / Yellow (Sin City)"
 }};
 
 enum Category { AllLooks, StartingPoints, CinemaNegative, StillNegative,
                 ReversalFilm, Monochrome, PrintLooks, Creative,
-                Thriller, Horror, ScienceFiction, CategoryCount };
+                Thriller, Horror, ScienceFiction, GraphicNoir, CategoryCount };
 inline constexpr std::array<const char*, CategoryCount> CategoryLabels {{
     "All Presets", "Starting Points", "Cinema Negative", "Still Negative",
     "Reversal Film", "Monochrome", "Print Looks", "Creative Looks",
-    "Thriller", "Horror", "Sci-Fi"
+    "Thriller", "Horror", "Sci-Fi", "Graphic Noir"
 }};
 
 inline constexpr std::array<int,Count> MenuOrder {{
@@ -61,7 +64,8 @@ inline constexpr std::array<int,Count> MenuOrder {{
     ClassicCinema, SoftPortrait, NeonNights, SeventiesPrint, BleachBypass,
     Super8HomeMovie, DesertChrome, ArcticDusk, GoldenHour, FadedInstant,
     ArchiveThriller, SilverThriller, SodiumNoir, FolkDread, DaylightDread,
-    GialloCrimson, CrimsonDream, SimulationGreen, AmberWasteland
+    GialloCrimson, CrimsonDream, SimulationGreen, AmberWasteland,
+    WinterCrime, SteelBlue, Nostromo, ComicRed, ComicBlue, ComicYellow
 }};
 
 inline constexpr int categoryFor(int preset)
@@ -76,9 +80,10 @@ inline constexpr int categoryFor(int preset)
     case Kodachrome64: case Ektachrome100: case Velvia100: case Provia100: return ReversalFilm;
     case ReversalMono: case TriX400: case Hp5Plus400: case SilverNoir: return Monochrome;
     case Print2383: case Print2393: return PrintLooks;
-    case ArchiveThriller: case SilverThriller: case SodiumNoir: return Thriller;
+    case ArchiveThriller: case SilverThriller: case SodiumNoir: case WinterCrime: return Thriller;
     case FolkDread: case DaylightDread: case GialloCrimson: case CrimsonDream: return Horror;
-    case SimulationGreen: case AmberWasteland: return ScienceFiction;
+    case SimulationGreen: case AmberWasteland: case SteelBlue: case Nostromo: return ScienceFiction;
+    case ComicRed: case ComicBlue: case ComicYellow: return GraphicNoir;
     default: return Creative;
     }
 }
@@ -170,7 +175,13 @@ inline constexpr Control Controls[] {
     {"bloomThreshold",film::BloomThreshold,Double,.65,0,2},
     {"bloomSoftness",film::BloomSoftness,Double,.35,.01,2},
     {"bloomColor",film::BloomColor,Double,1,0,1},
-    {"bloomProtection",film::BloomProtection,Double,.8,0,1}
+    {"bloomProtection",film::BloomProtection,Double,.8,0,1},
+    {"selectiveAmount",film::SelectiveAmount,Double,0,0,1},
+    {"selectiveHue",film::SelectiveHue,Double,0,0,360},
+    {"selectiveRange",film::SelectiveRange,Double,15,0,180},
+    {"selectiveSoftness",film::SelectiveSoftness,Double,15,0,90},
+    {"selectiveSaturation",film::SelectiveSaturation,Double,.25,0,1},
+    {"selectiveView",film::SelectiveView,Choice,0,0,1}
 };
 
 using Recipe = std::array<double, film::SettingsCount>;
@@ -452,6 +463,39 @@ inline Recipe recipe(int preset)
         s[film::SplitHighlights]=0; s[film::ColorRichness]=-.2;
         s[film::BloomAmount]=.18; s[film::BloomRadius]=1.1; s[film::BloomProtection]=.9;
         s[16]=.015; s[17]=.25; s[20]=.55; s[21]=.05;
+        break;
+    case WinterCrime:
+        s[7]=.09; s[8]=.82; s[9]=.06; s[10]=1.02; s[28]=.8; s[29]=.2;
+        s[32]=.6; s[33]=1.01; s[11]=1; s[12]=.14; s[34]=.78; s[35]=1;
+        s[38]=-.015; s[39]=0; s[40]=.035;
+        s[16]=.085; s[17]=.34; s[18]=.22; s[20]=.35; s[21]=.12;
+        s[film::ModuleIndex]=film::Negative | film::Print | film::Grain;
+        break;
+    case SteelBlue:
+        s[7]=.25; s[8]=1.02; s[9]=.15; s[10]=1.12; s[28]=.78; s[29]=.2;
+        s[32]=-.65; s[33]=1.12; s[11]=.9; s[12]=.09; s[34]=.72; s[35]=1; s[36]=1.05;
+        s[film::SplitTone]=1.85; s[film::SplitHue]=215; s[film::SplitShadows]=1.5;
+        s[film::SplitHighlights]=1.25; s[film::ColorRichness]=.16;
+        s[13]=.16; s[14]=.6; s[16]=.13; s[17]=.39; s[18]=.3;
+        s[film::FilmGauge]=gauge::Super35;
+        break;
+    case Nostromo:
+        s[1]=1; s[7]=.22; s[8]=.68; s[9]=.17; s[10]=1.09; s[28]=.78; s[29]=.65;
+        s[32]=-.4; s[33]=1.09; s[11]=.85; s[12]=.12; s[34]=.74; s[35]=1;
+        s[38]=-.04; s[39]=.035; s[40]=.025;
+        s[film::SplitTone]=.85; s[film::SplitHue]=175; s[film::SplitShadows]=1.2;
+        s[film::SplitHighlights]=.45;
+        s[13]=.09; s[14]=.6; s[16]=.15; s[17]=.41; s[18]=.34; s[21]=.1;
+        break;
+    case ComicRed: case ComicBlue: case ComicYellow:
+        // Keep a color negative; Mono Negative would remove the accent before selection.
+        s[7]=.12; s[8]=1.05; s[9]=.22; s[10]=1.10; s[28]=.55; s[29]=.15;
+        s[32]=-1; s[33]=1.5; s[11]=1; s[12]=0; s[34]=.4; s[35]=1; s[36]=1.05;
+        s[16]=.03; s[17]=.27; s[18]=.18; s[21]=0;
+        s[film::SelectiveAmount]=1;
+        s[film::SelectiveHue]=preset == ComicRed ? 0 : preset == ComicBlue ? 240 : 60;
+        s[film::SelectiveRange]=12; s[film::SelectiveSoftness]=14; s[film::SelectiveSaturation]=.45;
+        s[film::ModuleIndex]=film::Negative | film::Print | film::Grain | film::SelectiveColor;
         break;
     default: break;
     }

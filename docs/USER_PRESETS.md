@@ -1,4 +1,4 @@
-# User Presets (v0.28)
+# User Presets (v0.32)
 
 The User Presets group sits below the built-in Preset dropdown. Save Preset and Load Preset open native Windows dialogs for portable `.oepreset` files. The files contain UTF-8 JSON, not executable code or external LUT references. They are separate from Filmbox/Dehancer preset formats.
 
@@ -18,13 +18,13 @@ Enable an option only to retain the destination node's context instead of import
 
 Reusing a look requires the same incoming image/grade, compatible color management, and (for exactly matching animated grain) the same frame time and resolution. Presets do not include Resolve's external OFX blend/bypass controls, other nodes, project color management, or media. The v0.28 save fix cannot recover adjustments absent from a v0.27 file; resave from the tuned node.
 
-Mode and all seven Enable switches are imported together without automatic mode-driven rewriting, preserving the exact saved module choices. A loaded Grain Only/Bypass/matte snapshot retains that mode. Grain Response remains independent of Mode; texture-only rendering always retains the original post-print workflow.
+Mode and all eight Enable switches are imported together without automatic mode-driven rewriting, preserving the exact saved module choices. A loaded Grain Only/Bypass/matte snapshot retains that mode. Grain Response remains independent of Mode; texture-only rendering always retains the original post-print workflow. Selective Color's controls and Image/Selection Matte view are also captured.
 
 Canceling a dialog changes nothing. Filesystem failures are reported through the host's OFX message suite. Invalid files never partially apply. Host errors during parameter writes may require Undo; an edit block is not a transactional rollback of arbitrary host failures. Final dialog behavior, undo/redo, animated-node imports, and project reload should be verified in Resolve.
 
 ## File Format and Validation
 
-Format version 1 stores `plugin`, `createdWith`, `name`, `controls`, `modules`, and `context`, alongside `formatVersion`. Creative settings use existing stable parameter identifiers, not display labels. Choices are numeric indices in the v0.27 control vocabulary. This is an initial format, not a guarantee that future control additions or choice reordering will load without a schema migration.
+Format version 2 stores `plugin`, `createdWith`, `name`, `controls`, `modules`, and `context`, alongside `formatVersion`. It adds six Selective Color controls and an eighth module switch. Creative settings use stable parameter identifiers, not display labels; choices are numeric indices. Complete format-version-1 files remain readable: all their values are retained, selective controls take neutral defaults and Selective Color is disabled. Mixed/incomplete schemas are rejected. New files require v0.32 or later; older builds cannot read format version 2.
 
 All known controls and switches are required. Parsing rejects unsupported versions/plugins, missing or unknown controls, wrong types, fractional choices, nonfinite/out-of-range numbers, duplicate fields, excessive nesting, trailing data, and files over 64 KiB. Names are limited to 256 UTF-8 bytes; paths use the native Unicode Windows APIs. JSON parsing/serialization use vendored MIT-licensed nlohmann/json v3.12.0, whose release checksum was verified upstream.
 

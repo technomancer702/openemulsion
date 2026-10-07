@@ -28,6 +28,13 @@ inline FilmResponseParameters prepare(const float* s)
     p.splitWidth = std::clamp(s[film::SplitWidth], 0.0f, 0.3f);
     p.splitShadows = std::clamp(s[film::SplitShadows], 0.0f, 2.0f);
     p.splitHighlights = std::clamp(s[film::SplitHighlights], 0.0f, 2.0f);
+    p.selectiveAmount = std::clamp(s[film::SelectiveAmount], 0.0f, 1.0f);
+    p.selectiveHue = std::clamp(s[film::SelectiveHue], 0.0f, 360.0f);
+    if (p.selectiveHue == 360.0f) p.selectiveHue = 0.0f;
+    p.selectiveRange = std::clamp(s[film::SelectiveRange], 0.0f, 180.0f);
+    p.selectiveSoftness = std::clamp(s[film::SelectiveSoftness], 0.0f, 90.0f);
+    p.selectiveSaturation = std::clamp(s[film::SelectiveSaturation], 0.0f, 1.0f);
+    p.selectiveView = s[film::SelectiveView] == 1.0f ? 1 : 0;
     const float hue = std::clamp(s[film::SplitHue], 0.0f, 360.0f) / 60.0f;
     auto hueChannel = [hue](float offset) {
         const float t = std::fmod(hue + offset, 6.0f);

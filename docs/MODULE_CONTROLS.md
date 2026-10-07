@@ -1,4 +1,4 @@
-# Module Controls (v0.27)
+# Module Controls (v0.32)
 
 Disabled modules retain their settings but grey out every option inside the module. The Enable toggle remains editable if the current mode permits that module. Modules excluded by the mode have unavailable toggles and controls, regardless of any stored Enable value.
 
@@ -10,8 +10,8 @@ A user edit to Mode sets the Enable toggles as follows:
 
 | Mode | Enabled modules |
 | --- | --- |
-| Full | Film Color, Film Development, Print, Halation, Aura, Bloom, Grain |
-| Color Only | Film Color, Film Development, Print |
+| Full | Film Color, Film Development, Print, Halation, Aura, Bloom, Grain, Selective Color |
+| Color Only | Film Color, Film Development, Print, Selective Color |
 | Halation, Bloom & Grain Only | Halation, Aura, Bloom, Grain |
 | Grain Only | Grain |
 | Bypass | None |
@@ -34,6 +34,6 @@ Construction, plugin-edit notifications, and timeline notifications refresh cont
 
 ## Verification
 
-The standalone ModuleControlState regression checks all seven modes, all 128 Enable masks, toggle synchronization, control mappings, global-selector availability, neutral Development, print locking, sequential mode transitions, and Mono semantic availability in every system and at partial/full strengths. The CPU/OpenCL regression separately covers expanded slider endpoints and grain smoothing.
+The standalone ModuleControlState regression checks all seven modes, all 256 Enable masks, toggle synchronization, control mappings, global-selector availability, neutral Development, print locking, sequential mode transitions, and Mono semantic availability in every system and at partial/full strengths. The CPU/OpenCL regression separately covers slider endpoints, grain smoothing and Selective Color.
 
-Actual greying, edit-block undo/redo, animated controls, and save/reload still require checks inside Resolve. No processing kernels or per-frame rendering work were added.
+Actual greying, edit-block undo/redo, animated controls, and save/reload still require checks inside Resolve. The original UI-policy change added no processing work; v0.32's Selective Color uses the existing composite pass and is neutral by default. See [Selective Color](SELECTIVE_COLOR.md).

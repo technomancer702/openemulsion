@@ -15,10 +15,11 @@ struct Toggle {
     int module;
 };
 
-inline constexpr std::array<Toggle, 7> Toggles {{
+inline constexpr std::array<Toggle, 8> Toggles {{
     {"enableNegative", film::Negative}, {"enableDevelopment", film::Development},
     {"enablePrint", film::Print}, {"enableHalation", film::Halation},
-    {"enableAura", film::Aura}, {"enableBloom", film::Bloom}, {"enableGrain", film::Grain}
+    {"enableAura", film::Aura}, {"enableBloom", film::Bloom}, {"enableGrain", film::Grain},
+    {"enableSelectiveColor", film::SelectiveColor}
 }};
 
 struct Control {
@@ -50,7 +51,10 @@ inline constexpr Control Controls[] {
     {"grainShadows", film::Grain}, {"grainMidtones", film::Grain}, {"grainHighlights", film::Grain},
     {"grainSeed", film::Grain}, {"grainStretch", film::Grain}, {"grainRed", film::Grain},
     {"grainGreen", film::Grain}, {"grainBlue", film::Grain},
-    {"sourceSpace", film::All}, {"outputSpace", film::Negative | film::Development | film::Print},
+    {"selectiveAmount", film::SelectiveColor}, {"selectiveHue", film::SelectiveColor},
+    {"selectiveRange", film::SelectiveColor}, {"selectiveSoftness", film::SelectiveColor},
+    {"selectiveSaturation", film::SelectiveColor}, {"selectiveView", film::SelectiveColor},
+    {"sourceSpace", film::All}, {"outputSpace", film::Negative | film::Development | film::Print | film::SelectiveColor},
     {"filmGauge", film::Halation | film::Aura | film::Grain}
 };
 
