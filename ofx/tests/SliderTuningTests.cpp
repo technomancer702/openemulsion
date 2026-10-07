@@ -57,12 +57,55 @@ static void testAnchors()
         { .514006555f,.514006555f,.514006555f,.335305929f,.335305929f,.335305929f,-.00973842479f,-.00973842479f,-.00973842479f }
     }};
     for (int preset=0; preset<look::Count; ++preset) {
-        const auto s=settings(preset);
+        auto s=settings(preset);
+        // v0.29 changes recipes, not math. Freeze the revised looks' original inputs.
+        if (preset == look::Daylight250 || preset == look::Tungsten200 || preset == look::Tungsten500 ||
+            preset == look::ClassicCinema || preset == look::NeonNights || preset == look::SeventiesPrint ||
+            preset == look::Super8HomeMovie) {
+            s = settings();
+            switch (preset) {
+            case look::Daylight250:
+                s[7]=.14f; s[8]=1; s[10]=1.06f; s[16]=.13f; s[17]=.38f;
+                s[28]=.58f; s[32]=.2f; s[13]=.13f;
+                break;
+            case look::Tungsten200:
+                s[7]=.16f; s[8]=.97f; s[16]=.12f; s[17]=.36f; s[28]=.6f;
+                s[13]=.16f; s[15]=.015f; s[34]=.65f;
+                break;
+            case look::Tungsten500:
+                s[7]=.20f; s[9]=.20f; s[16]=.22f; s[17]=.52f; s[18]=.4f;
+                s[22]=1.35f; s[28]=.66f; s[13]=.24f; s[15]=.025f; s[34]=.68f;
+                break;
+            case look::ClassicCinema:
+                s[7]=.22f; s[8]=1.04f; s[32]=-.65f; s[11]=.3f; s[12]=.25f;
+                s[13]=.18f; s[15]=.02f; s[16]=.14f; s[17]=.4f;
+                s[film::ColorRichness]=.12f;
+                break;
+            case look::NeonNights:
+                s[7]=.22f; s[8]=1.05f; s[28]=.72f; s[30]=.7f; s[32]=-.3f; s[12]=.18f;
+                s[13]=.36f; s[14]=.85f; s[15]=.04f; s[16]=.2f; s[17]=.5f;
+                s[film::SplitTone]=.18f; s[film::SplitHue]=205;
+                s[film::SplitHighlights]=.55f; s[film::ColorRichness]=.15f;
+                break;
+            case look::SeventiesPrint:
+                s[1]=1; s[7]=.25f; s[8]=.84f; s[9]=.24f; s[29]=.7f;
+                s[32]=-.55f; s[11]=.18f; s[12]=.65f; s[38]=.06f; s[40]=-.08f;
+                s[16]=.25f; s[17]=.58f; s[18]=.5f; s[13]=.22f; s[15]=.03f;
+                break;
+            case look::Super8HomeMovie:
+                s[1]=1; s[7]=.18f; s[8]=.88f; s[9]=.24f; s[10]=.98f; s[29]=.6f;
+                s[32]=.45f; s[11]=.25f; s[12]=.68f; s[38]=.06f; s[40]=-.06f;
+                s[16]=.2f; s[17]=.48f; s[18]=.55f; s[20]=.4f;
+                s[13]=.16f; s[15]=.025f; s[film::FilmGauge]=gauge::Super8;
+                s[film::BloomAmount]=.08f;
+                break;
+            }
+        }
         const auto warm=colorStage({.65f,.44f,.33f},s), red=colorStage({1.2f,.03f,.01f},s);
         const auto grain=grain_delta(29,67,response_luma(red),grain::prepare(s.data(),1080,37));
         const std::array<float,9> actual {warm.r,warm.g,warm.b,red.r,red.g,red.b,grain.r,grain.g,grain.b};
         for (size_t i=0; i<actual.size(); ++i)
-            near(actual[i],anchors[preset][i],5e-7f,"Defaults or built-in recipe changed from v0.24 anchor");
+            near(actual[i],anchors[preset][i],5e-7f,"Default controls or historical response math changed from v0.24 anchor");
     }
 }
 
@@ -147,7 +190,7 @@ int main()
 {
     try {
         testAnchors(); testExpandedColor(); testSoftnessJoin();
-        std::puts("Slider tuning: v0.24 default/preset anchors, expanded endpoints, skin/neutral isolation, finite color sweeps, and soft-grain continuity/pitch/seed pass.");
+        std::puts("Slider tuning: v0.24 default/historical recipe anchors, expanded endpoints, skin/neutral isolation, finite color sweeps, and soft-grain continuity/pitch/seed pass.");
         return 0;
     } catch (const std::exception& error) {
         std::fprintf(stderr,"FAILED: %s\n",error.what()); return 1;

@@ -1,6 +1,17 @@
-# OpenEmulsion v0.28
+# OpenEmulsion v0.29
 
-Experimental Windows x64 preset-capture update. Film rendering, built-in recipes, and grain response are unchanged.
+Experimental Windows x64 built-in look update. Creative recipes are more distinct; stock-inspired looks remain restrained artistic approximations, not measured calibrations. Renderer math and default Custom controls are unchanged.
+
+## Changes in v0.29
+
+- Classic Cinema: richer color, denser print contrast, and deeper shadows.
+- Neon Nights: more visible cool-shadow/warm-highlight separation and a cleaner print palette, without increasing glow strength/radii or adding blur passes.
+- Seventies Print: warmer, more muted print color and softer lifted shadows.
+- Super 8 Home Movie: brighter, more colorful reversal-inspired palette, retaining its gauge and coarse texture.
+- 250D, 200T, and 500T: modest tone/shoulder/print refinements and restrained texture weighting. No automatic tungsten/daylight white-balance shift.
+- 50D, Soft Portrait, Bleach Bypass, B&W Reversal, and Silver Noir retain their previous recipes.
+- Added synthetic creative-separation, stock-family/texture/neutral-pivot, representative skin-hue, split-tone, and vintage-shadow checks, plus full-recipe 4K benchmarks. All looks retain CPU/OpenCL and color-space/mode parity coverage.
+- Existing nodes and user preset snapshots keep their stored values. Select Custom, then a named preset to load its revision. No choice reordering, parameter/schema changes, or new rendering passes. Real-footage comparisons and calibrated film-scan validation remain outstanding; see `docs/LOOK_PRESETS.md`.
 
 ## Changes in v0.28
 

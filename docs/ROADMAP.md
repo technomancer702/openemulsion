@@ -1,6 +1,6 @@
 # Upgrade Roadmap
 
-## Completed Through v0.28
+## Completed Through v0.29
 
 - Independent film/print color and tone strengths and in-module Enable toggles.
 - Disabled-module control greying, mode-driven Enable toggles, and mode-aware print-preset locks.
@@ -14,6 +14,7 @@
 - Independently enabled Film Development: Push/Pull with grain-strength coupling and stable grain geometry, Richness, and Split Tone.
 - Advanced grain: horizontal desqueeze and independent RGB intensity.
 - Top-level Preset dropdown with twelve complete, editable stock-inspired/creative recipes, Custom inheritance, preserved camera balance/encoding/seed, and recipe/edit-policy plus CPU/OpenCL checks.
+- Revised creative recipes with clearer cinema/neon/vintage/reversal-home-movie separation, restrained modern stock-family refinements, synthetic intent/skin/neutral checks, and per-look 4K timings. Existing saved tuning and Custom defaults remain unchanged. See [Look Presets](LOOK_PRESETS.md).
 - Targeted slider range expansion with unchanged defaults/presets, variance-normalized primary grain smoothing above Softness one, full-strength Mono semantic greying, historical response anchors, and expanded CPU/OpenCL/performance checks.
 - Comparable Filmbox-style control terminology and clearer directional tooltips, without changing parameter identifiers or rendering. See [Control Names](CONTROL_NAMES.md).
 - Portable user preset save/load, current-control capture before dialogs, complete restoration by default, strict JSON validation, atomic file replacement, and optional context preservation. See [User Presets](USER_PRESETS.md).

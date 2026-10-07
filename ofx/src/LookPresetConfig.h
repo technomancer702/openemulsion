@@ -95,16 +95,16 @@ inline Recipe recipe(int preset)
         s[32]=.35; s[35]=.6; s[13]=.08;
         break;
     case Daylight250:
-        s[7]=.14; s[8]=1; s[10]=1.06; s[16]=.13; s[17]=.38;
-        s[28]=.58; s[32]=.2; s[13]=.13;
+        s[7]=.16; s[8]=1; s[9]=.14; s[10]=1.06; s[16]=.13; s[17]=.38;
+        s[28]=.65; s[32]=.25; s[35]=.5; s[13]=.13;
         break;
     case Tungsten200:
-        s[7]=.16; s[8]=.97; s[16]=.12; s[17]=.36; s[28]=.6;
-        s[13]=.16; s[15]=.015; s[34]=.65;
+        s[7]=.16; s[8]=.97; s[9]=.12; s[10]=1.04; s[16]=.11; s[17]=.34; s[28]=.7;
+        s[13]=.16; s[15]=.015; s[32]=.35; s[34]=.65; s[35]=.55;
         break;
     case Tungsten500:
-        s[7]=.20; s[9]=.20; s[16]=.22; s[17]=.52; s[18]=.4;
-        s[22]=1.35; s[28]=.66; s[13]=.24; s[15]=.025; s[34]=.68;
+        s[7]=.20; s[9]=.18; s[16]=.20; s[17]=.52; s[18]=.4;
+        s[22]=1.25; s[28]=.76; s[13]=.24; s[15]=.025; s[32]=.15; s[34]=.72; s[35]=.4;
         break;
     case ReversalMono:
         s[1]=4; s[8]=1; s[9]=.26; s[10]=1.18; s[16]=.24; s[17]=.5;
@@ -112,9 +112,10 @@ inline Recipe recipe(int preset)
         s[film::ModuleIndex] = film::Negative | film::Print | film::Grain;
         break;
     case ClassicCinema:
-        s[7]=.22; s[8]=1.04; s[32]=-.65; s[11]=.3; s[12]=.25;
-        s[13]=.18; s[15]=.02; s[16]=.14; s[17]=.4;
-        s[film::ColorRichness]=.12;
+        s[7]=.28; s[8]=1.07; s[9]=.19; s[10]=1.10; s[29]=.55;
+        s[32]=-.8; s[33]=1.04; s[11]=.2; s[12]=.16; s[35]=.3; s[36]=1.04; s[34]=.6;
+        s[13]=.18; s[15]=.02; s[16]=.16; s[17]=.4;
+        s[film::ColorRichness]=.25;
         break;
     case SoftPortrait:
         s[7]=.10; s[8]=.9; s[9]=.08; s[10]=.95; s[28]=.72;
@@ -123,14 +124,16 @@ inline Recipe recipe(int preset)
         s[film::BloomAmount]=.12; s[film::BloomRadius]=.65;
         break;
     case NeonNights:
-        s[7]=.22; s[8]=1.05; s[28]=.72; s[30]=.7; s[32]=-.3; s[12]=.18;
+        s[7]=.20; s[8]=1.06; s[9]=.12; s[10]=1.03; s[28]=.82; s[30]=.6;
+        s[32]=-.2; s[33]=1.05; s[11]=.65; s[12]=.18; s[35]=.65;
         s[13]=.36; s[14]=.85; s[15]=.04; s[16]=.2; s[17]=.5;
-        s[film::SplitTone]=.18; s[film::SplitHue]=205;
-        s[film::SplitHighlights]=.55; s[film::ColorRichness]=.15;
+        s[film::SplitTone]=.9; s[film::SplitHue]=205; s[film::SplitShadows]=1.4;
+        s[film::SplitHighlights]=.55; s[film::ColorRichness]=.18;
         break;
     case SeventiesPrint:
-        s[1]=1; s[7]=.25; s[8]=.84; s[9]=.24; s[29]=.7;
-        s[32]=-.55; s[11]=.18; s[12]=.65; s[38]=.06; s[40]=-.08;
+        s[1]=1; s[7]=.22; s[8]=.78; s[9]=.14; s[10]=1.02; s[28]=.58; s[29]=.95;
+        s[32]=-.25; s[33]=.98; s[11]=.1; s[12]=.95; s[35]=.55; s[36]=.92;
+        s[38]=.14; s[39]=.01; s[40]=-.18; s[film::ColorRichness]=-.15;
         s[16]=.25; s[17]=.58; s[18]=.5; s[13]=.22; s[15]=.03;
         break;
     case BleachBypass:
@@ -140,8 +143,9 @@ inline Recipe recipe(int preset)
         s[film::ModuleIndex] = film::Negative | film::Print | film::Grain;
         break;
     case Super8HomeMovie:
-        s[1]=1; s[7]=.18; s[8]=.88; s[9]=.24; s[10]=.98; s[29]=.6;
-        s[32]=.45; s[11]=.25; s[12]=.68; s[38]=.06; s[40]=-.06;
+        s[1]=5; s[7]=.18; s[8]=1; s[9]=.18; s[10]=.98; s[28]=.65; s[29]=.5;
+        s[32]=.6; s[33]=.92; s[11]=.42; s[12]=.7; s[35]=.65; s[36]=1.02;
+        s[38]=.08; s[39]=.02; s[40]=-.06;
         s[16]=.2; s[17]=.48; s[18]=.55; s[20]=.4;
         s[13]=.16; s[15]=.025; s[film::FilmGauge]=gauge::Super8;
         s[film::BloomAmount]=.08;

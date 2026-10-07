@@ -1441,6 +1441,21 @@ public:
             const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() / 12.0;
             std::printf("4K %s, mode %.0f, film %.0f, gauge %s, radius %.1f, aura %.1f/radius %.1f, development %.1f/%.1f/%.1f, bloom %.1f/radius %.1f, grain softness %.2f/response %.0f: %.2f ms/frame (GPU resident, excludes Resolve/transfers).\n", color::spaces()[static_cast<int>(s[26])].label, s[0], s[1], gauge::prepare(s.data()).label, s[14], s[15], s[film::AuraRadius], s[film::PushPull],s[film::ColorRichness],s[film::SplitTone],s[film::BloomAmount],s[film::BloomRadius],s[20],s[film::GrainResponse],ms);
         }
+        for (int preset = 1; preset < look::Count; ++preset) {
+            auto s = filmSettings();
+            const auto recipe = look::recipe(preset);
+            for (const auto& control : look::Controls) s[control.setting] = static_cast<float>(recipe[control.setting]);
+            s[film::ModuleIndex] = static_cast<float>(recipe[film::ModuleIndex]);
+            s[26] = color::AlexaLogC3; s[27] = 1;
+            require(RunOpenEmulsionOpenCL(queue,width,height,0,s.data(),reinterpret_cast<const float*>(src),reinterpret_cast<float*>(dst)),"Look benchmark warmup failed");
+            require(finish(queue) == 0,"Look benchmark warmup execution failed");
+            const auto start = std::chrono::steady_clock::now();
+            for (int frame = 0; frame < 12; ++frame)
+                require(RunOpenEmulsionOpenCL(queue,width,height,frame,s.data(),reinterpret_cast<const float*>(src),reinterpret_cast<float*>(dst)),"Look benchmark render failed");
+            require(finish(queue) == 0,"Look benchmark execution failed");
+            const double ms = std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count()/12;
+            std::printf("4K LogC3 look %s: %.2f ms/frame (GPU resident, full recipe, excludes Resolve/transfers).\n",look::Labels[preset],ms);
+        }
         releaseMem(src);
         releaseMem(dst);
     }
