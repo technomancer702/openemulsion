@@ -152,6 +152,14 @@ if(BUILD_COLOR_BENCH)
     endif()
 endif()
 if(BUILD_TESTING)
+    add_executable(PluginStartupTests tests/PluginStartupTests.cpp)
+    target_include_directories(PluginStartupTests PRIVATE src "${OFX_API}/include")
+    target_compile_definitions(PluginStartupTests PRIVATE NOMINMAX)
+    if(MINGW)
+        target_link_options(PluginStartupTests PRIVATE -static-libgcc -static-libstdc++ -static)
+    endif()
+    add_dependencies(PluginStartupTests OpenEmulsion)
+    add_test(NAME PluginStartupRegression COMMAND PluginStartupTests "$<TARGET_FILE:OpenEmulsion>")
     add_test(NAME PluginIconPackaging
         COMMAND ${CMAKE_COMMAND}
             "-DSOURCE_ROOT=${CMAKE_CURRENT_SOURCE_DIR}"

@@ -1,6 +1,12 @@
-# OpenEmulsion v0.36
+# OpenEmulsion v0.37
 
 Experimental Windows x64 film emulation with SDR and direct HDR PQ output. Stock and movie references remain artistic interpretations, not measured film profiles or exact movie grades. HDR monitor/host validation is still outstanding.
+
+## Changes in v0.37
+
+- Fixed the crash when adding v0.36 to a clip: the new top-level HDR sliders passed no module parent to a helper that unconditionally dereferenced it. Root-level sliders now omit the parent assignment, as required by OFX; grouped module controls retain their existing parents.
+- Added a minimal host regression that loads the actual OFX binary, describes Filter/General controls, and creates/destroys SDR/HDR instances. Verifies HDR slider defaults, page order, group references and initial enabled states. The unfixed v0.36 binary reproduces the descriptor crash under this test.
+- Rendering math, preset recipes, parameter IDs and preset format 5 are unchanged. Resolve UI/playback and calibrated HDR appearance still require native-host confirmation.
 
 ## Changes in v0.36
 

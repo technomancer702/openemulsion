@@ -1,6 +1,8 @@
 # Upgrade Roadmap
 
-## Completed Through v0.36
+## Completed Through v0.37
+
+- Fixed v0.36 descriptor startup crash for root-level HDR controls. Added shipping-binary OFX descriptor/instance lifecycle checks for Filter/General contexts, including initial SDR/HDR control states. Rendering math and preset format are unchanged.
 
 - Experimental Rec.2100 PQ / Rec.2020 output, post-look HDR viewing response, peak/reference-white controls, shared CPU/OpenCL math and format-5 output-context snapshots. Independent transfer/matrix anchors, all-recipe parity and local footage luminance checks. HLG/metadata and calibrated HDR monitoring remain outstanding. See [Color Spaces](COLOR_SPACES.md).
 

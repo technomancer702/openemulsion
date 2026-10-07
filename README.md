@@ -6,7 +6,7 @@ Film Color, Film Development, Print, Halation, Aura, Bloom, Grain, and Selective
 
 ## Status
 
-Experimental, Windows x64. Current development version: **v0.36**. The current implementation supports OpenCL acceleration and a multithreaded CPU fallback. CUDA, Metal, macOS, and Linux builds are not implemented.
+Experimental, Windows x64. Current development version: **v0.37**. The current implementation supports OpenCL acceleration and a multithreaded CPU fallback. CUDA, Metal, macOS, and Linux builds are not implemented.
 
 OpenEmulsion is an original artistic approximation, not a measured film-stock calibration. HDR PQ output is experimental; HLG and HDR metadata are not implemented. There is no DCTL dependency. Earlier rendering has been tested in Resolve, but this is not yet a stable production release and calibrated HDR monitoring still needs verification.
 
@@ -119,6 +119,8 @@ Working buffers are reused on the GPU. The highlight blur uses a resolution-scal
 
 The regression harness covers color-space reference values, tone curves, grain statistics, continuous halation, module isolation, partial/zero color-tone strengths, gauge presets, HD/4K halo scaling, odd-sized higher-resolution grids, bypass, alpha, development tone/split isolation, grain stretch/channel gains, linear bloom extraction/spread/protection, and CPU/OpenCL parity. GPU checks are skipped explicitly when no device is available. GPU-resident 4K timings exclude Resolve, transfers, and other effects; they are not timeline playback guarantees.
 
+A minimal OFX test host also loads the shipping binary, describes its controls in Filter/General contexts, and creates/destroys SDR and HDR instances. It checks root-level HDR sliders, group parenting, page order, defaults, and initial enabled states. This catches descriptor/startup faults that pixel-math tests cannot; it is not a substitute for Resolve UI, project reload, and playback testing.
+
 Optional synthetic previews:
 
 ```powershell
@@ -130,9 +132,9 @@ The optional sixth preview path produces a five-panel bloom comparison; see [Blo
 
 ## Release Packaging
 
-Commit release files first, then run `.\tools\package_release.ps1`. It builds and tests Release, verifies the supported compiler/runtime notices and imported DLLs, and creates `dist/releases/OpenEmulsion-v0.36-Windows-x64.zip` plus `.zip.sha256`. Use `-Force` only when deliberately replacing a generated archive. Release output is ignored by Git; upload the ZIP and checksum as release assets, not repository files.
+Commit release files first, then run `.\tools\package_release.ps1`. It builds and tests Release, verifies the supported compiler/runtime notices and imported DLLs, and creates `dist/releases/OpenEmulsion-v0.37-Windows-x64.zip` plus `.zip.sha256`. Use `-Force` only when deliberately replacing a generated archive. Release output is ignored by Git; upload the ZIP and checksum as release assets, not repository files.
 
-The packager includes only the bundle, release guides, documentation, licenses, and a `git archive` source snapshot of the exact revision in `manifest.json`. It validates the extracted files and hashes, loads the extracted OFX binary using only its directory and Windows system DLL search, and checks its exported identifier/version. To recheck an archive, run `.\tools\test_release.ps1 -Archive "dist/releases/OpenEmulsion-v0.36-Windows-x64.zip"` in 64-bit PowerShell. This is not a clean-machine Resolve installation test or a code-signing/security certification; separate-machine and other-GPU validation remain outstanding.
+The packager includes only the bundle, release guides, documentation, licenses, and a `git archive` source snapshot of the exact revision in `manifest.json`. It validates the extracted files and hashes, loads the extracted OFX binary using only its directory and Windows system DLL search, and checks its exported identifier/version. To recheck an archive, run `.\tools\test_release.ps1 -Archive "dist/releases/OpenEmulsion-v0.37-Windows-x64.zip"` in 64-bit PowerShell. This is not a clean-machine Resolve installation test or a code-signing/security certification; separate-machine and other-GPU validation remain outstanding.
 
 Optional Resolve test charts:
 

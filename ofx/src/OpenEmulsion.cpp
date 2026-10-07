@@ -26,7 +26,7 @@
 #define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, halation, aura, linear-light bloom, and selective color, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 36
+#define kPluginVersionMinor 37
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -1357,7 +1357,7 @@ private:
                 param->setEnabled(false);
             }
         }
-        param->setParent(*parent);
+        if (parent) param->setParent(*parent);
         page->addChild(*param);
     }
 };
