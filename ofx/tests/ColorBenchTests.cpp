@@ -14,6 +14,8 @@ int oe_retention_index();
 int oe_sdr_contrast_index();
 int oe_sdr_rolloff_index();
 int oe_sdr_gamut_index();
+int oe_hdr_exposure_index();
+int oe_hdr_rolloff_index();
 int oe_preset_settings(int, float*, size_t);
 int oe_render(const float*, float*, size_t, const float*, size_t, float);
 }
@@ -30,6 +32,8 @@ int main()
                 "Native settings ABI mismatch");
         require(oe_sdr_contrast_index()==film::SDRContrast && oe_sdr_rolloff_index()==film::SDRRolloff &&
                 oe_sdr_gamut_index()==film::SDRGamut,"Native SDR control indices mismatch");
+        require(oe_hdr_exposure_index()==film::HDRExposure && oe_hdr_rolloff_index()==film::HDRRolloff,
+                "Native HDR control indices mismatch");
         const std::array<float,16> input {0,0,0,.1f, .15f,.25f,.3f,.5f, .6f,.7f,.5f,.7f, .9f,.6f,.5f,1};
         std::array<float,16> actual {};
         std::array<float,film::SettingsCount> s {};
@@ -70,6 +74,11 @@ int main()
             s[control]=2;
             require(oe_render(input.data(),actual.data(),4,s.data(),s.size(),0)!=0,"Invalid SDR control accepted");
             s[control]=0;
+        }
+        for (const auto entry : {std::pair<int,float>{film::HDRExposure,4.01f},{film::HDRRolloff,1.01f}}) {
+            s[film::OutputRendering]=color::StandardHDR; s[entry.first]=entry.second;
+            require(oe_render(input.data(),actual.data(),4,s.data(),s.size(),0)!=0,"Invalid HDR viewing control accepted");
+            s[entry.first]=0;
         }
         s[film::OutputRendering]=std::numeric_limits<float>::quiet_NaN();
         require(oe_render(input.data(),actual.data(),4,s.data(),s.size(),0)!=0,"NaN settings accepted");

@@ -44,6 +44,7 @@ typedef struct ColorParameters {
     int renderHDR;
     float hdrPeak, hdrWhite;
     float sdrContrast, sdrRolloff, sdrGamut;
+    float hdrGain, hdrRolloff;
 } ColorParameters;
 
 static inline float color_signed_power(float x, float exponent)
@@ -375,12 +376,26 @@ static inline float color_hdr_tone(float x, float ceiling)
     return 1.0f+headroom*(high/(headroom+high));
 }
 
+static inline float color_hdr_viewing_tone(float x, ColorParameters p)
+{
+    const float ceiling = p.hdrPeak/p.hdrWhite;
+    if (p.hdrRolloff == 0.0f || x <= 1.0f) return color_hdr_tone(x,ceiling);
+    // Reshape shoulder progress without changing the white slope or endpoint.
+    const float headroom = ceiling-1.0f;
+    const float high = (0.88f/0.82f)*(x-1.0f);
+    const float progress = high/(headroom+high);
+    return 1.0f+headroom*(progress/(1.0f+0.9f*p.hdrRolloff*progress*(1.0f-progress)));
+}
+
 // HDR runs after creative/texture finishing, in linear destination primaries.
 static inline ColorRgb color_hdr_output(ColorRgb c, ColorParameters p)
 {
+    if (p.hdrGain != 1.0f) {
+        c.r *= p.hdrGain; c.g *= p.hdrGain; c.b *= p.hdrGain;
+    }
     const float y = c.g+0.2627f*(c.r-c.g)+0.0593f*(c.b-c.g);
     if (y <= 0.0f) { ColorRgb black = {0,0,0}; return black; }
-    const float mapped = color_hdr_tone(y,p.hdrPeak/p.hdrWhite)*p.hdrWhite/p.hdrPeak;
+    const float mapped = color_hdr_viewing_tone(y,p)*p.hdrWhite/p.hdrPeak;
     const float gain = mapped/y;
     c.r *= gain; c.g *= gain; c.b *= gain;
     c = color_sdr_gamut(c,mapped);

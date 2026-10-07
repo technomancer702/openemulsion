@@ -138,9 +138,19 @@ int main()
             require(toJson(parse(older.dump())) == valid,"Older preset settings no longer load");
         }
         auto invalid = valid;
-        auto v5 = valid; v5["formatVersion"] = 5;
+        auto v6 = valid; v6["formatVersion"] = 6;
+        for (const char* name : {"hdrExposure","hdrRolloff"}) v6["context"].erase(name);
+        auto v6Context = original.context;
+        for (size_t i=0; i<v6Context.size(); ++i)
+            if (std::string(ContextControls[i].name)=="hdrExposure" || std::string(ContextControls[i].name)=="hdrRolloff") v6Context[i]=0;
+        const auto migratedV6=parse(v6.dump());
+        require(migratedV6.context==v6Context && migratedV6.controls==original.controls && migratedV6.modules==original.modules,
+                "v6 migration changes the existing look or HDR viewing defaults");
+        auto mixedV6=v6; mixedV6["context"]["hdrExposure"]=0;
+        rejects([&] { parse(mixedV6.dump()); },"Mixed HDR viewing schema accepted");
+        auto v5 = v6; v5["formatVersion"] = 5;
         for (const char* name : {"sdrContrast","sdrRolloff","sdrGamut"}) v5["context"].erase(name);
-        auto v5Context = original.context;
+        auto v5Context = v6Context;
         for (size_t i=0; i<v5Context.size(); ++i)
             if (std::string(ContextControls[i].name).rfind("sdr",0)==0) v5Context[i]=0;
         const auto migratedV5=parse(v5.dump());
@@ -148,12 +158,12 @@ int main()
                 "v5 migration changes existing look or SDR defaults");
         auto mixedV5=v5; mixedV5["context"]["sdrContrast"]=0;
         rejects([&] { parse(mixedV5.dump()); },"Mixed SDR schema accepted");
-        auto oldValid = valid;
+        auto oldValid = v6;
         for (const char* name : {"sdrContrast","sdrRolloff","sdrGamut"}) oldValid["context"].erase(name);
         oldValid["context"].erase("hdrPeak"); oldValid["context"].erase("hdrWhite");
         oldValid["context"]["outputSpace"] = color::HDRPQOutput-1;
         oldValid["context"]["outputRendering"] = color::StandardSDR;
-        auto oldContext = original.context;
+        auto oldContext = v6Context;
         for (size_t i=0; i<oldContext.size(); ++i) {
             const std::string name = ContextControls[i].name;
             if (name.rfind("sdr",0)==0) oldContext[i]=0;

@@ -160,6 +160,7 @@ inline ColorParameters prepare(int source, int output, bool textureOnly, int ren
         (rendering == StandardSDR || (rendering == Automatic && sceneInput));
     p.hdrPeak = std::clamp(hdrPeak,400.0f,10000.0f);
     p.hdrWhite = std::clamp(hdrWhite,80.0f,300.0f);
+    p.hdrGain = 1.0f;
     p.renderHDR = !textureOnly && destination == Rec2100PQ &&
         (rendering == StandardHDR || (rendering == Automatic && sceneInput));
     const Matrix& a = to709Matrices()[source];
@@ -186,6 +187,11 @@ inline bool sdrControlsEnabled(const ColorParameters& p, int modules, int view)
         !((modules & film::SelectiveColor) && view == 1);
 }
 
+inline bool hdrControlsEnabled(const ColorParameters& p, int modules, int view)
+{
+    return p.renderHDR && hdrWhiteEnabled(p,modules,view);
+}
+
 inline ColorParameters prepare(const float* settings)
 {
     const int modules = film::modulesForSettings(settings);
@@ -199,6 +205,10 @@ inline ColorParameters prepare(const float* settings)
         p.sdrContrast = std::clamp(settings[film::SDRContrast],-1.0f,1.0f);
         p.sdrRolloff = std::clamp(settings[film::SDRRolloff],-1.0f,1.0f);
         p.sdrGamut = std::clamp(settings[film::SDRGamut],-1.0f,1.0f);
+    }
+    if (hdrControlsEnabled(p,modules,static_cast<int>(settings[film::SelectiveView]))) {
+        p.hdrGain = std::exp2(std::clamp(settings[film::HDRExposure],-4.0f,4.0f));
+        p.hdrRolloff = std::clamp(settings[film::HDRRolloff],-1.0f,1.0f);
     }
     return p;
 }

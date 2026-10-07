@@ -1,11 +1,17 @@
-# OpenEmulsion v0.41
+# OpenEmulsion v0.42
 
 Experimental Windows x64 film emulation with SDR and direct HDR PQ output. Stock and movie references remain artistic interpretations, not measured film profiles or exact movie grades. HDR monitor/host validation is still outstanding.
+
+## Changes in v0.42
+
+- Added a collapsed HDR Viewing group below SDR Viewing, grouping Peak Luminance, Reference White, Exposure Trim (EV) and Highlight Rolloff. Trim runs after film/texture finishing, before HDR tone mapping; rolloff reshapes above-white highlights while preserving the gray/white anchors, white slope and peak limit. Both default to zero, retaining v0.41 rendering.
+- New adjustments grey out and have no effect outside active HDR rendering. Reference White still applies to PQ Conversion Only. Built-in looks preserve HDR Viewing settings; format-7 user presets capture them. Complete older files receive zero adjustments; Preserve Color Spaces retains the destination HDR settings.
+- Independently authored shared CPU/OpenCL math adds no passes, buffers or readbacks. Expanded checks cover neutral/exposure/colored-emitter ramps, curve continuity, peak bounds, startup/group order, inactive-path isolation, all-recipe parity and preset migration. Local full-precision footage diagnostics measure HDR output and source-keyed taillight contrast; they are not calibrated HDR-monitor validation or recovery of clipped source detail. No SpektraFilm code/profile data was reused.
 
 ## Changes in v0.41
 
 - Moved the collapsed SDR Viewing group to the bottom below Selective Color. Its controls, defaults, enabled-state policy, rendering math and preset format are unchanged.
-- Added shipping-plugin descriptor checks to keep the group and its three sliders last, after all Selective Color controls.
+- Added shipping-plugin descriptor checks to keep the group and its three sliders last, after all Selective Color controls in v0.41. v0.42 appends HDR Viewing afterward.
 
 ## Changes in v0.40
 

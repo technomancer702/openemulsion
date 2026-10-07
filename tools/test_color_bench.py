@@ -70,6 +70,51 @@ class BenchTests(unittest.TestCase):
         s[self.renderer.dll.oe_rendering_index()] = 1
         np.testing.assert_array_equal(self.renderer.render(frame, s), self.renderer.render(frame, s, 1))
 
+    def test_hdr_viewing_double_reference(self):
+        x = np.exp2(np.linspace(-16, 14, 2000))
+        frame = rgba(np.repeat(x[None, :, None], 3, axis=2).astype(np.float32))
+        self.assertEqual(set(self.renderer.hdr_indices), {"exposure", "rolloff"})
+        for peak, white in [(400, 300), (1000, 203), (10000, 80)]:
+            for ev in [-4, 0, 4]:
+                for rolloff in [-1, 0, 1]:
+                    settings = self.renderer.settings("Neutral / Clean Slate", 14, 3)
+                    settings[27] = self.renderer.dll.oe_hdr_output_index()
+                    settings[self.renderer.dll.oe_hdr_peak_index()] = peak
+                    settings[self.renderer.dll.oe_hdr_white_index()] = white
+                    settings[self.renderer.hdr_indices["exposure"]] = ev
+                    settings[self.renderer.hdr_indices["rolloff"]] = rolloff
+                    light = x*2**ev
+                    expected = np.empty_like(light)
+                    low, high = light <= .18, light > 1
+                    mid = ~(low | high)
+                    expected[low] = .12*light[low]/(.234-.30*light[low])
+                    t = (light[mid]-.18)/.82
+                    expected[mid] = .12+.88*t+.82*(13/15-.88/.82)*t*(1-t)**2
+                    headroom = peak/white-1
+                    u = (.88/.82)*(light[high]-1)/headroom
+                    progress = u/(1+u)
+                    expected[high] = 1+headroom*progress/(1+.9*rolloff*progress*(1-progress))
+                    n = (expected*white/10000)**(2610/16384)
+                    pq = ((3424/4096+(2413/128)*n)/(1+(2392/128)*n))**(2523/32)
+                    actual = self.renderer.render(frame, settings)
+                    np.testing.assert_allclose(actual[0, :, 0], pq, atol=1e-5)
+                    np.testing.assert_allclose(actual[0, :, 0], actual[0, :, 1], atol=1e-6)
+
+    def test_hdr_controls_inactive_and_invalid(self):
+        frame = rgba(np.array([[[.18, .18, .18], [32, .1, .3]]], np.float32))
+        for rendering, output in [(0, 1), (1, self.renderer.dll.oe_hdr_output_index()), (0, 2)]:
+            settings = self.renderer.settings("50D Daylight", 14, rendering)
+            settings[27] = output
+            baseline = self.renderer.render(frame, settings)
+            settings[self.renderer.hdr_indices["exposure"]] = 4
+            settings[self.renderer.hdr_indices["rolloff"]] = 1
+            np.testing.assert_array_equal(baseline, self.renderer.render(frame, settings))
+        for control, value in [("exposure", 4.01), ("rolloff", -1.01)]:
+            settings = self.renderer.settings("Neutral / Clean Slate", 14)
+            settings[self.renderer.hdr_indices[control]] = value
+            with self.assertRaises(ValueError):
+                self.renderer.render(frame, settings)
+
     def test_logc3_reference_black_and_gray(self):
         frame = rgba(np.array([[[.092809] * 3, [.39100683] * 3]], np.float32))
         linear = self.renderer.linear(frame, 0)

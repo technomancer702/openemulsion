@@ -153,6 +153,48 @@ decimated, not filtered. Use stride 1 when measuring tiny highlight detail.
 
 ## Interpretation
 
+### HDR Viewing Audit (v0.42)
+
+Preserve a v0.41 native bridge before rebuilding, then run:
+
+```powershell
+python tools/inspect_hdr_viewing.py --reference-bridge build/ofx/bench/ColorBench-v041.dll
+```
+
+This optional numeric audit reuses the five retained full-precision LogC3 inputs
+in `analysis/color-bench-v035`. It compares native outputs at 400/1000/4000-nit
+peaks, 203-nit white, Neutral and 50D. The local run passed 90 bit-exact default
+HDR comparisons against v0.41 and 90 bit-exact inactive pairs covering SDR,
+PQ Conversion Only and managed log output. It recorded 210 frame measurements
+and 180 taillight-region measurements across default, +/-1 EV trim and +/-1
+rolloff. The independently decoded PQ report lives under ignored
+`analysis/hdr-viewing-v042/results.json`; no HDR-in-SDR preview is generated.
+
+Taillight crops use fixed source-keyed four-pixel pairs at the retained source
+resolution, not output-selected pixels. At 1000 nits, median relative luminance
+contrast across the six region/timestamp combinations was 11.26-13.25% for
+Neutral defaults, 15.00-18.21% with -1 EV trim, and 12.24-14.64% with -1 rolloff.
+For 50D, default medians were 8.56-14.32%; -1 EV gave 9.61-14.71%, while rolloff
+had much less effect because the creative response had already compressed
+these highlights. These source-keyed diagnostics are not perceptual quality
+scores, calibrated HDR-monitor evaluation, stock fidelity, clipping recovery
+or a matched SpektraFilm render.
+
+All nine CTest suites and 21 Python bench tests passed. Tests cover independent
+double-precision neutral/PQ references, black/gray/white anchors, C1 joins,
+ordered/bounded shoulders, ordinary-exposure colored-emitter separation, alpha,
+all-recipe CPU/OpenCL parity, UI startup and preset migration. Extremely bright
+pairs at +4 EV can share float PQ codes near peak; stress checks allow transfer
+precision tolerance rather than claiming visible detail at every exposure.
+The current GPU driver does not support out-of-order queues, so those checks
+remain skipped on this machine.
+
+The same 4K GPU-resident harness measured HDR Color Only around 5.21-5.45 ms and
+Full around 6.50-7.39 ms across 1000/4000-nit targets and default/active controls.
+These short synthetic timings exclude Resolve/transfers, include run-to-run
+variation and are not playback guarantees or an old/new speed comparison. The
+controls reuse the composite pass; exposure gain is prepared once per render.
+
 ### SDR Viewing Audit (v0.40)
 
 Preserve the v0.39 native bridge before rebuilding, then run:

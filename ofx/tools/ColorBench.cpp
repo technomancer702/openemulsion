@@ -55,6 +55,8 @@ __declspec(dllexport) int oe_sdr_rolloff_index() { return film::SDRRolloff; }
 __declspec(dllexport) int oe_sdr_gamut_index() { return film::SDRGamut; }
 __declspec(dllexport) int oe_hdr_peak_index() { return film::HDRPeak; }
 __declspec(dllexport) int oe_hdr_white_index() { return film::HDRWhite; }
+__declspec(dllexport) int oe_hdr_exposure_index() { return film::HDRExposure; }
+__declspec(dllexport) int oe_hdr_rolloff_index() { return film::HDRRolloff; }
 __declspec(dllexport) int oe_hdr_output_index() { return color::HDRPQOutput; }
 __declspec(dllexport) int oe_hdr_rendering_index() { return color::StandardHDR; }
 __declspec(dllexport) int oe_preset_count() { return look::Count; }
@@ -98,7 +100,9 @@ try
         settings[film::OutputRendering]<0 || settings[film::OutputRendering]>color::StandardHDR ||
         settings[film::SDRContrast]<-1 || settings[film::SDRContrast]>1 ||
         settings[film::SDRRolloff]<-1 || settings[film::SDRRolloff]>1 ||
-        settings[film::SDRGamut]<-1 || settings[film::SDRGamut]>1) return 1;
+        settings[film::SDRGamut]<-1 || settings[film::SDRGamut]>1 ||
+        settings[film::HDRExposure]<-4 || settings[film::HDRExposure]>4 ||
+        settings[film::HDRRolloff]<-1 || settings[film::HDRRolloff]>1) return 1;
     const int modules=film::modulesForSettings(settings);
     if (modules & ~(film::Negative|film::Development|film::Print|film::SelectiveColor)) return 1;
     const auto cp=color::prepare(settings);

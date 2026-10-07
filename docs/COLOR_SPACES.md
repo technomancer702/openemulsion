@@ -1,4 +1,4 @@
-# OFX Color Spaces (v0.41)
+# OFX Color Spaces (v0.42)
 
 ## Resolve Workflow
 
@@ -98,8 +98,9 @@ The collapsed **SDR Viewing** group sits at the bottom below Selective Color
 and exposes three centered adjustments, each
 from -1 to +1. Zero preserves v0.39, including its colored-emitter detail response.
 They are output context, not stock-recipe values: built-in looks preserve them,
-and user presets capture them in format 6. Preserve Color Spaces also preserves
-these settings when loading a file. Older files receive zero adjustments.
+and user presets capture them in format 7 (introduced in format 6). Preserve Color
+Spaces also preserves these settings when loading a file. Pre-format-6 files
+receive zero SDR adjustments.
 
 - **Viewing Contrast:** negative softens shadow/midtone contrast; positive deepens
   shadows and increases midtone separation. Scene gray 0.18 remains display-linear
@@ -184,7 +185,8 @@ This is not inverse tone mapping or recovery of already clipped SDR highlights.
 
 **HDR Peak Luminance** ranges from 400 to 10000 nits (default 1000).
 **HDR Reference White** ranges from 80 to 300 nits (default 203). Their ranges
-ensure white is below peak. Both are top-level output context, preserved when
+ensure white is below peak. Both sit in the collapsed **HDR Viewing** group,
+below SDR Viewing, and remain output context, preserved when
 switching built-in looks and by Preserve Color Spaces during user-preset loading.
 Peak is enabled only during HDR rendering; reference white is enabled for all
 active PQ output, including Conversion Only. Texture-only, bypass and diagnostic
@@ -209,6 +211,41 @@ values can occupy HDR headroom. Peak-normalized radial gamut mapping preserves
 Rec.2020 linear luminance/chroma direction, then ST 2084 inverse EOTF encodes
 absolute luminance (code 1 means 10000 nits, not the selected peak).
 This is our artistic HDR rendering, not the BT.2100 reference OOTF or an ACES ODT.
+
+### HDR Viewing Controls
+
+**Exposure Trim (EV)** ranges from -4 to +4, default zero. It multiplies post-look
+linear Rec.2020 RGB by `2^EV` before the HDR tone/gamut response. Positive
+brightens, negative darkens; +1 doubles the incoming light, not the final
+compressed highlights. It does not change camera balance, the negative/print
+response, selection keys, glow extraction or grain geometry. All finishing
+including grain/glow is subsequently mapped through HDR, so their visible
+amplitudes can change. The gain is calculated once per render, not per pixel.
+
+**Highlight Rolloff** ranges from -1 to +1, default zero. It only reshapes the
+above-white shoulder: positive increases compression, negative keeps highlights
+brighter. Gray/white anchors, the slope at white and the asymptotic peak stay
+fixed at zero exposure trim. It does not brighten shadows or undo creative
+negative/print compression. For baseline shoulder progress `t` in 0..1 and
+headroom `H = peak/white - 1`, the adjusted above-white value is
+`1 + H*t/(1 + 0.9*rolloff*t*(1-t))`. Its derivative with respect to `t` is
+positive throughout the control range; the joins remain C1 continuous.
+
+Both controls are ignored and greyed out outside active HDR rendering, including
+PQ Conversion Only, SDR, managed log/linear output, texture-only, bypass and
+mattes. Reference White still affects PQ Conversion Only; peak and the new
+adjustments do not. Zero controls take the existing v0.41 arithmetic paths.
+No additional GPU passes, scratch buffers or readbacks are introduced. Built-in
+looks preserve this output context, and Preserve Color Spaces retains it on
+user-preset import. Format 7 captures the two adjustments; complete older files
+load them as zero. This implementation is independent of SpektraFilm's shaders.
+
+At 1000-nit peak and 203-nit white, neutral post-look input 4 maps to about
+562.09 nits at zero rolloff; the control changes this above-white response,
+not the standard PQ encoding. Near peak, finite-precision PQ codes and strong
+compression can still merge extremely bright intensity differences. HDR
+colored-emitter ordering and source-keyed taillight contrast are diagnostics,
+not a guarantee of visible lens detail at every exposure or peak setting.
 
 PQ transfer constants/Rec.2020 primaries and the 203-nit reference-white convention
 come from [ITU-R BT.2100-3](https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.2100-3-202502-I!!PDF-E.pdf).

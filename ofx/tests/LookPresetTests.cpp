@@ -298,7 +298,9 @@ int main()
             require(selectiveLook || (packed[film::SelectiveAmount] == 0 && packed[film::SelectiveView] == 0),
                     "Ordinary preset retains selective amount or matte view");
             require(packed[0] == 0 && packed[2] == printstyle::Custom, "Preset is masked by mode or locked print");
-            for (int preserved : {4,5,6,25,26,27})
+            for (int preserved : {4,5,6,25,26,27,int(film::OutputRendering),int(film::HDRPeak),int(film::HDRWhite),
+                                  int(film::SDRContrast),int(film::SDRRolloff),int(film::SDRGamut),
+                                  int(film::HDRExposure),int(film::HDRRolloff)})
                 require(packed[preserved] == before[preserved], "Preserved setting changed");
             packed[film::ModuleIndex] = static_cast<float>(mask);
             const auto response = response::prepare(packed.data());

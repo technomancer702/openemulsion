@@ -64,7 +64,131 @@ Keep the user-validated v0.39 default during further evaluation. Use stage-isola
 
 A matched appearance comparison needs SpektraFilm's actual process, film, paper, exposure/gamma, Color Adaptation and scanner settings, not just matching LogC3 and Rec.709 menus. Moving our SDR transform after the film stages is not a drop-in fix: those stages currently expect the existing perceptual working domain and would require redesign and regression checks. No rendering change was made during this audit.
 
+## HDR Follow-Up (2026-10-07)
+
+Fetched upstream again; local HEAD and `origin/main` still match
+`86476afc5b077de77e2278e3658d1ba9309892a1`. Compared its Vulkan and Metal HDR
+finalizers with OpenEmulsion v0.41. This is source inspection, not a matched
+HDR-monitor comparison of the installed plugins. No rendering change was made.
+
+### Output Architecture And Controls
+
+Both projects use Rec.2020/D65 and the ST 2084 absolute-luminance transfer for PQ.
+The important difference is the tone response before encoding, not a different
+PQ definition:
+
+- **SpektraFilm:** maps post-film/print/scan relative linear RGB to nits using
+  reference white and a post-scan HDR Exposure EV trim. Hard Clip limits
+  luminance to the chosen peak; Soft Rolloff leaves luminance below reference
+  white unchanged and uses an exponential shoulder above it. Its named PQ
+  1000, PQ 4000 and HLG 1000 presets all select **Hard Clip** at 203-nit white.
+  Selecting a named HDR preset does not reset the separate exposure trim.
+- **OpenEmulsion:** extends the artistic negative/print curve ceilings for HDR,
+  then applies our original luminance-based viewing curve after creative and
+  texture finishing. It has a shadow toe, a darker middle-gray anchor and a
+  smooth rational highlight shoulder. Peak and reference white are adjustable;
+  HDR-specific exposure and rolloff controls are not currently exposed.
+
+SpektraFilm's reference white scales relative **scan white**, not an untouched
+camera scene value. Our creative pipeline also changes the signal before HDR
+finalization. Equal menu selections therefore cannot establish equal exposure
+or appearance. Our artistic ceiling extension is an authored heuristic, not a
+measured film-profile calibration. Our SDR Viewing controls do not affect HDR.
+
+Sources: [HDR finalization](https://github.com/chaert-s/spektrafilm-ofx/blob/86476afc5b077de77e2278e3658d1ba9309892a1/shaders/vulkan/SpektraScannerPost.comp#L315),
+[Metal implementation](https://github.com/chaert-s/spektrafilm-ofx/blob/86476afc5b077de77e2278e3658d1ba9309892a1/shaders/SpektraFilm.metal#L637),
+[preset values](https://github.com/chaert-s/spektrafilm-ofx/blob/86476afc5b077de77e2278e3658d1ba9309892a1/src/SpektraFilmPlugin.cpp#L1464),
+[HDR controls](https://github.com/chaert-s/spektrafilm-ofx/blob/86476afc5b077de77e2278e3658d1ba9309892a1/src/SpektraFilmPlugin.cpp#L4973).
+Our corresponding functions are in `ofx/src/ColorMath.h` and
+`ofx/src/FilmResponseConfig.h`.
+
+### Isolated Neutral Response
+
+These source-derived values compare **equal neutral inputs to each HDR
+finalizer**, at 203-nit white, 1000-nit peak and zero exposure trim. They are not
+end-to-end LogC3 footage measurements or a stock-fidelity comparison.
+
+| Relative finalizer input | OpenEmulsion nits | SpektraFilm Hard Clip nits | SpektraFilm Soft Rolloff nits |
+| --- | --- | --- | --- |
+| 0.01 | 1.05 | 2.03 | 2.03 |
+| 0.18 | 24.36 | 36.54 | 36.54 |
+| 1 | 203.00 | 203.00 | 203.00 |
+| 2 | 374.09 | 406.00 | 382.21 |
+| 4 | 562.09 | 812.00 | 628.80 |
+| 8 | 726.44 | 1000.00 | 865.99 |
+
+Our finalizer has stronger shadow shaping and earlier highlight compression.
+Neither choice is mandated by PQ. Their default has more linear highlight
+headroom but a hard luminance endpoint; ours trades some separation for a smooth
+approach to peak. Creative negative/print curves can add further compression.
+
+### Saturated Highlights And Peak Bounds
+
+SpektraFilm's Color Adaptation master defaults off. In that state its HDR
+finalizer floors negative RGB, tone-maps **luminance**, and encodes without a
+per-channel ceiling at the selected peak. A post-scan Rec.2020 red input
+`(10, 0, 0)` becomes a 2030-nit red channel but only 533.28-nit luminance, so
+Hard Clip does not limit it at a 1000-nit setting. This is not the same as an
+incorrect PQ transfer: the selected luminance peak is simply not a channel bound.
+
+Enabling its optional output compression adds an OKLab/OKLch gamut-boundary
+search and bounds channels to the selected peak. In HDR, already in-bounds
+colors return unchanged rather than receiving the optional SDR in-gamut
+softening. OpenEmulsion's **rendered HDR** always uses linear-RGB radial gamut
+compression and bounds channels to peak. That is a useful delivery constraint,
+but can reduce saturated-highlight color and detail. Conversion Only does not
+apply that rendered-HDR peak bound.
+
+Source: [HDR gamut and encoding policy](https://github.com/chaert-s/spektrafilm-ofx/blob/86476afc5b077de77e2278e3658d1ba9309892a1/shaders/vulkan/SpektraScannerPost.comp#L508).
+Our peak-aware colored-emitter detail handling is currently SDR-only; HDR needs
+its own scene-to-output detail measurements before another algorithm change.
+
+### HLG Caution
+
+SpektraFilm offers HLG, which we currently do not. However, both inspected GPU
+implementations use system gamma 1.0 at 1000 nits and apply the inverse gamma
+separately to RGB channels. BT.2100's reference HLG path uses gamma 1.2 at
+1000 nits and a luminance-based OOTF. Surround adjustments can change gamma,
+but no matching surround-control intent was found in this path. This merits
+an independent standards audit, not copying their HLG implementation or judging
+their installed binary from an SDR screenshot.
+
+Sources: [HLG helper](https://github.com/chaert-s/spektrafilm-ofx/blob/86476afc5b077de77e2278e3658d1ba9309892a1/shaders/vulkan/SpektraScannerPost.comp#L351),
+[ITU-R BT.2100-3, Table 5 and notes](https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.2100-3-202502-I!!PDF-E.pdf).
+
+### Recommendation
+
+Keep the current PQ defaults while adding independently authored HDR viewing
+adjustments in a future version: post-look exposure trim and highlight rolloff,
+with neutral positions retaining the current output. Evaluate a more linear
+viewing option only against isolated ramps and matched footage, not to imitate
+one screenshot. Retain predictable peak bounds, but specifically test colored
+emitters for local contrast and hue across peak settings. Add HLG only when
+needed and validate its reference transfer independently.
+
+### Local Numeric Check
+
+Ran `tools/check_hdr_footage.py` against the preserved full-precision inputs in
+`analysis/color-bench-v035`, using the native v0.41 ColorBench bridge. The 90
+renders cover five clips at three timestamps, Neutral and 50D Daylight, and
+400/1000/4000-nit peaks at 203-nit white. Decoded-PQ measurements stayed finite,
+channels remained within the selected peak tolerance and alpha was unchanged.
+The local report is `analysis/hdr-review-v041/results.json` (ignored).
+
+At 1000-nit peak, the maximum luminance across these frames was approximately
+952 nits for Neutral and 407 nits for 50D Daylight; maximum channels were about
+999 and 753 nits respectively. This demonstrates that creative response uses
+less output headroom, not that either look must reach peak or that local lens
+detail is preserved. These are Color Only numeric checks with burn-ins included,
+not GPU-performance checks, calibrated HDR previews or SpektraFilm A/B renders.
+
 ## Source Boundary
+
+The subsequent v0.42 HDR Viewing implementation adds post-look exposure trim
+and independently authored rational-shoulder reshaping to our existing HDR path.
+Zero retains v0.41 and no upstream HDR/HLG shader code was reused. Native
+zero-default, inactive-path and source-keyed highlight diagnostics are recorded
+in [Color Bench](COLOR_BENCH.md#hdr-viewing-audit-v042).
 
 The subsequent v0.40 implementation exposes centered SDR Viewing Contrast,
 Highlight Rolloff and Gamut Compression using independently authored shared

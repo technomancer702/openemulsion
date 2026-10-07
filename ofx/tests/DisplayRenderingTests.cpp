@@ -219,6 +219,68 @@ static void testSDRControls()
     std::puts("SDR viewing controls: fixed gray/black, C1 joins, visible smooth changes, all endpoint combinations, exposure order, gamut bounds and zero-default curve pass.");
 }
 
+static void testHDRControls()
+{
+    for (float peak : {400.0f,1000.0f,4000.0f,10000.0f}) for (float white : {80.0f,203.0f,300.0f}) {
+        auto p=color::prepare(color::LinearRec709,color::HDRPQOutput,false,color::StandardHDR,peak,white);
+        for (float rolloff : {-1.0f,0.0f,1.0f}) {
+            p.hdrRolloff=rolloff;
+            near(color_hdr_viewing_tone(0,p),0,0,"HDR viewing lifts black");
+            near(color_hdr_viewing_tone(.18f,p),.12f,1e-7f,"HDR viewing moves gray anchor");
+            near(color_hdr_viewing_tone(1,p),1,0,"HDR viewing moves white anchor");
+            for (float join : {.18f,1.0f}) {
+                const float h=1e-4f;
+                near((color_hdr_viewing_tone(join,p)-color_hdr_viewing_tone(join-h,p))/h,
+                     (color_hdr_viewing_tone(join+h,p)-color_hdr_viewing_tone(join,p))/h,.006f,"HDR viewing slope continuity");
+            }
+            float previous=-1;
+            for (int i=0; i<2500; ++i) {
+                const float x=std::exp2(-20.0f+i*.016f);
+                const float value=color_hdr_viewing_tone(x,p);
+                const float tolerance=2e-7f*(peak/white);
+                if (!(std::isfinite(value) && value+tolerance>=previous && value<=peak/white+tolerance))
+                    std::fprintf(stderr,"HDR curve peak %.0f white %.0f rolloff %.0f x %.9g previous %.9g value %.9g ceiling %.9g\n",peak,white,rolloff,x,previous,value,peak/white);
+                require(std::isfinite(value) && value+tolerance>=previous && value<=peak/white+tolerance,"HDR viewing curve bounds/order");
+                if (rolloff==0) near(value,color_hdr_tone(x,peak/white),0,"Zero HDR rolloff changes default");
+                previous=value;
+            }
+            for (float ev : {-4.0f,0.0f,4.0f}) {
+                p.hdrGain=std::exp2(ev);
+                for (float x : {0.0f,.01f,.18f,1.0f,4.0f,64.0f}) {
+                    const auto out=color_from_work(color_curve_rgb({x,x,x},ColorSRGB,1),p);
+                    const float expected=color_hdr_viewing_tone(x*std::exp2(ev),p)*white;
+                    near(color_decode(out.r,ColorPQ)*10000,expected,std::max(.01f,peak*.0002f),"HDR exposure does not precede viewing curve");
+                    near(out.r,out.g,1e-6f,"HDR exposure tints neutrals");
+                }
+                for (const auto ray : std::array<ColorRgb,4>{{{1,.003125f,.009375f},{1,-.015f,.02f},
+                                                             {.01f,.03f,1},{1,1,.01f}}}) {
+                    float previousY=-1;
+                    for (float intensity : {2.0f,8.0f,16.0f,32.0f,64.0f,80.0f}) {
+                        const auto out=color_from_work(color_curve_rgb({ray.r*intensity,ray.g*intensity,ray.b*intensity},ColorSRGB,1),p);
+                        const auto n=color_curve_rgb(out,ColorPQ,0);
+                        for (float v : {n.r,n.g,n.b}) require(std::isfinite(v) && v>=0 && v*10000<=peak+.2f,"HDR viewing colored peak bound");
+                        const float y=(n.g+.2627f*(n.r-n.g)+.0593f*(n.b-n.g))*10000;
+                        require(y>previousY,"HDR colored emitter loses intensity ordering");
+                        previousY=y;
+                    }
+                }
+            }
+        }
+        p.hdrGain=1;
+        const float baseline=color_hdr_tone(4,peak/white);
+        p.hdrRolloff=1; require(color_hdr_viewing_tone(4,p)<baseline,"Positive HDR rolloff not stronger");
+        p.hdrRolloff=-1; require(color_hdr_viewing_tone(4,p)>baseline,"Negative HDR rolloff not brighter");
+        float previous=0;
+        for (int i=0; i<=200; ++i) {
+            p.hdrRolloff=-1+i*.01f;
+            const float value=color_hdr_viewing_tone(4,p);
+            if (i) require(std::abs(value-previous)<(peak/white)*.01f,"HDR rolloff slider jump");
+            previous=value;
+        }
+    }
+    std::puts("HDR viewing: zero-default curve, fixed black/gray/white, C1 joins, monotonic shoulder, exposure order, colored-emitter intensity ordering and peak bounds pass.");
+}
+
 static void testHDR()
 {
     // Independent ST 2084 numerical anchors (normalized float code values).
@@ -323,6 +385,7 @@ int main()
 {
     try {
         testHDR();
+        testHDRControls();
         testSDRControls();
         testEmitterShoulder();
         testEmitterDetail();

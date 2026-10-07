@@ -1459,9 +1459,10 @@ public:
             s[film::HighlightRetention]=retention;
             cases.push_back(s);
         }
-        for (int mode : {0,1}) for (float peak : {1000.0f,4000.0f}) {
+        for (int mode : {0,1}) for (float peak : {1000.0f,4000.0f}) for (float tuning : {-1.0f,0.0f,1.0f}) {
             auto s=filmSettings(); s[0]=static_cast<float>(mode); s[26]=color::AlexaLogC3;
             s[27]=color::HDRPQOutput; s[film::OutputRendering]=color::StandardHDR; s[film::HDRPeak]=peak;
+            s[film::HDRExposure]=tuning; s[film::HDRRolloff]=tuning;
             cases.push_back(s);
         }
         for (int source : {color::Rec709Gamma24, color::AlexaLogC3, color::DaVinciIntermediate, color::ACEScct}) {
@@ -1528,6 +1529,8 @@ public:
                 require(RunOpenEmulsionOpenCL(queue, width, height, static_cast<float>(frame), s.data(), reinterpret_cast<const float*>(src), reinterpret_cast<float*>(dst)), "Benchmark render failed");
             require(finish(queue) == 0, "Benchmark execution failed");
             const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() / 12.0;
+            if (s[27]==color::HDRPQOutput)
+                std::printf("HDR timing: peak %.0f, exposure %.1f EV, rolloff %.1f.\n",s[film::HDRPeak],s[film::HDRExposure],s[film::HDRRolloff]);
             std::printf("4K %s, mode %.0f, rendering %.0f, film %.0f, gauge %s, radius %.1f, aura %.1f/radius %.1f, development %.1f/%.1f/%.1f, bloom %.1f/radius %.1f, grain softness %.2f/response %.0f: %.2f ms/frame (GPU resident, excludes Resolve/transfers).\n", color::spaces()[static_cast<int>(s[26])].label, s[0], s[film::OutputRendering], s[1], gauge::prepare(s.data()).label, s[14], s[15], s[film::AuraRadius], s[film::PushPull],s[film::ColorRichness],s[film::SplitTone],s[film::BloomAmount],s[film::BloomRadius],s[20],s[film::GrainResponse],ms);
         }
         for (int preset = 1; preset < look::Count; ++preset) {
@@ -2223,6 +2226,53 @@ public:
 
     void testHDRRendering()
     {
+        for (float peak : {400.0f,1000.0f,4000.0f,10000.0f}) for (float white : {80.0f,203.0f,300.0f})
+            for (float ev : {-4.0f,0.0f,4.0f}) for (float rolloff : {-1.0f,0.0f,1.0f}) {
+                auto s=filmSettings(); s[26]=color::LinearRec709; s[27]=color::HDRPQOutput;
+                s[film::OutputRendering]=color::StandardHDR; s[film::HDRPeak]=peak; s[film::HDRWhite]=white;
+                s[film::HDRExposure]=ev; s[film::HDRRolloff]=rolloff;
+                s[film::NegativeColorStrength]=s[film::NegativeToneStrength]=0; s[19]=film::Negative;
+                std::vector<float> input;
+                for (const auto ray : std::array<ColorRgb,5>{{{1,1,1},{1,.003125f,.009375f},{1,-.015f,.02f},
+                                                             {.01f,.03f,1},{1,1,.01f}}})
+                    for (float intensity : {0.0f,.18f,1.0f,4.0f,32.0f,40.0f,64.0f,80.0f})
+                        input.insert(input.end(),{ray.r*intensity,ray.g*intensity,ray.b*intensity,.37f});
+                const auto result=render(input,40,1,s);
+                const auto cp=color::prepare(s.data());
+                for (int i=0; i<40; ++i) {
+                    const auto expected=color_from_work(color_to_work({input[i*4],input[i*4+1],input[i*4+2]},cp),cp);
+                    for (const auto pair : {std::pair<float,float>{result[i*4],expected.r},{result[i*4+1],expected.g},{result[i*4+2],expected.b}})
+                        requireNear(pair.first,pair.second,2e-5f,"HDR viewing GPU/CPU parity");
+                    require(result[i*4+3]==.37f,"HDR viewing changes alpha");
+                    for (int channel=0; channel<3; ++channel)
+                        require(color_decode(result[i*4+channel],ColorPQ)*10000<=peak+.2f,"GPU HDR viewing peak bound");
+                    if (i>=8 && (i%8==5 || i%8==7)) {
+                        const auto a=color_curve_rgb({result[(i-1)*4],result[(i-1)*4+1],result[(i-1)*4+2]},ColorPQ,0);
+                        const auto b=color_curve_rgb({result[i*4],result[i*4+1],result[i*4+2]},ColorPQ,0);
+                        const float aY=.2627f*a.r+.6780f*a.g+.0593f*a.b;
+                        const float bY=.2627f*b.r+.6780f*b.g+.0593f*b.b;
+                        // Extremely overbright pairs can quantize to the same PQ code near peak.
+                        const bool ordered=ev<=0 ? bY>aY : bY+peak/10000*.00015f>=aY;
+                        if (!ordered)
+                            std::fprintf(stderr,"HDR GPU detail peak %.0f white %.0f EV %.0f rolloff %.0f ray %d pair %d Y %.9g %.9g\n",peak,white,ev,rolloff,i/8,i%8,
+                                aY,bY);
+                        require(ordered,"GPU HDR emitter intensity ordering");
+                    }
+                }
+                s[26]=color::AlexaLogC3; s[19]=film::All; s[0]=0; s[13]=.2f; s[16]=.2f; s[film::BloomAmount]=.2f;
+                test(17,19,s,false);
+                if (unordered && ev==4 && rolloff==1) test(17,19,s,true);
+            }
+        for (int rendering : {color::Automatic,color::ConversionOnly,color::StandardSDR,color::StandardHDR})
+            for (int output : {1,5,color::HDRPQOutput}) for (int mode=0; mode<7; ++mode) {
+                auto s=filmSettings(); s[26]=color::AlexaLogC3; s[27]=static_cast<float>(output); s[0]=static_cast<float>(mode);
+                s[film::OutputRendering]=static_cast<float>(rendering);
+                const std::vector<float> input {.5f,.4f,.3f,.37f};
+                const auto baseline=render(input,1,1,s);
+                s[film::HDRExposure]=4; s[film::HDRRolloff]=1;
+                if (!color::prepare(s.data()).renderHDR)
+                    require(baseline==render(input,1,1,s),"HDR viewing alters inactive GPU output");
+            }
         for (float peak : {400.0f,1000.0f,4000.0f,10000.0f}) for (float white : {80.0f,203.0f,300.0f}) {
             auto s=filmSettings(); s[27]=color::HDRPQOutput; s[26]=color::LinearRec709;
             s[film::HDRPeak]=peak; s[film::HDRWhite]=white; s[film::OutputRendering]=color::StandardHDR;
@@ -2256,12 +2306,14 @@ public:
             for (size_t i=0; i<s.size(); ++i) s[i]=static_cast<float>(recipe[i]);
             s[26]=color::AlexaLogC3; s[27]=color::HDRPQOutput; s[film::OutputRendering]=color::StandardHDR;
             test(17,19,s,false); s[0]=1; test(17,19,s,false);
+            s[film::HDRExposure]=1; s[film::HDRRolloff]=-1; test(17,19,s,false);
         }
         auto s=filmSettings(); s[26]=color::LinearRec709; s[27]=color::HDRPQOutput;
         s[19]=film::Negative|film::SelectiveColor; s[film::SelectiveView]=1;
         const std::vector<float> input {4,.1f,.03f,.37f};
         s[film::OutputRendering]=color::ConversionOnly; const auto matte=render(input,1,1,s);
         s[film::OutputRendering]=color::StandardHDR; s[film::HDRPeak]=10000; s[film::HDRWhite]=300;
+        s[film::HDRExposure]=4; s[film::HDRRolloff]=1;
         require(matte==render(input,1,1,s),"HDR encodes Selection Matte");
         std::puts("OpenCL HDR PQ: all peak/reference-white limits, independent anchors, alpha, full color/glow/grain, recipes, unordered queue and texture/matte/bypass isolation pass.");
     }

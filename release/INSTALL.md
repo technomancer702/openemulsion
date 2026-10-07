@@ -1,4 +1,4 @@
-# Installing OpenEmulsion v0.38
+# Installing OpenEmulsion v0.42
 
 This ZIP contains a prebuilt Windows x64 OFX plugin. No build tools or DCTL are needed. Development testing uses DaVinci Resolve 21.1.1 on Windows x64; other host versions and GPU vendors still need community testing.
 
@@ -19,6 +19,8 @@ Close Resolve first. To update, replace only the installed `OpenEmulsion.ofx.bun
 Install only one copy. Developers already using `OFX_PLUGIN_PATH` should update that installation rather than also copying the release into the system folder. Duplicate copies with the same plugin identifier can lead to ambiguous loading.
 
 ## Quick Start
+
+- **HDR Viewing**, below SDR Viewing, contains Peak Luminance, Reference White, Exposure Trim (EV) and Highlight Rolloff. Leave the new controls at zero for unchanged v0.41 HDR output. Positive trim brightens post-look light before tone mapping; positive rolloff compresses above-white highlights more, while negative keeps them brighter. They grey out outside HDR rendering. Reference White remains available for PQ Conversion Only. User files save all four controls; Preserve Color Spaces retains the destination values on import.
 
 - For an unconverted Alexa LogC3 clip in a manually managed project, select **ARRI Alexa LogC3 / Wide Gamut 3 (EI 800)** input, **Rec.709 / Gamma 2.4** output and **Output Rendering: Auto**. Auto adds a neutral SDR viewing response before the creative film stages. Do not add a second LogC3-to-709 viewing transform afterward.
 - For direct HDR, select **Rec.2100 / PQ (Rec.2020)** output and **Standard HDR (PQ)**, with peak/reference white set to the target (default **1000/203 nits**). Auto also renders HDR for log/linear input sent to PQ. Use Clean Slate to evaluate the foundation; strong Film Tone/Print Tone can reduce specular headroom. Configure Resolve monitoring, export tags and mastering metadata separately. Do not apply another viewing transform to the rendered PQ. HLG and PQ input are not supported yet; calibrated HDR appearance still needs validation.

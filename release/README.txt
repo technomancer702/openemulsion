@@ -1,4 +1,4 @@
-OpenEmulsion v0.38 - Windows x64
+OpenEmulsion v0.42 - Windows x64
 Experimental development release
 
 INSTALL
@@ -25,6 +25,10 @@ Experimental Rec.2100 PQ / Rec.2020 output adds post-look HDR rendering, with
 input to PQ; Standard HDR explicitly enables it. Set Resolve HDR monitoring
 and export metadata separately. HLG/PQ input and HDR display certification are
 not included. Strong film/print shoulders can still reduce highlight headroom.
+HDR Viewing sits below SDR Viewing and groups peak/reference white with post-look
+Exposure Trim and Highlight Rolloff. Both adjustments default to zero, retaining
+v0.41 HDR output; they are inactive outside HDR rendering. Format-7 user presets
+capture them and complete older files load neutral adjustments.
 The SDR foundation now preserves more color/gradation in bright saturated
 emitters automatically. Highlight Color Retention adds to this response with a
 brightness tradeoff. Zero uses the updated default, not the pre-v0.38 look.

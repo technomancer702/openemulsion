@@ -50,6 +50,12 @@ class Renderer:
                 function.restype = ctypes.c_int
                 self.sdr_indices[control] = function()
         self.presets = {self.dll.oe_preset_label(i).decode(): i for i in range(self.dll.oe_preset_count())}
+        self.hdr_indices = {}
+        for control in ["exposure", "rolloff"]:
+            function = getattr(self.dll, f"oe_hdr_{control}_index", None)
+            if function is not None:
+                function.restype = ctypes.c_int
+                self.hdr_indices[control] = function()
 
     def settings(self, label: str, source: int, rendering: int = 0, retention: float = 0) -> np.ndarray:
         s = np.zeros(self.count, dtype=np.float32)

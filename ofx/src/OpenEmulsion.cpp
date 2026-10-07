@@ -26,7 +26,7 @@
 #define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, halation, aura, linear-light bloom, and selective color, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 41
+#define kPluginVersionMinor 42
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -45,6 +45,7 @@ struct Settings {
     int outputRendering = color::Automatic;
     double hdrPeak = 1000, hdrWhite = 203;
     double sdrContrast = 0, sdrRolloff = 0, sdrGamut = 0;
+    double hdrExposure = 0, hdrRolloff = 0;
     bool enableNegative = true;
     bool enableDevelopment = true;
     bool enablePrint = true;
@@ -397,6 +398,8 @@ private:
         out[film::SDRContrast] = static_cast<float>(s.sdrContrast);
         out[film::SDRRolloff] = static_cast<float>(s.sdrRolloff);
         out[film::SDRGamut] = static_cast<float>(s.sdrGamut);
+        out[film::HDRExposure] = static_cast<float>(s.hdrExposure);
+        out[film::HDRRolloff] = static_cast<float>(s.hdrRolloff);
         out[film::HighlightRetention] = static_cast<float>(s.highlightRetention);
         out[28] = static_cast<float>(s.negativeShoulder);
         out[29] = static_cast<float>(s.negativeCrosstalk);
@@ -472,6 +475,8 @@ public:
         outputRendering_ = fetchChoiceParam("outputRendering");
         hdrPeak_ = fetchDoubleParam("hdrPeak");
         hdrWhite_ = fetchDoubleParam("hdrWhite");
+        hdrExposure_ = fetchDoubleParam("hdrExposure");
+        hdrRolloff_ = fetchDoubleParam("hdrRolloff");
         sdrContrast_ = fetchDoubleParam("sdrContrast");
         sdrRolloff_ = fetchDoubleParam("sdrRolloff");
         sdrGamut_ = fetchDoubleParam("sdrGamut");
@@ -831,7 +836,10 @@ private:
                                                                          static_cast<float>(colorStrength),s.selectiveView));
         const bool whiteEnabled = color::hdrWhiteEnabled(cp,active,s.selectiveView);
         hdrWhite_->setEnabled(whiteEnabled);
-        hdrPeak_->setEnabled(whiteEnabled && cp.renderHDR);
+        const bool hdrEnabled = color::hdrControlsEnabled(cp,active,s.selectiveView);
+        hdrPeak_->setEnabled(hdrEnabled);
+        hdrExposure_->setEnabled(hdrEnabled);
+        hdrRolloff_->setEnabled(hdrEnabled);
         const bool sdrEnabled = color::sdrControlsEnabled(cp,active,s.selectiveView);
         sdrContrast_->setEnabled(sdrEnabled);
         sdrRolloff_->setEnabled(sdrEnabled);
@@ -847,6 +855,8 @@ private:
         outputRendering_->getValueAtTime(time, s.outputRendering);
         s.hdrPeak = hdrPeak_->getValueAtTime(time);
         s.hdrWhite = hdrWhite_->getValueAtTime(time);
+        s.hdrExposure = hdrExposure_->getValueAtTime(time);
+        s.hdrRolloff = hdrRolloff_->getValueAtTime(time);
         s.sdrContrast = sdrContrast_->getValueAtTime(time);
         s.sdrRolloff = sdrRolloff_->getValueAtTime(time);
         s.sdrGamut = sdrGamut_->getValueAtTime(time);
@@ -946,6 +956,8 @@ private:
     OFX::DoubleParam* sdrRolloff_ = nullptr;
     OFX::DoubleParam* sdrGamut_ = nullptr;
     OFX::DoubleParam* hdrWhite_ = nullptr;
+    OFX::DoubleParam* hdrExposure_ = nullptr;
+    OFX::DoubleParam* hdrRolloff_ = nullptr;
     OFX::ChoiceParam* system_ = nullptr;
     OFX::ChoiceParam* printStyle_ = nullptr;
     std::array<OFX::DoubleParam*, printstyle::ControlCount> printRecipeControls_ {};
@@ -1128,11 +1140,6 @@ public:
         choice->setDefault(color::Automatic);
         choice->setHint("Auto renders scene-log/linear input for the selected display output: SDR for Rec.709/sRGB, HDR for Rec.2100 PQ. SDR runs before creative film; HDR runs after creative and texture stages. Conversion Only leaves rendering to another stage (PQ still encodes absolute luminance using HDR Reference White). Standard SDR and Standard HDR explicitly render only their matching output targets. Managed log/linear output, texture-only, bypass and mattes do not apply display rendering.");
         page->addChild(*choice);
-
-        addDouble(desc,page,"hdrPeak","HDR Peak Luminance (nits)",1000,400,10000,1,nullptr,
-                  "PQ rendering ceiling. Default 1000 nits; match the intended mastering target. Only active with PQ output and HDR rendering. Does not configure Resolve monitoring, export tags or HDR metadata.");
-        addDouble(desc,page,"hdrWhite","HDR Reference White (nits)",203,80,300,1,nullptr,
-                  "Linear white 1 maps to this luminance in PQ; default 203 nits. Active for PQ output, including Conversion Only. Peak Luminance remains higher across the allowed ranges. Creative tone/print can compress highlights before output; lower their tone strengths for more headroom.");
 
         choice = desc.defineChoiceParam("filmGauge");
         choice->setLabels("Film Gauge", "Film Gauge", "Film Gauge");
@@ -1335,6 +1342,16 @@ public:
                   "Moves the SDR shoulder while preserving middle gray and its slope. Positive starts rolloff earlier for darker, softer highlights; negative delays rolloff for brighter highlights. Zero preserves v0.39. Negative and Print tone curves can add further compression. Inactive outside SDR rendering.");
         addDouble(desc,page,"sdrGamut","Gamut Compression",0,-1,1,.01,sdr,
                   "Adjusts the SDR display-gamut shoulder independently of Film Color Gamut Compression. Negative reduces in-gamut softening; positive starts compression earlier. Zero preserves v0.39. Minus one still limits out-of-gamut RGB to the display boundary; it does not disable gamut safety. Inactive outside SDR rendering.");
+
+        auto* hdr = addGroup(desc,page,"hdrViewing","HDR Viewing",false);
+        addDouble(desc,page,"hdrPeak","HDR Peak Luminance (nits)",1000,400,10000,1,hdr,
+                  "PQ rendering ceiling. Default 1000 nits; match the intended mastering target. Only active with PQ output and HDR rendering. Does not configure Resolve monitoring, export tags or HDR metadata.");
+        addDouble(desc,page,"hdrWhite","HDR Reference White (nits)",203,80,300,1,hdr,
+                  "Post-look linear white 1 maps to this luminance at zero HDR Exposure; default 203 nits. Active for PQ output, including Conversion Only. Peak Luminance remains higher across the allowed ranges. Creative tone/print can compress highlights before output; lower their tone strengths for more headroom.");
+        addDouble(desc,page,"hdrExposure","Exposure Trim (EV)",0,-4,4,.01,hdr,
+                  "Post-look linear exposure before the HDR viewing curve, after film, print, glow and grain. Positive brightens; negative darkens. Plus one doubles the incoming light, not the final tone-mapped highlights. Zero preserves v0.41. Inactive in SDR, Conversion Only, managed output, texture-only, bypass and mattes. Built-in looks preserve this output setting.");
+        addDouble(desc,page,"hdrRolloff","Highlight Rolloff",0,-1,1,.01,hdr,
+                  "Reshapes HDR highlights above reference white while keeping the gray/white anchors, white slope and peak ceiling. Positive compresses highlights more; negative preserves more brightness. Zero preserves v0.41. Creative negative/print curves can still compress detail. Inactive outside HDR rendering.");
     }
 
     OFX::ImageEffect* createInstance(OfxImageEffectHandle handle, OFX::ContextEnum) override

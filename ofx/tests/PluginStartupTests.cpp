@@ -248,13 +248,19 @@ void testContext(OfxPlugin& plugin, const char* context)
     action(kOfxActionDescribe, descriptor);
     action(kOfxImageEffectActionDescribeInContext, descriptor, handle(args));
 
-    for (const char* name : {"hdrPeak", "hdrWhite"}) {
+    require(value<int>(descriptor.parameters.at("hdrViewing").properties,kOfxParamPropGroupOpen)==0,"HDR group starts expanded");
+    for (const char* name : {"hdrPeak", "hdrWhite", "hdrExposure", "hdrRolloff"}) {
         auto& p = descriptor.parameters.at(name).properties;
-        require(value<std::string>(p, kOfxParamPropParent).empty(), "HDR slider must be ungrouped");
+        require(value<std::string>(p, kOfxParamPropParent)=="hdrViewing", "HDR slider parent");
         require(value<std::string>(p, kOfxParamPropType) == kOfxParamTypeDouble, "HDR slider type");
     }
     require(value<double>(descriptor.parameters.at("hdrPeak").properties, kOfxParamPropDefault) == 1000, "Peak default");
     require(value<double>(descriptor.parameters.at("hdrWhite").properties, kOfxParamPropDefault) == 203, "White default");
+    for (const auto entry : {std::pair<const char*,double>{"hdrExposure",4}, {"hdrRolloff",1}}) {
+        auto& p=descriptor.parameters.at(entry.first).properties;
+        require(value<double>(p,kOfxParamPropDefault)==0 && value<double>(p,kOfxParamPropMin)==-entry.second &&
+                value<double>(p,kOfxParamPropMax)==entry.second,"HDR viewing default/range");
+    }
     require(value<int>(descriptor.parameters.at("sdrViewing").properties,kOfxParamPropGroupOpen)==0,"SDR group starts expanded");
     for (const char* name : {"sdrContrast","sdrRolloff","sdrGamut"}) {
         auto& p=descriptor.parameters.at(name).properties;
@@ -271,16 +277,17 @@ void testContext(OfxPlugin& plugin, const char* context)
         require(value<std::string>(it->second.properties, kOfxParamPropType) == kOfxParamTypeGroup, "Non-group parent");
     }
     auto& children = descriptor.parameters.at("Controls").properties.at(kOfxParamPropPageChild);
-    size_t peak = children.size(), white = children.size(), gauge = children.size(), sdrGroup = children.size();
+    size_t hdrGroup = children.size(), sdrGroup = children.size();
     for (size_t i = 0; i < children.size(); ++i) {
         auto name = std::get<std::string>(children[i]);
-        if (name == "hdrPeak") peak = i;
-        if (name == "hdrWhite") white = i;
-        if (name == "filmGauge") gauge = i;
+        if (name == "hdrViewing") hdrGroup = i;
         if (name == "sdrViewing") sdrGroup = i;
     }
-    require(peak < white && white < gauge, "HDR sliders must precede Film Gauge");
-    require(sdrGroup < children.size() && sdrGroup+4==children.size(),"SDR Viewing must be the last group and controls");
+    require(sdrGroup < children.size() && sdrGroup+4==hdrGroup && hdrGroup+5==children.size(),
+            "SDR/HDR Viewing must be consecutive bottom groups");
+    const std::array<const char*,4> hdrNames {"hdrPeak","hdrWhite","hdrExposure","hdrRolloff"};
+    for (size_t i=0; i<hdrNames.size(); ++i)
+        require(std::get<std::string>(children[hdrGroup+1+i])==hdrNames[i],"HDR slider order changed");
     const std::array<const char*,3> sdrNames {"sdrContrast","sdrRolloff","sdrGamut"};
     for (size_t i=0; i<sdrNames.size(); ++i)
         require(std::get<std::string>(children[sdrGroup+1+i])==sdrNames[i],"SDR slider order changed");
@@ -291,18 +298,20 @@ void testContext(OfxPlugin& plugin, const char* context)
             require(i<sdrGroup,"SDR Viewing must follow Selective Color and its controls");
     }
 
-    for (int rendering : {0,1,2}) {
-        const bool hdr=rendering==2, sdr=rendering==1;
+    for (int rendering : {0,1,2,3}) {
+        const bool hdr=rendering==2, sdr=rendering==1, pqConversion=rendering==3;
         Effect instance = descriptor;
         setString(handle(instance.properties), kOfxImageEffectPropContext, 0, context);
-        if (hdr || sdr) {
-            // Scene LogC3 + Auto activates both HDR sliders on the first UI refresh.
+        if (hdr || sdr || pqConversion) {
+            // Check SDR, HDR and PQ Conversion Only on the first UI refresh.
             set(handle(instance.parameters.at("sourceSpace").properties), kOfxParamPropDefault, 0, int(color::AlexaLogC3));
-            set(handle(instance.parameters.at("outputSpace").properties), kOfxParamPropDefault, 0, hdr ? color::HDRPQOutput : 1);
+            set(handle(instance.parameters.at("outputSpace").properties), kOfxParamPropDefault, 0, hdr || pqConversion ? color::HDRPQOutput : 1);
+            if (pqConversion) set(handle(instance.parameters.at("outputRendering").properties),kOfxParamPropDefault,0,int(color::ConversionOnly));
         }
         action(kOfxActionCreateInstance, instance);
         require(value<void*>(instance.properties, kOfxPropInstanceData) != nullptr, "Missing instance data");
-        for (const char* name : {"hdrPeak", "hdrWhite"})
+        require(value<int>(instance.parameters.at("hdrWhite").properties,kOfxParamPropEnabled)==int(hdr || pqConversion),"HDR white enable state");
+        for (const char* name : {"hdrPeak", "hdrExposure", "hdrRolloff"})
             require(value<int>(instance.parameters.at(name).properties, kOfxParamPropEnabled) == int(hdr), "HDR enable state");
         for (const char* name : {"sdrContrast","sdrRolloff","sdrGamut"})
             require(value<int>(instance.parameters.at(name).properties,kOfxParamPropEnabled)==int(sdr),"SDR enable state");
