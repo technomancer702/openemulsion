@@ -46,12 +46,57 @@ class BenchTests(unittest.TestCase):
         np.testing.assert_array_equal(self.renderer.render(frame, self.renderer.settings("Neutral / Clean Slate", 5)),
                                       self.renderer.render(frame, self.renderer.settings("Neutral / Clean Slate", 5, 1)))
 
-    def test_production_retention_matches_restrained_experiment(self):
-        frame = rgba(np.array([[[32, .1, .3], [.01, .03, 32], [.38, .2, .12], [4, 4, 4]]], np.float32))
-        s = self.renderer.settings("Neutral / Clean Slate", 14)
-        expected = self.renderer.render(frame, s, .35)
-        actual = self.renderer.render(frame, self.renderer.settings("Neutral / Clean Slate", 14, retention=1))
-        np.testing.assert_allclose(actual, expected, atol=2e-6)
+    def test_emitter_shoulder_independent_double_reference(self):
+        rgb = np.array([[[32, .1, .3], [.01, .03, 32], [.38, .2, .12], [4, 4, 4], [2, -.02, .2]]], np.float64)
+        def tone(x):
+            return np.where(x <= .18, .12*x/(.234-.3*x), np.where(x <= .6,
+                .12+(13/15)*(x-.18), 1-.516**2/(.516+(13/15)*(x-.6))))
+        def slope(x):
+            return np.where(x <= .18, .02808/(.234-.3*x)**2, np.where(x <= .6,
+                13/15, (13/15)*.516**2/(.516+(13/15)*(x-.6))**2))
+        def gamut(c, mapped):
+            distance = np.maximum((c.max(-1)-mapped)/np.maximum(1-mapped, 1e-7),
+                                  (mapped-c.min(-1))/np.maximum(mapped, 1e-7))
+            excess = np.maximum(distance-.8, 0)
+            scale = np.where(distance > .8, (.8+.2*excess/(.2+excess))/np.maximum(distance, 1e-7), 1)
+            return np.clip(mapped[..., None]+(c-mapped[..., None])*scale[..., None], 0, 1)
+        y = rgb @ np.array([.2126, .7152, .0722])
+        peak, low = rgb.max(-1), rgb.min(-1)
+        mapped = tone(y)
+        baseline = gamut(rgb*(mapped/y)[..., None], mapped)
+        ratio = y/peak
+        knee = tone(ratio)
+        headroom = ratio-knee
+        high = slope(ratio)*np.maximum(y-ratio, 0)
+        retained_y = np.where(peak > 1, knee+headroom*high/(headroom+high), mapped)
+        retained = gamut(rgb*(retained_y/y)[..., None], retained_y)
+        t = np.clip(((peak-low)/peak-.15)/.6, 0, 1)
+        gate = t*t*(3-2*t)
+        for amount in [0, .25, .5, 1]:
+            expected = (baseline+(retained-baseline)*((.5+.3*amount)*gate)[..., None])**(1/2.4)
+            actual = self.renderer.render(rgba(rgb.astype(np.float32)),
+                self.renderer.settings("Neutral / Clean Slate", 14, retention=amount))
+            np.testing.assert_allclose(actual[..., :3], expected, atol=3e-6)
+
+    def test_emitter_detail_and_exposure_order(self):
+        exposure = np.exp2(np.linspace(-14, 14, 2400)).astype(np.float32)
+        for chip in [[1, .01, .025], [.01, 1, .02], [.01, .03, 1], [1, -.05, .25], [1, 1, .01]]:
+            frame = rgba((exposure[:, None]*np.array(chip, np.float32))[None, ...])
+            for amount in [0, .5, 1]:
+                actual = self.renderer.render(frame, self.renderer.settings("Neutral / Clean Slate", 14, retention=amount))
+                linear_y = actual[0, :, :3].astype(np.float64)**2.4 @ np.array([.2126, .7152, .0722])
+                self.assertGreaterEqual(np.diff(linear_y).min(), -2e-6)
+                self.assertTrue(((actual[..., :3] >= 0) & (actual[..., :3] <= 1)).all())
+        frame = rgba(np.array([[[16, .05, .15], [32, .1, .3]]], np.float32))
+        actual = self.renderer.render(frame, self.renderer.settings("Neutral / Clean Slate", 14))
+        self.assertLess(actual[0, 1, 1], .8)
+        self.assertGreater(actual[0, 1, 0], actual[0, 0, 0])
+
+    def test_retention_keeps_low_intensity_and_pale_colors(self):
+        frame = rgba(np.array([[[1, .01, .025], [.38, .2, .12], [8, 7.8, 7.6], [4, 4, 4]]], np.float32))
+        baseline = self.renderer.render(frame, self.renderer.settings("Neutral / Clean Slate", 14))
+        maximum = self.renderer.render(frame, self.renderer.settings("Neutral / Clean Slate", 14, retention=1))
+        np.testing.assert_array_equal(baseline, maximum)
 
     def test_all_recipes_are_finite(self):
         frame = rgba(np.array([[[.18, .18, .18], [4, -.05, .25], [.01, .03, 4], [0, 0, 0]]], np.float32))

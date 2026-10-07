@@ -200,6 +200,32 @@ static inline float color_sdr_tone(float x)
     return 1.0f - headroom * headroom / (headroom + slope * (x - 0.60f));
 }
 
+static inline float color_sdr_slope(float x)
+{
+    if (x <= 0.18f) {
+        const float denominator = 0.234f - 0.30f*x;
+        return 0.02808f/(denominator*denominator);
+    }
+    if (x <= 0.60f) return 0.8666666667f;
+    const float denominator = 0.516f + 0.8666666667f*(x-0.60f);
+    return 0.8666666667f*0.516f*0.516f/(denominator*denominator);
+}
+
+// Join the existing tone at peak RGB = 1 with a matching slope. Along a
+// fixed chromatic ray, ratio is constant and both shoulders are monotonic.
+// Limiting headroom by that ratio avoids forcing a saturated emitter to white.
+static inline float color_sdr_emitter_tone(float y, float peak)
+{
+    if (peak <= 1.0f) return color_sdr_tone(y);
+    const float ratio = COLOR_MIN(1.0f,y/peak);
+    if (ratio <= 0.0f) return 0.0f;
+    const float knee = color_sdr_tone(ratio);
+    const float headroom = ratio-knee;
+    if (headroom <= 0.0f) return knee;
+    const float high = color_sdr_slope(ratio)*COLOR_MAX(0.0f,y-ratio);
+    return knee + headroom*(high/(headroom+high));
+}
+
 static inline ColorRgb color_sdr_gamut(ColorRgb c, float mapped)
 {
     const float hi = COLOR_MAX(c.r, COLOR_MAX(c.g,c.b)) - mapped;
@@ -231,16 +257,20 @@ static inline ColorRgb color_render_work(ColorRgb work, ColorParameters p)
     c = color_sdr_gamut(c,mapped);
     const float peak = COLOR_MAX(linear.r,COLOR_MAX(linear.g,linear.b));
     const float low = COLOR_MIN(linear.r,COLOR_MIN(linear.g,linear.b));
-    if (p.highlightRetention > 0.0f && peak > 0.6f && peak-low > 1e-7f*COLOR_MAX(peak,1.0f)) {
-        // Retain emitter color with a restrained brightness tradeoff, not global saturation.
-        const float t = COLOR_MAX(0.0f,COLOR_MIN(1.0f,(peak-0.6f)/1.4f));
-        const float weight = 0.35f*p.highlightRetention*t*t*(3.0f-2.0f*t);
-        const float peakGain = color_sdr_tone(peak)/peak;
-        ColorRgb retained = {linear.r*peakGain,linear.g*peakGain,linear.b*peakGain};
-        retained = color_sdr_gamut(retained,y*peakGain);
-        c.r += (retained.r-c.r)*weight;
-        c.g += (retained.g-c.g)*weight;
-        c.b += (retained.b-c.b)*weight;
+    if (peak > 1.0f) {
+        const float relative = (peak-low)/peak;
+        const float t = COLOR_MAX(0.0f,COLOR_MIN(1.0f,(relative-0.15f)/0.60f));
+        // The chroma gate is exposure invariant; an intensity-ramped blend can
+        // reverse brightness as its weight rises, hiding detail rather than saving it.
+        const float weight = (0.50f+0.30f*p.highlightRetention)*t*t*(3.0f-2.0f*t);
+        if (weight > 0.0f) {
+            const float retainedY = color_sdr_emitter_tone(y,peak), retainedGain = retainedY/y;
+            ColorRgb retained = {linear.r*retainedGain,linear.g*retainedGain,linear.b*retainedGain};
+            retained = color_sdr_gamut(retained,retainedY);
+            c.r += (retained.r-c.r)*weight;
+            c.g += (retained.g-c.g)*weight;
+            c.b += (retained.b-c.b)*weight;
+        }
     }
     return color_curve_rgb(c, ColorSRGB, 1);
 }

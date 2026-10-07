@@ -1,6 +1,14 @@
-# OpenEmulsion v0.37
+# OpenEmulsion v0.38
 
 Experimental Windows x64 film emulation with SDR and direct HDR PQ output. Stock and movie references remain artistic interpretations, not measured film profiles or exact movie grades. HDR monitor/host validation is still outstanding.
+
+## Changes in v0.38
+
+- Revised the SDR foundation's bright colored-emitter response. Previously, luminance-only highlight mapping pushed saturated red taillights toward white, making existing channel variation hard to see even with creative controls neutral. A peak-aware rational shoulder now preserves more color automatically, with a brightness tradeoff; no blanket exposure or saturation change.
+- The alternate shoulder joins the original at peak scene-linear RGB one with matching value/slope. Its chroma gate is exposure invariant, avoiding the brightness reversals caused by simply increasing an intensity-ramped blend. Neutral/pale colors and colors whose peak is at most one retain the previous response. Both endpoints use radial gamut mapping; the retention slider remains an affine display-linear RGB blend.
+- Highlight Color Retention adds to the new SDR default (effective fully gated blend 0.5 at zero, 0.8 at one). Zero no longer restores pre-v0.38 SDR rendering. Built-in look recipes, IDs and preset format 5 are unchanged; old SDR project/preset renders intentionally change in these highlights. HDR, Conversion Only, display-ready Auto, managed log/linear and texture/bypass/matte policies are unchanged.
+- Shared CPU/OpenCL math stays in the existing composite pass, with no new buffers, blur passes or readbacks. Extended tests cover independent double-precision references, shoulder continuity, bounded/ordered exposure ramps, hue direction, slider continuity, neutral/low-intensity preservation and host startup.
+- Added optional local full-precision footage comparisons and source-keyed taillight-region measurements against a retained pre-update native bridge, including exact HDR/Conversion Only checks. Private footage, previews and reports are ignored and not packaged. The plugin cannot recover detail already clipped in camera/source channels; strong creative tone/glow settings can still hide detail. Resolve appearance remains a native-host check.
 
 ## Changes in v0.37
 

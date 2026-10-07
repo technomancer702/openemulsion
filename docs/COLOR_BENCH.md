@@ -55,7 +55,26 @@ python tools/check_color_reference.py analysis/color-bench
 ```
 
 The checker requires existing input/output float arrays and verifies exact
-zero-retention output, without needing the original clips again.
+zero-retention output, without needing the original clips again. This historical
+bit-exact check intentionally fails when comparing pre-v0.38 SDR highlights with
+v0.38: the zero/default response has changed.
+
+SDR colored-highlight evaluation (v0.38), against a separately retained v0.37
+native bench DLL:
+
+```powershell
+python tools/check_highlight_detail.py analysis/color-bench-v035 --reference-bridge build/ofx/bench/ColorBench-v037.dll
+```
+
+This requires the previous DLL to have been preserved before rebuilding; it
+never substitutes a Python approximation for the native old/new outputs.
+Compares all retained Production SDR frames/looks, default and maximum retention,
+and source-keyed bright red taillight regions. Reports near-white fraction and
+channel variation from float RGB; tagged sRGB ROI PNGs are visual previews only.
+Checks that the reference DLL exactly reproduces the retained baseline, and
+that HDR PQ and Conversion Only old/new outputs remain bit-exact. This does
+not prove recovery of clipped camera detail or equal perceived luminance.
+Reports/previews remain local in `analysis/highlight-detail-v038`.
 
 HDR PQ numeric evaluation (v0.36 onward), using retained source floats:
 
@@ -128,7 +147,9 @@ automatic improvements.
 **Peak blend** is an independent, bench-only experiment blending production
 luminance-based rendering toward peak-RGB scaling in bright colored pixels.
 It trades highlight brightness/approach-to-white for stronger retained chroma.
-It does not alter the installed plugin and is not a spectral film model. Neutral
+It is not the v0.38 production shoulder, can reverse exposure brightness at
+strong blends, and is deliberately not shipped. It does not alter the installed
+plugin and is not a spectral film model. Neutral
 grays and lower-intensity pixels retain the production response. Evaluate all
 shots before choosing an algorithm; do not optimize one taillight at the expense
 of other footage.

@@ -1,4 +1,4 @@
-OpenEmulsion v0.37 - Windows x64
+OpenEmulsion v0.38 - Windows x64
 Experimental development release
 
 INSTALL
@@ -25,8 +25,9 @@ Experimental Rec.2100 PQ / Rec.2020 output adds post-look HDR rendering, with
 input to PQ; Standard HDR explicitly enables it. Set Resolve HDR monitoring
 and export metadata separately. HLG/PQ input and HDR display certification are
 not included. Strong film/print shoulders can still reduce highlight headroom.
-Highlight Color Retention in Film Color preserves more color in bright emitters
-with a restrained brightness tradeoff. Default zero retains the previous look.
+The SDR foundation now preserves more color/gradation in bright saturated
+emitters automatically. Highlight Color Retention adds to this response with a
+brightness tradeoff. Zero uses the updated default, not the pre-v0.38 look.
 User Presets can save/load portable look snapshots. Grain Response optionally
 adds negative-driven grain before Print; Post Print remains the default.
 
@@ -45,7 +46,7 @@ The film profiles are original creative approximations, not measured stocks.
 SOURCE AND LICENSE
 Free and open source, MPL-2.0. See LICENSE and THIRD_PARTY_NOTICES.md.
 Compiler runtime notices travel with the plugin in Contents/Licenses.
-Source/OpenEmulsion-v0.37-source.zip contains the matching project source;
+Source/OpenEmulsion-v0.38-source.zip contains the matching project source;
 external OpenFX SDK files are not included. See manifest.json for the exact
 source revision and SHA-256 hashes.
 

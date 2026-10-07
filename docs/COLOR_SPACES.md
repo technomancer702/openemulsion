@@ -1,4 +1,4 @@
-# OFX Color Spaces (v0.36)
+# OFX Color Spaces (v0.38)
 
 ## Resolve Workflow
 
@@ -53,21 +53,41 @@ The viewing response runs after enabled Film Color camera balance and before the
 
 The independent rational luminance curve maps scene-linear 18% gray to display-linear 0.12 (approximately 0.4134 in Gamma 2.4). Scene white 1 maps to approximately 0.69136 (0.85745 encoded); the shoulder starts at scene-linear 0.6, and brighter values approach display white continuously. Shadows remain monotonic down to zero, with no added pedestal or positive-shadow clipping. The old conversion mapped gray to 0.4894 and did not provide a display shoulder. This difference addresses washed-out direct log-to-display rendering; it is not automatic dehazing or exposure correction.
 
-Chroma is rescaled with linear luminance, then compressed radially toward the neutral axis at the display-gamut boundary. In-gamut colors below the compression knee retain their chroma direction; overbright colored emitters smoothly approach neutral white rather than relying on display channel clipping. No global saturation boost, stock-data import, ARRI LUT reproduction, or ACES rendering-transform equivalence is claimed. Creative print lift/casts and texture can still intentionally change the final black/white values.
+Chroma is rescaled with linear luminance, then compressed radially toward the neutral axis at the display-gamut boundary. In-gamut colors below the compression knee retain their chroma direction. From v0.38, bright saturated emitters blend toward a peak-aware shoulder rather than being forced too quickly toward neutral white. This trades highlight brightness for retained color/channel gradation, not a global saturation or exposure change. No stock-data import, ARRI LUT reproduction, or ACES rendering-transform equivalence is claimed. Creative print lift/casts and texture can still intentionally change the final black/white values.
+
+For positive scene luminance `y` and peak RGB `p > 1`, let `q = y/p`,
+`k = tone(q)`, `h = q-k`, and `d = toneDerivative(q)*(y-q)`.
+The alternate luminance is `k + h*d/(h+d)`. At peak one it matches the
+original value and slope; along a fixed chromatic ray, `q` stays constant and
+the shoulder is monotonic. Its luminance ceiling is `q`, keeping the
+alternate's pre-gamut peak RGB below one, rather than requiring a red emitter
+to occupy the same near-white
+brightness as an achromatic light. Negative wide-gamut channels are handled by
+the same bounded radial mapping at both endpoints.
+
+The original and alternate display-linear RGB outputs are blended with a
+chroma-only smooth gate: `smoothstep(0.15, 0.75, (max-min)/max)`. At default,
+the maximum blend is 0.5. Peak RGB at or below one, neutral grays and pale colors
+with relative range at or below 0.15 keep the original response. The gate is
+exposure invariant: a simple intensity-ramped stronger blend can reverse
+brightness on an exposure ramp and is deliberately not used. This response
+applies wherever SDR rendering is active, even without Film Color; the extra
+retention adjustment below still requires that module.
 
 Source highlight extraction and selective-color keys still use the original converted scene signal (camera-balanced for selection when Film Color is enabled). Rendering does not change glow extraction thresholds, source hue selection or procedural grain coordinates. Grain tonal weighting follows the image at its selected insertion point, so its amplitude can legitimately change with the improved tone response.
 
 ### Highlight Color Retention
 
-Film Color's **Highlight Color Retention** defaults to zero, preserving v0.34's
-rendering. Its 0-1 range smoothly blends the display-linear luminance-based
-result toward peak-RGB scaling, with an effective maximum blend of 0.35. The
-weight smoothly activates between peak scene-linear 0.6 and 2.0, after camera
-balance. Both endpoints use bounded radial gamut mapping. This trades some
-highlight brightness for retained emitter color; it is not a global saturation
+Film Color's **Highlight Color Retention** defaults to zero, using v0.38's
+updated automatic colored-highlight response. Its 0-1 range increases the
+fully gated display-linear RGB blend from 0.5 to 0.8. At each fixed source pixel
+the slider is an affine RGB blend between fixed, bounded endpoints, after
+camera balance. Zero no longer reproduces pre-v0.38 SDR highlights; saved SDR
+projects/presets intentionally receive the improved foundation. The preset
+file format and recipes are unchanged. This is not a global saturation
 increase or guaranteed recovery of clipped source channels.
 
-Neutral grays and colors whose largest linear channel is at most 0.6 retain
+Neutral/pale colors and colors whose largest linear channel is at most one retain
 their original response. Bright colored windows and reflections can change too,
 not just neon/LEDs. Start around 0.5 when a luminous colored source turns too
 white, and compare its brightness as well as its hue.

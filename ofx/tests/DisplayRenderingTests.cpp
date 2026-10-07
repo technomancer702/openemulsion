@@ -33,6 +33,52 @@ static ColorRgb renderRetained(ColorRgb c, float amount)
     return color_curve_rgb(color_render_work(color_curve_rgb(c,ColorSRGB,1),p),ColorSRGB,0);
 }
 
+static void testEmitterShoulder()
+{
+    for (float ratio : {.001f,.0722f,.18f,.2126f,.5f,.6f,.7152f,.95f,1.0f}) {
+        near(color_sdr_emitter_tone(ratio,1),color_sdr_tone(ratio),0,"Emitter join value");
+        const float h=1e-4f;
+        const float left=(color_sdr_emitter_tone(ratio,1)-color_sdr_emitter_tone(ratio*(1-h),1-h))/(ratio*h);
+        const float right=(color_sdr_emitter_tone(ratio*(1+h),1+h)-color_sdr_emitter_tone(ratio,1))/(ratio*h);
+        near(left,right,.003f,"Emitter join slope");
+        near(right,color_sdr_slope(ratio),.003f,"Emitter join disagrees with analytical slope");
+        float previous=-1;
+        for (int i=0; i<2400; ++i) {
+            const float peak=std::exp2(-14.0f+i*.012f), y=peak*ratio;
+            const float mapped=color_sdr_emitter_tone(y,peak);
+            require(mapped>=previous-1e-7f && mapped>=0 && mapped<=1,"Emitter shoulder exposure order/bounds");
+            if (peak>1) require(mapped<=ratio+1e-7f,"Emitter shoulder forces peak RGB over one");
+            previous=mapped;
+        }
+    }
+    require(color_sdr_emitter_tone(0,32)==0,"Emitter shoulder raises black");
+    require(color_sdr_emitter_tone(1e-9f,32)<=1e-9f,"Emitter shoulder adds a tiny-luminance pedestal");
+    for (float join : {.15f,.75f}) for (float amount : {0.0f,.5f,1.0f}) {
+        const float h=1e-5f;
+        const auto a=renderRetained({4,4*(1-join+h),4*(1-join+h)},amount);
+        const auto b=renderRetained({4,4*(1-join-h),4*(1-join-h)},amount);
+        near(a.r,b.r,1e-4f,"Emitter chroma gate red discontinuity");
+        near(a.g,b.g,1e-4f,"Emitter chroma gate green discontinuity");
+        near(a.b,b.b,1e-4f,"Emitter chroma gate blue discontinuity");
+    }
+    const ColorRgb emitter {32,.1f,.3f};
+    const float y=luma(emitter), mapped=color_sdr_tone(y), gain=mapped/y;
+    const auto old=color_sdr_gamut({emitter.r*gain,emitter.g*gain,emitter.b*gain},mapped);
+    const auto updated=renderRetained(emitter,0);
+    require(updated.g<old.g*.75f && updated.b<old.b*.75f,"Default still forces red emitter near white");
+    require(updated.r>updated.g && updated.r>updated.b,"Default emitter hue ordering");
+    require(luma(updated)<luma(old) && luma(updated)>.5f*luma(old),"Default brightness tradeoff");
+    for (const auto color : std::array<ColorRgb,4>{{{.38f,.2f,.12f},{1,.01f,.025f},{.02f,.03f,1},{8,7.8f,7.6f}}}) {
+        const float luminance=luma(color), scale=color_sdr_tone(luminance)/luminance;
+        const auto reference=color_sdr_gamut({color.r*scale,color.g*scale,color.b*scale},color_sdr_tone(luminance));
+        const auto result=renderRetained(color,1);
+        near(result.r,reference.r,2e-6f,"Low-intensity/pale color changed");
+        near(result.g,reference.g,2e-6f,"Low-intensity/pale color changed");
+        near(result.b,reference.b,2e-6f,"Low-intensity/pale color changed");
+    }
+    std::puts("SDR emitters: matching value/slope at peak one, exposure order, RGB bounds, default color retention and unchanged low-intensity/pale colors pass.");
+}
+
 static void testHighlightRetention()
 {
     for (float y : {0.0f,.0001f,.01f,.18f,.6f,1.0f,4.0f,64.0f,10000.0f}) {
@@ -63,7 +109,7 @@ static void testHighlightRetention()
             }
         }
     }
-    for (float peak : {.6f,2.0f}) {
+    for (float peak : {1.0f}) {
         const auto a=renderRetained({peak-1e-5f,.02f,.03f},1), b=renderRetained({peak+1e-5f,.02f,.03f},1);
         near(a.r,b.r,1e-4f,"Retention gate has a discontinuity");
         near(a.g,b.g,1e-4f,"Retention gate has a discontinuity");
@@ -184,6 +230,7 @@ int main()
 {
     try {
         testHDR();
+        testEmitterShoulder();
         testHighlightRetention();
         near(color_sdr_tone(0),0,0,"SDR adds a black offset");
         near(color_sdr_tone(.18f),.12f,1e-7f,"SDR gray anchor");
@@ -216,7 +263,14 @@ int main()
                 const ColorRgb source {chip.r*exposure,chip.g*exposure,chip.b*exposure};
                 const auto c=renderLinear(source);
                 for (float v : {c.r,c.g,c.b}) require(std::isfinite(v) && v>=0 && v<=1.000001f,"SDR gamut boundary");
-                near(luma(c),color_sdr_tone(luma(source)),3e-6f,"SDR gamut mapping changes target luminance");
+                const float peak=std::max({source.r,source.g,source.b});
+                const float baseline=color_sdr_tone(luma(source));
+                const float retained=color_sdr_emitter_tone(luma(source),peak);
+                require(luma(c)<=baseline+3e-6f && luma(c)>=retained-3e-6f,"SDR luminance outside shoulder endpoints");
+                const float low=std::min({source.r,source.g,source.b});
+                const float t=std::clamp(((peak-low)/peak-.15f)/.6f,0.0f,1.0f);
+                const float weight=peak>1 ? .5f*t*t*(3-2*t) : 0;
+                near(luma(c),baseline+(retained-baseline)*weight,3e-6f,"SDR blend target luminance");
                 const float sourceY=luma(source), outputY=luma(c);
                 const float cross=(source.r-sourceY)*(c.g-outputY)-(source.g-sourceY)*(c.r-outputY);
                 near(cross,0,5e-5f,"SDR gamut mapping rotates linear chroma");

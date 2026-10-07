@@ -26,7 +26,7 @@
 #define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, halation, aura, linear-light bloom, and selective color, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 37
+#define kPluginVersionMinor 38
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -1246,7 +1246,7 @@ public:
         addDouble(desc, page, "negativeShoulder", "Negative Shoulder", 0.50, 0.0, 1.0, 0.01, negative);
         addDouble(desc, page, "negativeCrosstalk", "Color Crosstalk", 0.35, 0.0, 3.0, 0.01, negative, "Zero is no palette mixing, one is the original family matrix, and values above one intensify that palette. Not a global film strength control.");
         addDouble(desc, page, "gamutCompression", "Gamut Compression", 0.50, 0.0, 1.0, 0.01, negative, "Continuously blends negative gamut compression: 0 is off, 0.5 is half strength, and 1 is full strength. Preserves working-space brightness and chroma direction. Partial strength can retain out-of-range values; Print and downstream color management determine the final display range.");
-        addDouble(desc, page, "highlightRetention", "Highlight Color Retention", 0.0, 0.0, 1.0, 0.01, negative, "Retains more color in bright emitters during SDR rendering, trading some highlight brightness for chroma. Zero keeps the previous rendering; the maximum is deliberately restrained. Requires Film Color and active SDR output rendering. Neutral grays and lower-intensity colors are unchanged; full-strength Mono Negative and selective matte ignore it. Independent of Film Color/Tone Strength; built-in presets reset it to zero.");
+        addDouble(desc, page, "highlightRetention", "Highlight Color Retention", 0.0, 0.0, 1.0, 0.01, negative, "Adds retention to the SDR foundation's automatic colored-highlight shoulder, trading some brightness for chroma and channel gradation. Zero uses the updated default, not the pre-v0.38 response. Requires Film Color and active SDR rendering. Neutral/pale colors and peak scene-linear RGB at or below one are unchanged; full-strength Mono Negative and selective matte ignore this extra adjustment. Independent of Film Color/Tone Strength; built-in presets reset it to zero. Cannot restore clipped source detail.");
         addDouble(desc, page, "skinHue", "Skin Hue", 0.0, -3.0, 3.0, 0.01, negative, "Selective warm-color adjustment toward magenta or green, with extra endpoint range. Not face detection; neutral and cool colors are excluded.");
         addDouble(desc, page, "printTone", "Print Tone Curve", 0.0, -1.0, 1.0, 0.01, print, "Minus one gives a stronger print-like tone curve; plus one gives a gentler telecine-like response. Print Tone Strength separately blends the complete tonal response.");
         addDouble(desc, page, "printContrast", "Print Contrast", 1.0, 0.5, 2.0, 0.01, print);

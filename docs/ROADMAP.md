@@ -1,6 +1,8 @@
 # Upgrade Roadmap
 
-## Completed Through v0.37
+## Completed Through v0.38
+
+- SDR colored-highlight shoulder to reduce taillight washout automatically, preserving neutral/low-intensity response and ordered exposure ramps. Retention adds to the updated default. Shared CPU/OpenCL arithmetic, independent references and local footage/isolated-path comparisons; no source highlight reconstruction. See [Color Spaces](COLOR_SPACES.md).
 
 - Fixed v0.36 descriptor startup crash for root-level HDR controls. Added shipping-binary OFX descriptor/instance lifecycle checks for Filter/General contexts, including initial SDR/HDR control states. Rendering math and preset format are unchanged.
 
