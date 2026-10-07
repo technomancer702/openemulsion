@@ -1,14 +1,13 @@
-# OpenEmulsion v0.25
+# OpenEmulsion v0.26
 
-Experimental Windows x64 update with more expressive slider ranges and an extended grain-softness response. The plugin identifier, defaults, and built-in preset looks are retained.
+Experimental Windows x64 terminology update. Control labels and tooltips are clearer and aligned with comparable Filmbox terminology. Rendering, performance, parameter identifiers, values, animation, and built-in preset recipes are unchanged from v0.25.
 
-## Changes in v0.25
+## Changes in v0.26
 
-- Expanded Temperature/Tint and Skin Hue to -3..3, Color Crosstalk and Split Tone to 0..3, and Negative Density to -1.2..1.5. Existing values keep their effect; no preset retuning or value migration is needed.
-- Extended Grain Softness to 0..2. Above one, the main grain field is smoothed with approximately stable variance, without extra image passes or buffers. Zero to one retains the previous texture.
-- Greyed out ineffective color controls in active full-strength Mono Negative, including forced-monochrome Grain Color. Partial strength and texture-only modes retain the applicable controls.
-- Added v0.24 response/grain anchors for defaults and all twelve presets, expanded endpoint/semantic UI checks, and CPU/OpenCL parity/performance checks for new ranges and smoothing.
-- Kept selective toe/shoulder and gamut behavior, existing print styles, halation/Aura/bloom, exposure/contrast/saturation, and grain amount/size/roughness unchanged. See `docs/SLIDER_TUNING.md`.
+- Renamed Negative Density to Color Density, Color Richness to Richness, Neutralize Print to Neutralize Balance, Neutral Width to Dead Zone Width, and Print Tone to Print Tone Curve.
+- Retained Skin Hue and Print Color: comparable Filmbox controls use the same terminology and direction. Print Color's tooltip now explains that zero is more print-like and one is more neutral/telecine-like, distinct from Print Color Strength.
+- Added clearer tooltips for density, richness, print curve/balance, and the split-tone dead zone. No processing changes or additional GPU work.
+- Retained the broader slider ranges and extended grain softness from v0.25. See `docs/SLIDER_TUNING.md` and `docs/CONTROL_NAMES.md`.
 
 ## Included
 
@@ -20,7 +19,7 @@ Experimental Windows x64 update with more expressive slider ranges and an extend
 - LogC3 EI-800, LogC4, Sony, Blackmagic, RED, Canon, Panasonic, ACES, DaVinci Wide Gamut, and standard display/linear input choices.
 - Smooth resolution-aware halation/Aura, separate linear-light bloom, and diagnostic mattes.
 - Procedural grain styles, size/softness/roughness, desqueeze, channel intensity, and gauge presets.
-- Push/Pull, Color Richness, and Split Tone; Push/Pull preserves grain geometry.
+- Push/Pull, Richness, and Split Tone; Push/Pull preserves grain geometry.
 - OpenCL acceleration, multithreaded CPU fallback, and an original plugin icon.
 
 ## Limitations

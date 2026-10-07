@@ -2,6 +2,8 @@
 
 This is a targeted usability update, not a new film model. Defaults and built-in recipes retain their v0.24 values and response. Expanding the exposed ranges makes the same percentage of slider travel more expressive while preserving precise numeric adjustments.
 
+The names below document the v0.25 release. v0.26 renames Negative Density to Color Density and Neutralize Print to Neutralize Balance, without changing their values or behavior. See [Control Names](CONTROL_NAMES.md).
+
 ## Expanded Ranges
 
 | Control | Previous range | v0.25 range |

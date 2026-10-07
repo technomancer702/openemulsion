@@ -1,4 +1,4 @@
-# Negative and Print Response (v0.25)
+# Negative and Print Response (v0.26)
 
 ## Current Engine
 
@@ -10,7 +10,7 @@ The engine is an original artistic model, not a measured stock calibration, phys
 
 ## Negative
 
-v0.25 expands Temperature/Tint and Skin Hue to -3..3, Color Crosstalk to 0..3, and Negative Density to -1.2..1.5. Existing values/defaults/presets retain their response; above-one Crosstalk intensifies the original matrix rather than changing the meaning of one. See [Slider Tuning](SLIDER_TUNING.md).
+v0.25 expands Temperature/Tint and Skin Hue to -3..3, Color Crosstalk to 0..3, and Color Density (previously Negative Density) to -1.2..1.5. Existing values/defaults/presets retain their response; above-one Crosstalk intensifies the original matrix rather than changing the meaning of one. See [Slider Tuning](SLIDER_TUNING.md). v0.26 updates labels and tooltips only; see [Control Names](CONTROL_NAMES.md).
 
 The negative uses a shared luminance response, palette mixing, saturation/density, and optional soft gamut compression. Unlike independent RGB tone curves, luminance shaping does not itself rotate hue. Each film family has its own contrast, saturation, and color-mixing profile; the monochrome family uses its own RGB weighting.
 
@@ -21,7 +21,7 @@ The negative uses a shared luminance response, palette mixing, saturation/densit
 - `Toe`: rounds the lower shadows while retaining nonzero detail. Maximum Toe does not impose a hard black clipping threshold.
 - `Negative Shoulder`: higher values begin highlight compression earlier and reduce its upper headroom. It remains smooth at the transition.
 - `Color Crosstalk`: blends each film family's color-mixing matrix with identity. Zero removes the matrix's palette mixing, not its contrast/saturation profile. It is separate from Grain Color.
-- `Negative Density`: higher values darken saturated colors to add density, leaving neutral grays unchanged. Negative values brighten those colors.
+- `Color Density`: higher values darken saturated colors to add density, leaving neutral grays unchanged. Negative values brighten those colors. This is a creative color-density adjustment, not calibrated photographic optical density.
 - `Saturation`: overall negative colorfulness, combined with the selected film-family profile.
 - `Gamut Compression`: an amount control that blends toward a fixed soft radial compression target in the perceptual working RGB domain. Zero disables this negative-stage compression, 0.5 applies half its RGB change, and 1 applies the full target (knee 0.45). Working-space weighted brightness and chroma direction are retained, not physical scene-linear luminance or perceptual hue in a color appearance model. Partial amounts can retain negative or above-boundary values; final negative-channel clamping, Print, and downstream color management still affect the result. This is not a standardized ACES gamut compressor or an output-gamut mapping guarantee.
 - `Skin Hue`: positive shifts selected warm midtone colors toward magenta; negative shifts toward green. Selection is a soft RGB color region, not face detection, and can also affect similarly colored objects. Neutral, blue, and green colors are excluded. Mono ignores it.
@@ -50,15 +50,15 @@ The independent development stage runs between Film Color and Print. Neutral con
 
 Full (Film Print) is the strongest print-like response. Standard balances that with softer tone and broader color. Extended (Telecine) is gentler, with a neutral gray axis and lower black point. These are original artistic presets, not Filmbox's numerical recipes.
 
-Selecting Full, Standard, or Extended loads and grays out seven recipe knobs: Print Tone, Print Contrast, Highlight Rolloff, Print Color, Neutralize Print, Print Saturation, and Black Point. Custom unlocks the last selected recipe without changing its rendered result. There is one underlying response, with no hidden style-specific multipliers after switching to Custom.
+Selecting Full, Standard, or Extended loads and grays out seven recipe knobs: Print Tone Curve, Print Contrast, Highlight Rolloff, Print Color, Neutralize Balance, Print Saturation, and Black Point. Custom unlocks the last selected recipe without changing its rendered result. There is one underlying response, with no hidden style-specific multipliers after switching to Custom.
 
 | Recipe Knob | Full | Standard | Extended |
 | --- | ---: | ---: | ---: |
-| Print Tone | -1 | 0 | 1 |
+| Print Tone Curve | -1 | 0 | 1 |
 | Print Contrast | 1 | 1 | 1 |
 | Highlight Rolloff | 0.55 | 0.55 | 0.55 |
 | Print Color | 0.25 | 0.43 | 0.79 |
-| Neutralize Print | 0 | 0 | 1 |
+| Neutralize Balance | 0 | 0 | 1 |
 | Print Saturation | 1 | 1 | 1 |
 | Black Point | 0.585 | 0.45 | 0.135 |
 
@@ -70,12 +70,12 @@ The following seven recipe controls apply only in Custom; the strength and expos
 
 - `Print Color Strength`: 0 removes print palette, saturation, cast, and print gamut compression; 1 applies them fully. Intermediate values blend the color operations. Print tone and linear-light exposure/balance remain independent.
 - `Print Tone Strength`: 0 removes print contrast, toe, shoulder, and lifted black point; 1 applies them fully. Intermediate values interpolate the tone response and scale the black lift. Print color and exposure/balance remain independent.
-- `Print Tone`: -1 emphasizes the print-like toe/contrast character; +1 makes it gentler and cleaner. Zero uses the common middle tone response.
-- `Print Contrast`: a multiplier on the contrast selected by Print Tone; 1 uses that response.
+- `Print Tone Curve`: -1 emphasizes the print-like toe/contrast character; +1 makes it gentler and cleaner. Zero uses the common middle tone response.
+- `Print Contrast`: a multiplier on the contrast selected by Print Tone Curve; 1 uses that response.
 - `Highlight Rolloff`: higher values start the shoulder earlier. Highlights approach the upper level smoothly instead of folding downward at large inputs.
 - `Print Color`: 0 applies the full print palette/cold-shadow/warm-highlight character; 1 removes that palette/cast character. Tone and output-gamut compression still operate.
-- `Neutralize Print`: removes only the tone-dependent shadow/highlight cast. It does not undo the film-family palette, print matrix, saturation, toe, or shoulder. At 1, neutral input remains neutral with default RGB print balance.
-- `Print Saturation`: multiplies print colorfulness independently of Film Color saturation. A value of 0 removes chroma before any enabled print cast; set Neutralize Print to 1 for a fully monochrome print result.
+- `Neutralize Balance`: removes only the tone-dependent shadow/highlight cast. It does not undo the film-family palette, print matrix, saturation, toe, or shoulder. At 1, neutral input remains neutral with default RGB print balance.
+- `Print Saturation`: multiplies print colorfulness independently of Film Color saturation. A value of 0 removes chroma before any enabled print cast; set Neutralize Balance to 1 for a fully monochrome print result.
 - `Black Point`: adjusts a neutral lifted floor; 0 sets the floor to zero. Full selects a higher value than Standard, while Extended selects a lower one.
 - `Print Exposure`: creative print-side exposure in linear-light stops before the print tone response; positive values brighten. It does not change the negative or source-keyed halation.
 - `Print Red`, `Print Green`, `Print Blue`: independent linear-light channel exposure offsets in stops, added to Print Exposure. These are creative RGB balance controls, not calibrated physical printer-point units.

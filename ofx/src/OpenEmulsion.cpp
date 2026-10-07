@@ -25,7 +25,7 @@
 #define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, halation, aura, and linear-light bloom, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 25
+#define kPluginVersionMinor 26
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -981,7 +981,7 @@ public:
         addDouble(desc, page, "exposure", "Exposure", 0.0, -4.0, 4.0, 0.01, negative);
         addDouble(desc, page, "temperature", "Temperature", 0.0, -3.0, 3.0, 0.01, negative, "Broader linear red/blue balance. Zero is neutral; existing values retain their effect. Creative units, not kelvin.");
         addDouble(desc, page, "tint", "Tint", 0.0, -3.0, 3.0, 0.01, negative, "Broader linear green/magenta balance. Zero is neutral; existing values retain their effect.");
-        addDouble(desc, page, "density", "Negative Density", 0.18, -1.2, 1.5, 0.01, negative, "Darkens saturated colors without changing neutral grays; negative values brighten them. Expanded creative range with unchanged defaults.");
+        addDouble(desc, page, "density", "Color Density", 0.18, -1.2, 1.5, 0.01, negative, "Positive values darken saturated colors; negative values brighten them. Neutral grays and chromatic direction are unchanged. Creative color density, not calibrated photographic optical density or an extreme-saturation-only adjustment.");
         addDouble(desc, page, "saturation", "Saturation", 0.95, 0.0, 2.0, 0.01, negative);
         addDouble(desc, page, "toe", "Toe", 0.16, 0.0, 1.0, 0.01, negative);
         addDouble(desc, page, "contrast", "Contrast", 1.08, 0.5, 2.0, 0.01, negative);
@@ -989,11 +989,11 @@ public:
         addDouble(desc, page, "negativeCrosstalk", "Color Crosstalk", 0.35, 0.0, 3.0, 0.01, negative, "Zero is no palette mixing, one is the original family matrix, and values above one intensify that palette. Not a global film strength control.");
         addDouble(desc, page, "gamutCompression", "Gamut Compression", 0.50, 0.0, 1.0, 0.01, negative, "Continuously blends negative gamut compression: 0 is off, 0.5 is half strength, and 1 is full strength. Preserves working-space brightness and chroma direction. Partial strength can retain out-of-range values; Print and downstream color management determine the final display range.");
         addDouble(desc, page, "skinHue", "Skin Hue", 0.0, -3.0, 3.0, 0.01, negative, "Selective warm-color adjustment toward magenta or green, with extra endpoint range. Not face detection; neutral and cool colors are excluded.");
-        addDouble(desc, page, "printTone", "Print Tone", 0.0, -1.0, 1.0, 0.01, print);
+        addDouble(desc, page, "printTone", "Print Tone Curve", 0.0, -1.0, 1.0, 0.01, print, "Minus one gives a stronger print-like tone curve; plus one gives a gentler telecine-like response. Print Tone Strength separately blends the complete tonal response.");
         addDouble(desc, page, "printContrast", "Print Contrast", 1.0, 0.5, 2.0, 0.01, print);
         addDouble(desc, page, "printRolloff", "Highlight Rolloff", 0.55, 0.0, 1.0, 0.01, print);
-        addDouble(desc, page, "printColor", "Print Color", printstyle::Presets[printstyle::Standard][printstyle::Color], 0.0, 1.0, 0.01, print);
-        addDouble(desc, page, "printNeutralize", "Neutralize Print", 0.0, 0.0, 1.0, 0.01, print);
+        addDouble(desc, page, "printColor", "Print Color", printstyle::Presets[printstyle::Standard][printstyle::Color], 0.0, 1.0, 0.01, print, "Zero gives the strongest print-like palette, cold shadows, and warm highlights; one gives a more neutral, less constrained telecine-like color response. Print Color Strength separately blends the complete chromatic response, including saturation and gamut compression.");
+        addDouble(desc, page, "printNeutralize", "Neutralize Balance", 0.0, 0.0, 1.0, 0.01, print, "Removes only the print's cold-shadow/warm-highlight color bias. Does not bypass its palette, saturation, gamut compression, or tone curve. Has less effect when Print Color is high.");
         addDouble(desc, page, "printSaturation", "Print Saturation", 1.0, 0.0, 2.0, 0.01, print);
         addDouble(desc, page, "blackPoint", "Black Point", 0.45, 0.0, 1.0, 0.01, print);
         addDouble(desc, page, "printExposure", "Print Exposure", 0.0, -2.0, 2.0, 0.01, print);
@@ -1016,11 +1016,11 @@ public:
         addDouble(desc, page, "grainMidtones", "Midtone Grain", 0.80, 0.0, 2.0, 0.01, grain);
         addDouble(desc, page, "grainHighlights", "Highlight Grain", 0.42, 0.0, 2.0, 0.01, grain);
         addDouble(desc, page, "pushPull", "Push / Pull", 0, -3, 3, 0.01, development, "Creative development amount: changes contrast and shadow fog around fixed middle gray; also scales enabled grain strength in Full mode without changing grain size or position. Not calibrated camera exposure stops.");
-        addDouble(desc, page, "colorRichness", "Color Richness", 0, -1, 1, 0.01, development, "Adjusts muted colors more than saturated colors without changing luminance.");
+        addDouble(desc, page, "colorRichness", "Richness", 0, -1, 1, 0.01, development, "Positive values enrich muted colors; negative values desaturate them. Affects already saturated colors less, preserving neutral gray and working-space luminance. Separate from Saturation and Color Density.");
         addDouble(desc, page, "splitTone", "Split Tone", 0, 0, 3, 0.01, development, "Shifts shadows toward the selected hue and highlights toward its chromatic opposite. Middle gray remains neutral by default. Values above one allow stronger creative toning.");
         addDouble(desc, page, "splitHue", "Shadow Hue", 220, 0, 360, 1, development, "Shadow hue in degrees: red 0, green 120, blue 240. Highlights use the opposite direction.");
         addDouble(desc, page, "splitPivot", "Split Pivot", 0.46135613, 0.2, 0.8, 0.01, development, "Neutral split point in the managed perceptual working space. Default is scene-linear 18% gray.");
-        addDouble(desc, page, "splitWidth", "Neutral Width", 0.1, 0, 0.3, 0.01, development, "Width of the unaffected tonal range around Split Pivot.");
+        addDouble(desc, page, "splitWidth", "Dead Zone Width", 0.1, 0, 0.3, 0.01, development, "Width of the neutral tonal range around Split Pivot that Split Tone leaves unaffected. Not a shadow lift or black-level adjustment.");
         addDouble(desc, page, "splitShadows", "Shadow Intensity", 1, 0, 2, 0.01, development, "Scales the shadow side of Split Tone independently.");
         addDouble(desc, page, "splitHighlights", "Highlight Intensity", 1, 0, 2, 0.01, development, "Scales the highlight side of Split Tone independently.");
         addDouble(desc, page, "grainStretch", "Horizontal Stretch", 1, 0.5, 2, 0.01, grain, "Horizontal grain desqueeze ratio. One is round grain; two doubles its horizontal scale without changing frame dimensions.");
