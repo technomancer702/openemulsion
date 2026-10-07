@@ -19,13 +19,14 @@
 #include "FilmResponseConfig.h"
 #include "ModuleControlState.h"
 #include "LookPresetConfig.h"
+#include "UserPresetIO.h"
 
 #define kPluginName "OpenEmulsion"
 #define kPluginGrouping "OpenEmulsion"
 #define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, halation, aura, and linear-light bloom, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 26
+#define kPluginVersionMinor 27
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -38,6 +39,7 @@ struct Settings {
     int system = 0;
     int printStyle = 1;
     int grainStyle = 1;
+    int grainResponse = 0;
     int sourceSpace = color::Rec709Gamma24;
     int outputSpace = 0;
     bool enableNegative = true;
@@ -293,6 +295,11 @@ public:
                         c = response_negative_stage(c, responseParameters_);
                     }
                     if (modules & film::Development) c = response_development(c, responseParameters_);
+                    if (grainParameters_.prePrint && grainEnabled(settings_)) {
+                        const OfxRectI& b = src_->getBounds();
+                        const auto delta = grain_delta(x - b.x1, y - b.y1, luma(c), grainParameters_);
+                        c.r += delta.r; c.g += delta.g; c.b += delta.b;
+                    }
                     if (printEnabled(settings_)) {
                         c = response_print(c, responseParameters_);
                     }
@@ -316,7 +323,7 @@ public:
                         const Rgb glow = bloomBlur_ ? bloomBlur_->sample(x - b.x1, y - b.y1) : Rgb{0,0,0};
                         c = bloom_composite(c, glow, bloomConfig_.parameters, settings_.mode == 6);
                     }
-                    if (grainEnabled(settings_)) {
+                    if (grainEnabled(settings_) && !grainParameters_.prePrint) {
                         const OfxRectI& b = src_->getBounds();
                         const GrainVector delta = grain_delta(x - b.x1, y - b.y1, luma(c), grainParameters_);
                         c.r += delta.r;
@@ -412,6 +419,7 @@ private:
         out[film::BloomSoftness] = static_cast<float>(s.bloomSoftness);
         out[film::BloomColor] = static_cast<float>(s.bloomColor);
         out[film::BloomProtection] = static_cast<float>(s.bloomProtection);
+        out[film::GrainResponse] = static_cast<float>(s.grainResponse);
     }
 
     OFX::Image* src_ = nullptr;
@@ -439,6 +447,7 @@ public:
         system_ = fetchChoiceParam("system");
         printStyle_ = fetchChoiceParam("printStyle");
         grainStyle_ = fetchChoiceParam("grainStyle");
+        grainResponse_ = fetchChoiceParam("grainResponse");
         enableNegative_ = fetchBooleanParam("enableNegative");
         enableDevelopment_ = fetchBooleanParam("enableDevelopment");
         enablePrint_ = fetchBooleanParam("enablePrint");
@@ -491,6 +500,15 @@ public:
             if (control.kind == look::Choice) lookControls_[i].choice = fetchChoiceParam(control.name);
             else lookControls_[i].number = fetchDoubleParam(control.name);
         }
+        for (size_t i = 0; i < std::size(userpreset::ContextControls); ++i) {
+            const auto& control = userpreset::ContextControls[i];
+            if (control.kind == userpreset::Choice) contextControls_[i].choice = fetchChoiceParam(control.name);
+            else if (control.kind == userpreset::Integer) contextControls_[i].integer = fetchIntParam(control.name);
+            else contextControls_[i].number = fetchDoubleParam(control.name);
+        }
+        preserveSpaces_ = fetchBooleanParam("presetPreserveSpaces");
+        preserveCamera_ = fetchBooleanParam("presetPreserveCamera");
+        preserveSeed_ = fetchBooleanParam("presetPreserveSeed");
         halationThreshold_ = fetchDoubleParam("halationThreshold");
         halationSoftness_ = fetchDoubleParam("halationSoftness");
         halationColor_ = fetchDoubleParam("halationColor");
@@ -526,6 +544,26 @@ public:
     void changedParam(const OFX::InstanceChangedArgs& args, const std::string& name) override
     {
         if (applyingControls_) return;
+        if (name == "saveUserPreset" || name == "loadUserPreset") {
+            if (args.reason != OFX::eChangeUserEdit) return;
+            try {
+                const bool save = name == "saveUserPreset";
+                const auto path = userpreset::chooseFile(save);
+                if (!path) return;
+                if (save) {
+                    auto preset = presetAt(args.time);
+                    preset.name = path->stem().u8string();
+                    userpreset::saveFile(*path,preset);
+                } else {
+                    // Parse and validate the complete file before touching any host parameters.
+                    const auto preset = userpreset::loadFile(*path);
+                    applyUserPreset(preset);
+                }
+            } catch (const std::exception& error) {
+                sendMessage(OFX::Message::eMessageError,"userPreset",std::string("OpenEmulsion preset: ") + error.what());
+            }
+            return;
+        }
         int selected = look::Custom;
         lookPreset_->getValue(selected);
         const auto action = look::editAction(name, args.reason == OFX::eChangeUserEdit, applyingControls_, selected);
@@ -631,18 +669,43 @@ private:
         applyingControls_ = true;
         try {
             look::applyPreset(selected, [&](size_t i, double value) {
-                auto& control = lookControls_[i];
-                if (control.choice) {
-                    control.choice->deleteAllKeys();
-                    control.choice->setValue(static_cast<int>(value));
-                } else {
-                    control.number->deleteAllKeys();
-                    control.number->setValue(value);
-                }
+                setControl(lookControls_[i],value);
             }, [&](size_t i, bool enabled) {
                 moduleToggles_[i]->deleteAllKeys();
                 moduleToggles_[i]->setValue(enabled);
             });
+            printStyle_->getValue(printStyleForUI_);
+        } catch (...) {
+            applyingControls_ = false;
+            endEditBlock();
+            throw;
+        }
+        applyingControls_ = false;
+        endEditBlock();
+        updateControlState();
+    }
+
+    userpreset::Snapshot presetAt(double time) const
+    {
+        userpreset::Snapshot preset;
+        for (size_t i = 0; i < preset.controls.size(); ++i) preset.controls[i] = readControl(lookControls_[i],time);
+        for (size_t i = 0; i < preset.modules.size(); ++i) preset.modules[i] = moduleToggles_[i]->getValueAtTime(time);
+        for (size_t i = 0; i < preset.context.size(); ++i) preset.context[i] = readControl(contextControls_[i],time);
+        return preset;
+    }
+
+    void applyUserPreset(const userpreset::Snapshot& preset)
+    {
+        const userpreset::ImportOptions options {preserveSpaces_->getValue(),preserveCamera_->getValue(),preserveSeed_->getValue()};
+        beginEditBlock("Load user preset");
+        applyingControls_ = true;
+        try {
+            userpreset::apply(preset,options,[&](size_t i, double value) { setControl(lookControls_[i],value); },
+                [&](size_t i, bool enabled) {
+                    moduleToggles_[i]->deleteAllKeys();
+                    moduleToggles_[i]->setValue(enabled);
+                }, [&](size_t i, double value) { setControl(contextControls_[i],value); });
+            lookPreset_->setValue(look::Custom);
             printStyle_->getValue(printStyleForUI_);
         } catch (...) {
             applyingControls_ = false;
@@ -682,6 +745,7 @@ private:
         system_->getValueAtTime(time, s.system);
         printStyle_->getValueAtTime(time, s.printStyle);
         grainStyle_->getValueAtTime(time, s.grainStyle);
+        grainResponse_->getValueAtTime(time, s.grainResponse);
         s.enableNegative = enableNegative_->getValueAtTime(time);
         s.enableDevelopment = enableDevelopment_->getValueAtTime(time);
         s.enablePrint = enablePrint_->getValueAtTime(time);
@@ -769,11 +833,29 @@ private:
     struct LookControl {
         OFX::ChoiceParam* choice = nullptr;
         OFX::DoubleParam* number = nullptr;
+        OFX::IntParam* integer = nullptr;
     };
+    static double readControl(const LookControl& control, double time)
+    {
+        if (control.choice) { int value = 0; control.choice->getValueAtTime(time,value); return value; }
+        if (control.integer) { int value = 0; control.integer->getValueAtTime(time,value); return value; }
+        return control.number->getValueAtTime(time);
+    }
+    static void setControl(const LookControl& control, double value)
+    {
+        if (control.choice) { control.choice->deleteAllKeys(); control.choice->setValue(static_cast<int>(value)); }
+        else if (control.integer) { control.integer->deleteAllKeys(); control.integer->setValue(static_cast<int>(value)); }
+        else { control.number->deleteAllKeys(); control.number->setValue(value); }
+    }
     OFX::ChoiceParam* lookPreset_ = nullptr;
     std::array<LookControl, std::size(look::Controls)> lookControls_ {};
+    std::array<LookControl, std::size(userpreset::ContextControls)> contextControls_ {};
+    OFX::BooleanParam* preserveSpaces_ = nullptr;
+    OFX::BooleanParam* preserveCamera_ = nullptr;
+    OFX::BooleanParam* preserveSeed_ = nullptr;
     bool applyingControls_ = false;
     OFX::ChoiceParam* grainStyle_ = nullptr;
+    OFX::ChoiceParam* grainResponse_ = nullptr;
     OFX::BooleanParam* enableNegative_ = nullptr;
     OFX::BooleanParam* enableDevelopment_ = nullptr;
     OFX::BooleanParam* enablePrint_ = nullptr;
@@ -928,6 +1010,27 @@ public:
         choice->setHint("Original stock-inspired and creative looks. Loads Full mode, gauge, module switches, and editable settings; replaces their keyframes. Preserves input/output spaces, camera exposure/temperature/tint, and grain seed. Custom retains your current settings.");
         page->addChild(*choice);
 
+        GroupParamDescriptor* presets = addGroup(desc, page, "userPresetControls", "User Presets", false);
+        for (const auto& command : std::array<std::pair<const char*,const char*>,2> {{{"saveUserPreset","Save Preset..."},{"loadUserPreset","Load Preset..."}}}) {
+            auto* button = desc.definePushButtonParam(command.first);
+            button->setLabels(command.second,command.second,command.second);
+            button->setHint(command.first == std::string("saveUserPreset") ?
+                "Save the current frame's settings to an OpenEmulsion preset file. Animation curves are not exported." :
+                "Load a complete preset in one undoable edit. Replaces creative settings and their keyframes; the Preserve options retain the selected context groups.");
+            button->setParent(*presets);
+            page->addChild(*button);
+        }
+        for (const auto& option : std::array<std::pair<const char*,const char*>,3> {{{"presetPreserveSpaces","Preserve Color Spaces"},{"presetPreserveCamera","Preserve Camera Balance"},{"presetPreserveSeed","Preserve Grain Seed"}}}) {
+            auto* toggle = desc.defineBooleanParam(option.first);
+            toggle->setLabels(option.second,option.second,option.second);
+            toggle->setDefault(true);
+            toggle->setAnimates(false);
+            toggle->setEvaluateOnChange(false);
+            toggle->setHint("When loading a user preset, keep this node's current settings and animation in this group. Does not affect saving or built-in presets.");
+            toggle->setParent(*presets);
+            page->addChild(*toggle);
+        }
+
         GroupParamDescriptor* negative = addGroup(desc, page, "negativeControls", "Film Color", false);
         addToggle(desc, page, negative, "enableNegative", "Enable");
         GroupParamDescriptor* development = addGroup(desc, page, "developmentControls", "Film Development", false);
@@ -972,6 +1075,15 @@ public:
         choice->appendOption("Debug");
         choice->setDefault(1);
         choice->setParent(*grain);
+        page->addChild(*choice);
+
+        choice = desc.defineChoiceParam("grainResponse");
+        choice->setLabels("Grain Response", "Grain Response", "Grain Response");
+        choice->appendOption("Post Print");
+        choice->appendOption("Negative & Print");
+        choice->setDefault(0);
+        choice->setParent(*grain);
+        choice->setHint("Post Print retains the original texture. Negative & Print keys grain from the developed negative and adds it before Print, allowing print tone/color to shape it. Texture-only modes retain Post Print behavior. Creative approximation, not measured emulsion density.");
         page->addChild(*choice);
 
         addDouble(desc, page, "negativeColorStrength", "Film Color Strength", 1.0, 0.0, 1.0, 0.01, negative, "Scales the film palette, monochrome conversion, skin hue, saturation, density, and gamut compression. Zero removes these; camera balance and Film Tone remain independent.");

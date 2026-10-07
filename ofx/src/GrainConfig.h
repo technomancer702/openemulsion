@@ -25,7 +25,8 @@ inline GrainParameters prepare(const float* settings, int height, double time)
     const auto frame = static_cast<int64_t>(std::llround(time * 256.0));
     const auto seed = static_cast<GrainUInt>(settings[25]);
     const auto format = gauge::prepare(settings);
-    const float push = (film::modulesForSettings(settings) & film::Development) ?
+    const int modules = film::modulesForSettings(settings);
+    const float push = (modules & film::Development) ?
         std::clamp(settings[film::PushPull], -3.0f, 3.0f) : 0.0f;
     return {1.0f / ((0.55f + size * 2.65f) * styleSize * scale * format.scale),
             detail * std::max(1.0f - softness, 0.0f), std::clamp(settings[18], 0.0f, 1.0f),
@@ -36,7 +37,9 @@ inline GrainParameters prepare(const float* settings, int height, double time)
             std::clamp(settings[film::GrainRed], 0.0f, 2.0f),
             std::clamp(settings[film::GrainGreen], 0.0f, 2.0f),
             std::clamp(settings[film::GrainBlue], 0.0f, 2.0f),
-            std::max(softness - 1.0f, 0.0f)};
+            std::max(softness - 1.0f, 0.0f),
+            static_cast<int>(settings[film::GrainResponse]) == 1 && static_cast<int>(settings[0]) == 0 &&
+                (modules & film::Grain) && (modules & (film::Negative | film::Development | film::Print)) ? 1 : 0};
 }
 
 } // namespace grain

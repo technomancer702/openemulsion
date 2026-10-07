@@ -35,7 +35,7 @@ Preset application only writes parameters. It adds no rendering passes, buffers,
 
 ## Source And Validation
 
-Recipes and their parameter ownership are defined in `ofx/src/LookPresetConfig.h`. Contributors can propose new recipes without changing the renderer. User preset file import/export is not implemented yet; Resolve's normal saved effect settings remain available.
+Recipes and their parameter ownership are defined in `ofx/src/LookPresetConfig.h`. Contributors can propose new recipes without changing the renderer. v0.27 adds [User Presets](USER_PRESETS.md) for portable file save/load. Built-in recipes retain Post Print grain and reset Grain Response along with other creative settings; user files capture the selected response. Resolve's normal saved effect settings remain available.
 
 The stock families are informed by public [Kodak camera-film references](https://www.kodak.com/en/motion/products/camera-films/), but no manufacturer graphs, datasets, proprietary presets, or third-party implementation code are incorporated.
 

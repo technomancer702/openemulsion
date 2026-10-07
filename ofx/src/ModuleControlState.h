@@ -45,7 +45,7 @@ inline constexpr Control Controls[] {
     {"halationColor", film::Halation}, {"aura", film::Aura}, {"auraRadius", film::Aura},
     {"bloom", film::Bloom}, {"bloomRadius", film::Bloom}, {"bloomThreshold", film::Bloom},
     {"bloomSoftness", film::Bloom}, {"bloomColor", film::Bloom}, {"bloomProtection", film::Bloom},
-    {"grainStyle", film::Grain}, {"grain", film::Grain}, {"grainSize", film::Grain},
+    {"grainStyle", film::Grain}, {"grainResponse", film::Grain}, {"grain", film::Grain}, {"grainSize", film::Grain},
     {"grainSoftness", film::Grain}, {"grainRoughness", film::Grain}, {"grainColor", film::Grain},
     {"grainShadows", film::Grain}, {"grainMidtones", film::Grain}, {"grainHighlights", film::Grain},
     {"grainSeed", film::Grain}, {"grainStretch", film::Grain}, {"grainRed", film::Grain},
@@ -67,6 +67,8 @@ inline bool printRecipeEnabled(int mode, int enabled, int style)
 
 inline bool semanticControlEnabled(std::string_view name, int mode, int enabled, int system, double colorStrength)
 {
+    if (name == "grainResponse")
+        return mode == 0 && (enabled & (film::Negative | film::Development | film::Print)) != 0;
     const bool mono = system == 4 && controlEnabled(mode, enabled, film::Negative);
     if (!mono) return true;
     if (name == "negativeCrosstalk" || name == "skinHue") return false;

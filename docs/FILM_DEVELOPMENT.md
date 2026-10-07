@@ -1,4 +1,4 @@
-# Film Development (v0.26)
+# Film Development (v0.27)
 
 An independently switchable creative stage between Film Color and Print, available in Full and Color Only. Its first control is Enable. Film Color may be disabled while Development remains enabled; camera exposure/balance still belongs only to Film Color. Development ignores Film Color/Print strengths and does not rewrite their settings or print presets.
 
@@ -18,7 +18,7 @@ Print response runs afterward and may compress or modify the final appearance. F
 
 ## Texture and Color Management
 
-Push/Pull scales enabled grain strength by `2^(0.22 * amount)` in Full mode. Positive amounts make grain stronger; negative amounts make it gentler. At a fixed frame/seed it does not change grain size, sampling coordinates, stretch, or the noise pattern. Size remains controlled by Grain Size, style, Film Gauge, and render resolution. This fixes the grain enlargement/sliding present in v0.17-v0.18. It never enables zero-strength or disabled grain. It does not alter halation selection/spread, Aura, or the original source-highlight key. Tonal weights still respond to the developed image's luminance.
+Push/Pull scales enabled grain strength by `2^(0.22 * amount)` in Full mode. Positive amounts make grain stronger; negative amounts make it gentler. At a fixed frame/seed it does not change grain size, sampling coordinates, stretch, or the underlying noise field. Size remains controlled by Grain Size, style, Film Gauge, and render resolution. This fixes the grain enlargement/sliding present in v0.17-v0.18. It never enables zero-strength or disabled grain. It does not alter halation selection/spread, Aura, or the original source-highlight key. Post Print weights grain by final luminance; Negative & Print weights it by the developed negative before print/glow and lets Print shape the texture. See [Texture Controls](TEXTURE_CONTROLS.md).
 
 Grain Only, Halation, Bloom & Grain Only, Halation Matte, Bloom Matte, and Bypass ignore all Development controls, including grain coupling. For your own LUT in Full mode, disable Film Color, Film Development, and Print. Texture-only output preserves the input encoding. Non-neutral Development on its own counts as a color stage and honors the Output Color Space selector.
 

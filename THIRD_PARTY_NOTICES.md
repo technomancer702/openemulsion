@@ -2,6 +2,14 @@
 
 OpenEmulsion project files use MPL-2.0; see [LICENSE](LICENSE).
 
+## JSON for Modern C++
+
+User preset parsing and serialization use nlohmann/json v3.12.0, under the MIT license. The unmodified single-header library is vendored at `ofx/third_party/nlohmann/json.hpp`. Its license is included in `licenses/nlohmann-json-LICENSE.MIT` and copied into the installed bundle.
+
+Source: https://github.com/nlohmann/json/releases/tag/v3.12.0
+
+The downloaded release header's SHA-256 was verified against the upstream release: `aaf127c04cb31c406e5b04a63f1ae89369fccde6d8fa7cdda1ed4f32dfc5de63`.
+
 ## OpenFX API and C++ Support Library
 
 The build uses the external OpenFX API headers and C++ Support library supplied with DaVinci Resolve. Those SDK files are not vendored here. The Support sources are compiled into the plugin and retain their original BSD-3-Clause notices.

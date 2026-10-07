@@ -1,4 +1,4 @@
-# Installing OpenEmulsion v0.22
+# Installing OpenEmulsion v0.27
 
 This ZIP contains a prebuilt Windows x64 OFX plugin. No build tools or DCTL are needed. Development testing uses DaVinci Resolve 21.1.1 on Windows x64; other host versions and GPU vendors still need community testing.
 
@@ -25,6 +25,8 @@ Install only one copy. Developers already using `OFX_PLUGIN_PATH` should update 
 - For your own LUT, use **Grain Only** or **Halation, Bloom & Grain Only**, or disable Film Color, Film Development, and Print in Full mode. Texture-only rendering returns the input encoding regardless of the output dropdown.
 - Mode selection switches module Enable toggles. Returning to Full enables all modules; turn off individual modules as needed. Bloom strength defaults to zero.
 - Print's named presets lock their recipe knobs. Select Custom to edit the inherited recipe.
+- User Presets > Save/Load captures a look snapshot. Import preserves camera balance, color spaces, and grain seed by default; imported creative settings replace their keyframes.
+- Grain > Grain Response > Negative & Print optionally lets Print shape the texture. Post Print is the default; texture-only modes keep their original behavior.
 
 Detailed controls and color-space limitations are in the included `docs` folder. Input color space is not auto-detected. This is not a standalone color-space converter, manufacturer viewing LUT, measured-stock simulator, or complete HDR display transform.
 
@@ -36,4 +38,4 @@ If the effect does not appear, check the exact folder structure, confirm there i
 
 The binary is unsigned. Windows or antivirus software may warn about a new unsigned download. A SHA-256 file accompanies the ZIP so downloads can be checked against the publisher's copy; this is an integrity check, not a code signature or security certification.
 
-This first release is experimental. A clean installation on a separate machine has not yet been tested, and NVIDIA/Intel GPU paths are not certified. Test on non-critical material and retain backups. Please report reproducible problems at https://github.com/technomancer702/openemulsion/issues.
+This release is experimental. A clean installation on a separate machine has not yet been tested, and NVIDIA/Intel GPU paths are not certified. Test on non-critical material and retain backups. Please report reproducible problems at https://github.com/technomancer702/openemulsion/issues.

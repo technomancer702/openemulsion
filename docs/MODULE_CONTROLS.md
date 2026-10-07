@@ -1,8 +1,10 @@
-# Module Controls (v0.26)
+# Module Controls (v0.27)
 
 Disabled modules retain their settings but grey out every option inside the module. The Enable toggle remains editable if the current mode permits that module. Modules excluded by the mode have unavailable toggles and controls, regardless of any stored Enable value.
 
 In active Mono Negative, Color Crosstalk and Skin Hue are unavailable at any strength because this family does not use them. At full Film Color Strength, Saturation, Color Density, Gamut Compression, and Grain Color also become unavailable. Their stored values are retained. Lowering Film Color Strength below one, changing Film System, disabling Film Color, or entering texture-only modes restores the applicable controls. Strength and system edits refresh this policy alongside mode/module/time changes. See [Slider Tuning](SLIDER_TUNING.md).
+
+Grain Response additionally requires Full mode and at least one enabled color-stage module switch. Neutral Development alone may remain editable but falls back to Post Print until its processing is non-neutral. User preset Save/Load and import-preservation options remain available in every mode; they are workflow controls, not processing modules.
 
 A user edit to Mode sets the Enable toggles as follows:
 

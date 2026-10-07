@@ -1,0 +1,121 @@
+// SPDX-License-Identifier: MPL-2.0
+
+#include <cstdio>
+#include <limits>
+#include "UserPresetIO.h"
+
+static void require(bool value, const char* message)
+{
+    if (!value) throw std::runtime_error(message);
+}
+
+template<class Function> static void rejects(Function operation, const char* message)
+{
+    bool rejected = false;
+    try { operation(); } catch (const std::exception&) { rejected = true; }
+    require(rejected,message);
+}
+
+int main()
+{
+    try {
+        using namespace userpreset;
+        Snapshot original;
+        original.name = "Night look \"A\" \n \u00e9";
+        for (size_t i = 0; i < original.controls.size(); ++i) {
+            const auto& c = look::Controls[i];
+            original.controls[i] = c.kind == look::Choice ? c.maximum : c.minimum + (c.maximum-c.minimum)*.371;
+        }
+        for (size_t i = 0; i < original.modules.size(); ++i) original.modules[i] = i % 2 == 0;
+        for (size_t i = 0; i < original.context.size(); ++i) original.context[i] = ContextControls[i].maximum;
+        const auto encoded = serialize(original);
+        const auto decoded = parse(encoded);
+        require(toJson(decoded) == toJson(original),"Preset serialization loses settings or metadata");
+        for (int mask = 0; mask < 8; ++mask) {
+            const ImportOptions options {bool(mask&1),bool(mask&2),bool(mask&4)};
+            Snapshot applied;
+            const auto before = applied;
+            int controls = 0, toggles = 0;
+            apply(decoded,options,[&](size_t i, double v) { applied.controls[i] = v; ++controls; },
+                [&](size_t i, bool v) { applied.modules[i] = v; ++toggles; },
+                [&](size_t i, double v) { applied.context[i] = v; });
+            require(controls == std::size(look::Controls) && toggles == 7,"Incomplete preset import");
+            require(applied.controls == original.controls && applied.modules == original.modules,"Creative tuning not restored");
+            for (size_t i = 0; i < applied.context.size(); ++i)
+                require(applied.context[i] == (options.preserves(ContextControls[i].group) ? before.context[i] : original.context[i]),
+                    "Import preservation policy failed");
+        }
+        for (int preset = 0; preset < look::Count; ++preset) {
+            Snapshot stock;
+            const auto recipe = look::recipe(preset);
+            for (size_t i = 0; i < stock.controls.size(); ++i) stock.controls[i] = recipe[look::Controls[i].setting];
+            for (size_t i = 0; i < stock.modules.size(); ++i)
+                stock.modules[i] = (static_cast<int>(recipe[film::ModuleIndex]) & moduleui::Toggles[i].module) != 0;
+            require(toJson(parse(serialize(stock))) == toJson(stock),"Built-in recipe does not round-trip");
+        }
+        const auto valid = toJson(original);
+        auto invalid = valid;
+        invalid["formatVersion"] = 2;
+        rejects([&] { parse(invalid.dump()); },"Future schema silently accepted");
+        invalid = valid; invalid["formatVersion"] = 1.0;
+        rejects([&] { parse(invalid.dump()); },"Non-integer schema accepted");
+        invalid = valid; invalid["plugin"] = "other.plugin";
+        rejects([&] { parse(invalid.dump()); },"Foreign plugin accepted");
+        invalid = valid; invalid["controls"].erase("grainResponse");
+        rejects([&] { parse(invalid.dump()); },"Incomplete settings accepted");
+        invalid["controls"]["unsupported"] = 0;
+        rejects([&] { parse(invalid.dump()); },"Unknown control accepted");
+        invalid = valid; invalid["modules"]["enableGrain"] = 1;
+        rejects([&] { parse(invalid.dump()); },"Numeric module switch accepted");
+        invalid = valid; invalid["controls"]["grainResponse"] = .5;
+        rejects([&] { parse(invalid.dump()); },"Fractional choice accepted");
+        invalid = valid; invalid["context"]["grainSeed"] = 1000001;
+        rejects([&] { parse(invalid.dump()); },"Invalid context accepted even when preserved");
+        for (const auto& c : look::Controls) {
+            for (auto value : {Json(nullptr),Json("1"),Json(true),Json(c.minimum-1),Json(c.maximum+1)}) {
+                invalid = valid; invalid["controls"][c.name] = value;
+                rejects([&] { parse(invalid.dump()); },"Invalid control value accepted");
+            }
+        }
+        rejects([&] { parse("{\"name\":\"duplicate\"," + valid.dump().substr(1)); },"Duplicate root key accepted");
+        auto duplicated = encoded;
+        const auto field = duplicated.find("\"grainResponse\"");
+        duplicated.insert(field,"\"grainResponse\": 0, ");
+        rejects([&] { parse(duplicated); },"Duplicate control accepted");
+        rejects([&] { parse(encoded + "garbage"); },"Trailing content accepted");
+        rejects([&] { parse(std::string(MaximumBytes+1,' ')); },"Oversize file accepted");
+        rejects([&] { parse("{\"a\":" + std::string(12,'[') + "0" + std::string(12,']') + "}"); },"Deep nesting accepted");
+        auto nonfinite = original; nonfinite.controls[0] = std::numeric_limits<double>::quiet_NaN();
+        rejects([&] { serialize(nonfinite); },"Nonfinite export accepted");
+
+        const auto folder = std::filesystem::temp_directory_path() /
+            ("OpenEmulsionPresetTests-" + std::to_string(GetCurrentProcessId()) + "-" + std::to_string(GetTickCount64()));
+        require(std::filesystem::create_directory(folder),"Could not create unique test folder");
+        const auto path = folder / L"look-\u00e9-\u7535\u5f71.oepreset";
+        struct Cleanup {
+            std::filesystem::path file, folder;
+            ~Cleanup() { std::error_code error; std::filesystem::remove(file,error); std::filesystem::remove(folder,error); }
+        } cleanup {path,folder};
+        saveFile(path,original);
+        require(toJson(loadFile(path)) == valid,"Unicode file path did not round-trip");
+        auto replacement = original; replacement.name = "Replacement";
+        saveFile(path,replacement);
+        require(loadFile(path).name == replacement.name,"Replacing preset failed");
+        rejects([&] { saveFile(path,nonfinite); },"Invalid preset was saved");
+        require(loadFile(path).name == replacement.name,"Rejected export damaged existing file");
+        HANDLE lock = CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);
+        require(lock != INVALID_HANDLE_VALUE,"Could not lock test destination");
+        bool refused = false;
+        try { saveFile(path,original); } catch (const std::exception&) { refused = true; }
+        CloseHandle(lock);
+        require(refused && loadFile(path).name == replacement.name,"Failed replacement damaged existing file");
+        for (const auto& entry : std::filesystem::directory_iterator(folder))
+            require(entry.path() == path,"Temporary preset file leaked");
+        rejects([&] { saveFile(folder/"missing"/"look.oepreset",original); },"Missing folder silently accepted");
+        std::puts("User presets: all recipes, exact JSON round-trip, every preservation policy, strict validation, duplicate/depth/size rejection, Unicode paths, atomic replacement, and failed-save preservation pass.");
+        return 0;
+    } catch (const std::exception& error) {
+        std::fprintf(stderr,"FAILED: %s\n",error.what());
+        return 1;
+    }
+}

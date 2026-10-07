@@ -74,6 +74,10 @@ int main()
         require(!moduleui::controlEnabled(3,film::All,film::Negative | film::Development | film::Print),"Texture-only output selector remains enabled");
         require(!moduleui::controlEnabled(6,film::All,film::Halation | film::Aura | film::Grain),"Bloom-only enables Film Gauge");
         for (int mode = 0; mode < 7; ++mode) for (int mask = 0; mask <= film::All; ++mask)
+            require(moduleui::semanticControlEnabled("grainResponse",mode,mask,0,1) ==
+                (mode == 0 && (mask & (film::Negative | film::Development | film::Print)) != 0),
+                "Grain Response remains editable in texture-only or excluded modes");
+        for (int mode = 0; mode < 7; ++mode) for (int mask = 0; mask <= film::All; ++mask)
             for (int system = 0; system < 6; ++system) for (double strength : {0.0,0.5,0.999,1.0}) {
                 const bool mono = system == 4 && (mode == 0 || mode == 1) && (mask & film::Negative);
                 for (const char* name : {"saturation","density","gamutCompression","grainColor"})

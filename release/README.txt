@@ -1,5 +1,5 @@
-OpenEmulsion v0.22 - Windows x64
-First public experimental release
+OpenEmulsion v0.27 - Windows x64
+Experimental development release
 
 INSTALL
 1. Close DaVinci Resolve.
@@ -17,6 +17,8 @@ WHAT IS INCLUDED
 Film Color, Film Development, Print, Halation, Aura, Bloom, and Grain.
 Modules are independently switchable. Texture-only modes work with your own LUT.
 Bloom defaults to zero; raise its strength to use it.
+User Presets can save/load portable look snapshots. Grain Response optionally
+adds negative-driven grain before Print; Post Print remains the default.
 
 REQUIREMENTS AND STATUS
 Windows 10/11 x64, DaVinci Resolve, and a supported display/GPU driver.
@@ -33,7 +35,7 @@ The film profiles are original creative approximations, not measured stocks.
 SOURCE AND LICENSE
 Free and open source, MPL-2.0. See LICENSE and THIRD_PARTY_NOTICES.md.
 Compiler runtime notices travel with the plugin in Contents/Licenses.
-Source/OpenEmulsion-v0.22-source.zip contains the matching project source;
+Source/OpenEmulsion-v0.27-source.zip contains the matching project source;
 external OpenFX SDK files are not included. See manifest.json for the exact
 source revision and SHA-256 hashes.
 

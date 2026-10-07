@@ -35,6 +35,7 @@ typedef struct GrainParameters {
     float inverseStretch;
     float red, green, blue;
     float primarySoftness;
+    int prePrint;
 } GrainParameters;
 
 static inline GrainUInt grain_hash(GrainUInt value)

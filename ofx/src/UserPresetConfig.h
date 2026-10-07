@@ -1,0 +1,148 @@
+// SPDX-License-Identifier: MPL-2.0
+
+#pragma once
+
+#include <cmath>
+#include <set>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+#include "../third_party/nlohmann/json.hpp"
+#include "ColorSpaceConfig.h"
+#include "LookPresetConfig.h"
+
+namespace userpreset {
+
+using Json = nlohmann::json;
+constexpr size_t MaximumBytes = 65536;
+constexpr int FormatVersion = 1;
+constexpr const char* Plugin = "org.openemulsion.film";
+
+enum ContextKind { Choice, Number, Integer };
+enum ContextGroup { Spaces, Camera, Seed };
+struct ContextControl {
+    const char* name;
+    ContextKind kind;
+    ContextGroup group;
+    double initial, minimum, maximum;
+};
+inline constexpr ContextControl ContextControls[] {
+    {"sourceSpace",Choice,Spaces,color::Rec709Gamma24,0,color::SpaceCount-1},
+    {"outputSpace",Choice,Spaces,0,0,std::size(color::OutputSpaces)-1},
+    {"exposure",Number,Camera,0,-4,4}, {"temperature",Number,Camera,0,-3,3},
+    {"tint",Number,Camera,0,-3,3}, {"grainSeed",Integer,Seed,0,0,1000000}
+};
+
+struct Snapshot {
+    std::string name;
+    std::array<double, std::size(look::Controls)> controls {};
+    std::array<bool, moduleui::Toggles.size()> modules {};
+    std::array<double, std::size(ContextControls)> context {};
+    Snapshot() {
+        for (size_t i = 0; i < controls.size(); ++i) controls[i] = look::Controls[i].initial;
+        modules.fill(true);
+        for (size_t i = 0; i < context.size(); ++i) context[i] = ContextControls[i].initial;
+    }
+};
+
+struct ImportOptions {
+    bool preserveSpaces = true, preserveCamera = true, preserveSeed = true;
+    bool preserves(ContextGroup group) const {
+        return group == Spaces ? preserveSpaces : group == Camera ? preserveCamera : preserveSeed;
+    }
+};
+
+inline double validateNumber(double value, double minimum, double maximum, bool integer, const char* name)
+{
+    if (!std::isfinite(value) || value < minimum || value > maximum || (integer && value != std::floor(value)))
+        throw std::runtime_error(std::string("Invalid preset value: ") + name);
+    return value;
+}
+
+inline double readNumber(const Json& object, const char* name, double minimum, double maximum, bool integer)
+{
+    const auto& value = object.at(name);
+    if (!value.is_number()) throw std::runtime_error(std::string("Expected a numeric preset value: ") + name);
+    return validateNumber(value.get<double>(), minimum, maximum, integer, name);
+}
+
+inline Json toJson(const Snapshot& preset)
+{
+    if (preset.name.size() > 256) throw std::runtime_error("Preset name is too long.");
+    Json controls = Json::object(), modules = Json::object(), context = Json::object();
+    for (size_t i = 0; i < preset.controls.size(); ++i) {
+        const auto& c = look::Controls[i];
+        controls[c.name] = validateNumber(preset.controls[i], c.minimum, c.maximum, c.kind == look::Choice, c.name);
+    }
+    for (size_t i = 0; i < preset.modules.size(); ++i) modules[moduleui::Toggles[i].name] = preset.modules[i];
+    for (size_t i = 0; i < preset.context.size(); ++i) {
+        const auto& c = ContextControls[i];
+        context[c.name] = validateNumber(preset.context[i], c.minimum, c.maximum, c.kind != Number, c.name);
+    }
+    return {{"formatVersion",FormatVersion}, {"plugin",Plugin}, {"createdWith","0.27"},
+            {"name",preset.name}, {"controls",controls}, {"modules",modules}, {"context",context}};
+}
+
+inline std::string serialize(const Snapshot& preset)
+{
+    auto output = toJson(preset).dump(2) + "\n";
+    if (output.size() > MaximumBytes) throw std::runtime_error("Preset exceeds the file size limit.");
+    return output;
+}
+
+inline Snapshot parse(const std::string& input)
+{
+    if (input.empty() || input.size() > MaximumBytes) throw std::runtime_error("Invalid preset file size (maximum 64 KiB).");
+    // Reject duplicate keys rather than silently accepting a later conflicting value.
+    std::vector<std::set<std::string>> keys;
+    const auto document = Json::parse(input, [&](int depth, Json::parse_event_t event, Json& value) {
+        if (depth > 8) throw std::runtime_error("Preset JSON nesting is too deep.");
+        if (event == Json::parse_event_t::object_start) keys.emplace_back();
+        if (event == Json::parse_event_t::key && !keys.back().insert(value.get<std::string>()).second)
+            throw std::runtime_error("Preset contains a duplicate JSON field.");
+        if (event == Json::parse_event_t::object_end) keys.pop_back();
+        return true;
+    });
+    if (!document.is_object() || document.size() != 7 ||
+        !document.contains("formatVersion") || !document["formatVersion"].is_number_integer() ||
+        document["formatVersion"] != FormatVersion || document.value("plugin",std::string()) != Plugin)
+        throw std::runtime_error("Not a supported OpenEmulsion preset (format version 1 required).");
+    if (!document.at("createdWith").is_string() || document.at("createdWith").get<std::string>().size() > 64 ||
+        !document.at("name").is_string() || document.at("name").get<std::string>().size() > 256)
+        throw std::runtime_error("Invalid preset metadata.");
+    Snapshot preset;
+    preset.name = document.at("name").get<std::string>();
+    const auto& controls = document.at("controls");
+    const auto& modules = document.at("modules");
+    const auto& context = document.at("context");
+    if (!controls.is_object() || controls.size() != preset.controls.size() ||
+        !modules.is_object() || modules.size() != preset.modules.size() ||
+        !context.is_object() || context.size() != preset.context.size())
+        throw std::runtime_error("Incomplete or unsupported preset controls.");
+    for (size_t i = 0; i < preset.controls.size(); ++i) {
+        const auto& c = look::Controls[i];
+        preset.controls[i] = readNumber(controls,c.name,c.minimum,c.maximum,c.kind == look::Choice);
+    }
+    for (size_t i = 0; i < preset.modules.size(); ++i) {
+        const auto& value = modules.at(moduleui::Toggles[i].name);
+        if (!value.is_boolean()) throw std::runtime_error("Preset module switches must be booleans.");
+        preset.modules[i] = value.get<bool>();
+    }
+    for (size_t i = 0; i < preset.context.size(); ++i) {
+        const auto& c = ContextControls[i];
+        preset.context[i] = readNumber(context,c.name,c.minimum,c.maximum,c.kind != Number);
+    }
+    return preset;
+}
+
+template<class Writer, class ToggleWriter, class ContextWriter>
+inline void apply(const Snapshot& preset, ImportOptions options, Writer write, ToggleWriter toggle, ContextWriter context)
+{
+    for (size_t i = 0; i < preset.controls.size(); ++i) write(i,preset.controls[i]);
+    for (size_t i = 0; i < preset.modules.size(); ++i) toggle(i,preset.modules[i]);
+    for (size_t i = 0; i < preset.context.size(); ++i)
+        if (!options.preserves(ContextControls[i].group)) context(i,preset.context[i]);
+}
+
+} // namespace userpreset

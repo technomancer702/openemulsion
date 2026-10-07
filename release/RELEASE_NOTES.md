@@ -1,17 +1,19 @@
-# OpenEmulsion v0.26
+# OpenEmulsion v0.27
 
-Experimental Windows x64 terminology update. Control labels and tooltips are clearer and aligned with comparable Filmbox terminology. Rendering, performance, parameter identifiers, values, animation, and built-in preset recipes are unchanged from v0.25.
+Experimental Windows x64 update with portable user presets and optional negative-driven, pre-print grain. Post Print remains the default; existing preset recipes and texture-only workflows retain their appearance.
 
-## Changes in v0.26
+## Changes in v0.27
 
-- Renamed Negative Density to Color Density, Color Richness to Richness, Neutralize Print to Neutralize Balance, Neutral Width to Dead Zone Width, and Print Tone to Print Tone Curve.
-- Retained Skin Hue and Print Color: comparable Filmbox controls use the same terminology and direction. Print Color's tooltip now explains that zero is more print-like and one is more neutral/telecine-like, distinct from Print Color Strength.
-- Added clearer tooltips for density, richness, print curve/balance, and the split-tone dead zone. No processing changes or additional GPU work.
-- Retained the broader slider ranges and extended grain softness from v0.25. See `docs/SLIDER_TUNING.md` and `docs/CONTROL_NAMES.md`.
+- Added native Save Preset / Load Preset dialogs and portable `.oepreset` JSON snapshots. Import optionally preserves camera balance, color spaces, and grain seed; all three are preserved by default.
+- Added complete preset validation, Unicode file paths, atomic replacement, and malformed/oversize/duplicate-field rejection before applying any settings. Snapshot imports replace creative keyframes in one undoable edit; animation curves are not exported.
+- Added Grain Response: Post Print (original/default) or Negative & Print. The new optional response keys grain after Film Color/Development and adds it before Print, so print tone/color shapes the texture. It does not add buffers, readbacks, blur passes, or extra grain evaluations.
+- Retained original texture-only grain, source-keyed halation/bloom, exact zero/disabled behavior, Mono finishing, stable grain coordinates, and all built-in looks. The new selector is unavailable in texture-only modes.
+- Added preset I/O/preservation tests and CPU/OpenCL grain-stage parity, interaction, isolation, and 4K benchmark cases. See `docs/USER_PRESETS.md` and `docs/TEXTURE_CONTROLS.md` for limits and host validation still needed.
 
 ## Included
 
 - Twelve editable stock-inspired and creative looks in a top-level Preset dropdown.
+- Portable user preset snapshots with selective context preservation.
 - Six original creative negative families, including monochrome finishing.
 - Independent Film Color, Film Development, Print, Halation, Aura, Bloom, and Grain modules, with mode-driven toggles and disabled-control greying.
 - Film Color's continuous gamut-compression amount, with the near-zero jump fixed.

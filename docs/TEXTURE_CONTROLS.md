@@ -1,4 +1,4 @@
-# Texture Controls (v0.25)
+# Texture Controls (v0.27)
 
 ## Film Gauge
 
@@ -30,7 +30,18 @@ Grain Softness now extends to two: 0..1 retains the original fine-detail reducti
 
 `Red Grain`, `Green Grain`, and `Blue Grain` multiply each channel's noise delta by 0-2, default 1. Zero removes grain from that working-space channel; source color is not multiplied. Grain Color at zero uses a shared monochrome noise field, but unequal channel multipliers can tint that field. Active full-strength Mono Negative still finishes the final composite monochrome, including unequal channel gains. The channel controls operate in the managed Rec.709-primary working space, not individual camera-gamut channels.
 
-Enabled Film Development in Full mode scales grain strength by `2^(0.22 * Push/Pull)` without changing grain size or sampling coordinates. At a fixed frame/seed, adjusting Push/Pull preserves the noise pattern; tonal weighting still follows final working luminance. Zero Grain and the Grain Enable toggle still win. Grain Only and Halation, Bloom & Grain Only ignore development entirely, preserving their independent texture workflow. Grain remains additive after print/halo, keyed by final working luminance; negative-density-driven, pre-print grain is still future work.
+Enabled Film Development in Full mode scales grain strength by `2^(0.22 * Push/Pull)` without changing grain size or sampling coordinates. At a fixed frame/seed, adjusting Push/Pull preserves the noise field; tonal weighting follows the selected Grain Response stage. Zero Grain and the Grain Enable toggle still win. Grain Only and Halation, Bloom & Grain Only ignore development entirely, preserving their independent texture workflow.
+
+### Grain Response
+
+- `Post Print` (default): the original additive grain after Print, Halation/Aura, and Bloom, keyed by final working luminance. Existing defaults and built-in look recipes retain this path.
+- `Negative & Print`: in Full mode with an active color stage, key grain from luminance after Film Color and Film Development, then add it before Print. Print exposure/balance, palette, tone, black lift, and gamut compression process the textured image. Color Density and development tone can affect the pre-print grain's tonal weighting without shifting its coordinates. Print changes affect the rendered texture but do not change the underlying noise field or pre-print tonal key.
+
+This optional response uses the same procedural grain model and amplitude controls in the managed perceptual domain. It is not optical-density-domain chemistry or calibrated physical emulsion simulation. Without Print, it remains keyed before glow; Halation/Aura and Bloom are still composited afterward and their source keys are unchanged. Added glow does not receive an additional grain pass in this response.
+
+Texture-only modes and Full with no active color stage always retain Post Print behavior, regardless of the stored choice. The selector is unavailable outside Full or when all color-stage module switches are off. Neutral Development alone also falls back to Post Print until it actually processes color. No-print/no-glow composition is identical between responses. Grain zero/disabled and bypass remain exact; Mono finishing still neutralizes the final composite.
+
+The placement selector adds no GPU buffers, readbacks, blur passes, extra grain field evaluations, or extra per-pixel print evaluations. Native file preset operations also run only on button clicks, never in rendering. Real-footage appearance and GPU/host timing still need testing beyond the synthetic harness.
 
 ## Highlight Selection
 

@@ -6,7 +6,7 @@ Film Color, Film Development, Print, Halation, Aura, Bloom, and Grain can be ena
 
 ## Status
 
-Experimental, Windows x64. Current development version: **v0.26**. The current implementation supports OpenCL acceleration and a multithreaded CPU fallback. CUDA, Metal, macOS, and Linux builds are not implemented.
+Experimental, Windows x64. Current development version: **v0.27**. The current implementation supports OpenCL acceleration and a multithreaded CPU fallback. CUDA, Metal, macOS, and Linux builds are not implemented.
 
 OpenEmulsion is an original artistic approximation, not a measured film-stock calibration or a complete HDR rendering transform. There is no DCTL dependency. Rendering has been tested in Resolve, but this is not yet a stable production release.
 
@@ -83,11 +83,12 @@ Selecting a mode switches its applicable modules on and the others off, without 
 - **Film Color:** independent color/tone strengths, six creative families, linear-light exposure/balance, density, saturation, toe, contrast, shoulder, crosstalk, gamut compression, and Skin Hue.
 - **Film Development:** Push/Pull changes tone and grain strength without moving or resizing the grain pattern; Richness favors muted colors; Split Tone has hue, pivot, Dead Zone Width, and separate shadow/highlight intensities. Neutral defaults preserve the previous look.
 - **Print:** Full (Film Print), Standard, Extended (Telecine), and Custom. Named presets load and lock their tone/color recipe; Custom unlocks the last recipe without changing its look. Color/tone strengths, exposure, and RGB balance remain editable in every style.
-- **Grain:** Fine, Classic, Rough, and Debug styles; strength, size, softness, roughness, color, horizontal stretch, independent RGB intensity, tonal weighting, and repeatable frame/seed variation.
+- **Grain:** Fine, Classic, Rough, and Debug styles; strength, size, softness, roughness, color, horizontal stretch, independent RGB intensity, tonal weighting, and repeatable frame/seed variation. Grain Response optionally adds grain before Print and keys it from the developed negative; Post Print remains the default and texture-only behavior is preserved.
 - **Halation and Aura:** smooth source-highlight selection with adjustable threshold/transition, red-to-amber tint, independent tight-halo and broad-aura radii, and resolution-aware continuous Gaussian spread. Matte mode exposes the signal.
 - **Bloom:** separate neutral/source-colored linear-light diffusion with its own strength, radius, threshold/transition, highlight protection, and Bloom Matte. It defaults to zero and is independent of Aura and Film Gauge.
 - **Film Gauge:** Custom, 8 mm, Super 8, 16 mm, Super 16, 35 mm, Super 35, 65 mm, and 70 mm (15-perf) creative presets coordinate grain size/strength and halo spread without resetting sliders. Custom and 35 mm use the unscaled settings. Formats do not crop/resize the image or affect Bloom or film/print color. Older development nodes need their gauge reselected after the dropdown expansion; see [Texture Controls](docs/TEXTURE_CONTROLS.md).
 - **Preset:** below Film Gauge, twelve editable stock-inspired and creative looks plus Custom. Loads Full mode, gauge, module switches, and creative settings while preserving input/output spaces, camera exposure/temperature/tint, and grain seed. Editing a recipe changes its label to Custom; selecting Custom alone leaves the look unchanged. Named looks replace creative keyframes and load unlocked Custom print controls. See [Look Presets](docs/LOOK_PRESETS.md).
+- **User Presets:** native Save/Load dialogs export portable `.oepreset` JSON snapshots, including module switches and Grain Response. Import optionally preserves color spaces, camera balance, and grain seed (all preserved by default). See [User Presets](docs/USER_PRESETS.md).
 - **Slider tuning:** expanded balance, Skin Hue, Crosstalk, Density, and Split Tone ranges retain existing values/defaults/preset looks. Grain Softness above 1 smooths the primary field with normalized variance and no extra image pass. Full-strength Mono greys out ineffective color controls. See [Slider Tuning](docs/SLIDER_TUNING.md).
 
 With **Mono Negative** and Film Color Strength at 1, the final print and texture composite stays monochrome, including source-colored bloom. Halation/Aura remain visible as neutral glow, and grain automatically becomes monochrome. This does not affect texture-only modes, bypass, or a disabled Film Color module.
@@ -119,9 +120,9 @@ The optional sixth preview path produces a five-panel bloom comparison; see [Blo
 
 ## Release Packaging
 
-Commit release files first, then run `.\tools\package_release.ps1`. It builds and tests Release, verifies the supported compiler/runtime notices and imported DLLs, and creates `dist/releases/OpenEmulsion-v0.26-Windows-x64.zip` plus `.zip.sha256`. Use `-Force` only when deliberately replacing a generated archive. Release output is ignored by Git; upload the ZIP and checksum as release assets, not repository files.
+Commit release files first, then run `.\tools\package_release.ps1`. It builds and tests Release, verifies the supported compiler/runtime notices and imported DLLs, and creates `dist/releases/OpenEmulsion-v0.27-Windows-x64.zip` plus `.zip.sha256`. Use `-Force` only when deliberately replacing a generated archive. Release output is ignored by Git; upload the ZIP and checksum as release assets, not repository files.
 
-The packager includes only the bundle, release guides, documentation, licenses, and a `git archive` source snapshot of the exact revision in `manifest.json`. It validates the extracted files and hashes, loads the extracted OFX binary using only its directory and Windows system DLL search, and checks its exported identifier/version. To recheck an archive, run `.\tools\test_release.ps1 -Archive "dist/releases/OpenEmulsion-v0.26-Windows-x64.zip"` in 64-bit PowerShell. This is not a clean-machine Resolve installation test or a code-signing/security certification; separate-machine and other-GPU validation remain outstanding.
+The packager includes only the bundle, release guides, documentation, licenses, and a `git archive` source snapshot of the exact revision in `manifest.json`. It validates the extracted files and hashes, loads the extracted OFX binary using only its directory and Windows system DLL search, and checks its exported identifier/version. To recheck an archive, run `.\tools\test_release.ps1 -Archive "dist/releases/OpenEmulsion-v0.27-Windows-x64.zip"` in 64-bit PowerShell. This is not a clean-machine Resolve installation test or a code-signing/security certification; separate-machine and other-GPU validation remain outstanding.
 
 Optional Resolve test charts:
 

@@ -38,7 +38,7 @@ try {
     $imports = & $objdump -p $plugin | Select-String 'DLL Name:' | ForEach-Object { ($_.Line -split 'DLL Name:')[1].Trim() }
     if ($LASTEXITCODE -ne 0 -or !$imports) { throw 'Cannot inspect DLL dependencies.' }
     foreach ($dependency in $imports) {
-        if ($dependency -notmatch '^(KERNEL32\.dll|api-ms-win-crt-[a-z0-9-]+\.dll)$') {
+        if ($dependency -notmatch '^(KERNEL32\.dll|USER32\.dll|comdlg32\.dll|api-ms-win-crt-[a-z0-9-]+\.dll)$') {
             throw "Unexpected DLL dependency $dependency; resolve redistribution requirements before packaging."
         }
     }

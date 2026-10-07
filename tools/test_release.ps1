@@ -46,6 +46,10 @@ try {
         "Source/OpenEmulsion-v$($manifest.version)-source.zip")) {
         if (!$seen.ContainsKey($required)) { throw "Missing release requirement: $required" }
     }
+    if ([version]$manifest.version -ge [version]'0.27' -and
+        !$seen.ContainsKey('OpenEmulsion.ofx.bundle/Contents/Licenses/nlohmann-json-LICENSE.MIT')) {
+        throw 'Missing JSON library license.'
+    }
     if (!('OpenEmulsionReleaseProbe' -as [type])) {
         Add-Type -TypeDefinition @'
 using System;

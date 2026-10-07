@@ -1,6 +1,6 @@
 # Upgrade Roadmap
 
-## Completed Through v0.26
+## Completed Through v0.27
 
 - Independent film/print color and tone strengths and in-module Enable toggles.
 - Disabled-module control greying, mode-driven Enable toggles, and mode-aware print-preset locks.
@@ -16,6 +16,8 @@
 - Top-level Preset dropdown with twelve complete, editable stock-inspired/creative recipes, Custom inheritance, preserved camera balance/encoding/seed, and recipe/edit-policy plus CPU/OpenCL checks.
 - Targeted slider range expansion with unchanged defaults/presets, variance-normalized primary grain smoothing above Softness one, full-strength Mono semantic greying, historical response anchors, and expanded CPU/OpenCL/performance checks.
 - Comparable Filmbox-style control terminology and clearer directional tooltips, without changing parameter identifiers or rendering. See [Control Names](CONTROL_NAMES.md).
+- Portable user preset save/load, strict JSON validation, atomic file replacement, and optional context preservation. See [User Presets](USER_PRESETS.md).
+- Optional Negative & Print grain keyed by the developed negative before Print, with unchanged default/texture-only behavior and CPU/OpenCL parity. See [Texture Controls](TEXTURE_CONTROLS.md).
 
 ## Bloom Added in v0.18
 
@@ -25,8 +27,8 @@ Synthetic checks cover bounded extraction, colored/white sources, continuous con
 
 ## Further Work
 
-- Real-footage refinement of the look library and user preset save/load for community sharing. Current built-in recipes live in `ofx/src/LookPresetConfig.h`; there is no preset file import/export yet.
-- Investigate negative-response-driven, pre-print grain rather than the current additive post-print grain. Preserve independent texture-only operation and predictable print interaction.
+- Real-footage refinement of the look library and the new optional Negative & Print grain response. Compare motion, shadow bias, print interaction, and proxy/full-resolution consistency.
+- Community preset sharing and versioned preset-format evolution. Current built-in recipes live in `ofx/src/LookPresetConfig.h`; user files use complete validated snapshots, not animation curves.
 - Reference-based profiles using properly licensed original scans and measured charts. Current film families remain original creative approximations; do not claim measured stock calibration without measurements.
 - Clean-machine Resolve installation checks, other-GPU/host testing, and signed release binaries. Current ZIP checks validate extracted payloads and native OFX loading, not a second-machine Resolve session.
 - CUDA backend for NVIDIA hosts after suitable hardware/testing becomes available. GPU ownership/event handling and existing CPU/OpenCL parity must remain intact.

@@ -34,6 +34,7 @@ struct Control {
 inline constexpr Control Controls[] {
     {"mode",0,Choice,0,0,6}, {"system",1,Choice,0,0,5},
     {"printStyle",2,Choice,printstyle::Custom,0,3}, {"grainStyle",3,Choice,1,0,3},
+    {"grainResponse",film::GrainResponse,Choice,0,0,1},
     {"density",7,Double,.18,-1.2,1.5}, {"saturation",8,Double,.95,0,2},
     {"toe",9,Double,.16,0,1}, {"contrast",10,Double,1.08,.5,2},
     {"printColor",11,Double,.43,0,1}, {"blackPoint",12,Double,.45,0,1},

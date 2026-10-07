@@ -1168,6 +1168,10 @@ public:
                 ColorRgb processed = work;
                 if (modules & film::Negative) processed = response_negative_stage(color_balance(processed, {s[4],s[5],s[6]}), responseParameters);
                 if (modules & film::Development) processed = response_development(processed, responseParameters);
+                if (grainParameters.prePrint && s[16] > 0) {
+                    const auto delta = grain_delta(x,y,response_luma(processed),grainParameters);
+                    processed.r += delta.r; processed.g += delta.g; processed.b += delta.b;
+                }
                 if (modules & film::Print) processed = response_print(processed, responseParameters);
                 std::array<float, 3> rgb {processed.r + h * halo.key.red, processed.g + h * halo.key.green, processed.b + h * halo.key.blue};
                 if (s[0] == 5.0f) {
@@ -1179,7 +1183,7 @@ public:
                     const auto c = bloom_composite({rgb[0],rgb[1],rgb[2]},glow,bloomConfig.parameters,s[0] == 6);
                     rgb = {c.r,c.g,c.b};
                 }
-                if ((modules & film::Grain) && s[16] > 0.0f) {
+                if ((modules & film::Grain) && s[16] > 0.0f && !grainParameters.prePrint) {
                     const float luma = rgb[0] * 0.2126f + rgb[1] * 0.7152f + rgb[2] * 0.0722f;
                     const auto delta = grain_delta(x, y, luma, grainParameters);
                     rgb[0] += delta.r;
@@ -1318,6 +1322,48 @@ public:
         std::printf("Look preview: %s (row-major, twelve recipes in dropdown order).\n",path);
     }
 
+    void writeGrainResponsePreview(const char* path)
+    {
+        const int panel = 320, width = panel*4, height = 512, rowBytes = width*3;
+        std::vector<float> input(panel*height*4,1);
+        const std::array<ColorRgb,4> chips {{{.55f,.35f,.25f},{.7f,.06f,.03f},{.03f,.12f,.7f},{.03f,.5f,.1f}}};
+        for (int y = 0; y < height; ++y) for (int x = 0; x < panel; ++x) {
+            const float gray = .005f + static_cast<float>(x)/(panel-1)*2;
+            const auto c = y < 256 ? ColorRgb{gray,gray,gray} : chips[x/80];
+            const size_t i = (static_cast<size_t>(y)*panel+x)*4;
+            input[i] = c.r; input[i+1] = c.g; input[i+2] = c.b;
+        }
+        std::array<std::vector<float>,4> images;
+        for (int column = 0; column < 4; ++column) {
+            auto s = filmSettings(); s[26] = color::SRGB; s[27] = 4; s[2] = printstyle::Custom;
+            s[0] = 0;
+            s[33] = column < 2 ? .7f : 1.5f;
+            s[film::GrainResponse] = static_cast<float>(column%2);
+            s[16] = .45f; s[17] = .75f; s[21] = .35f;
+            images[column] = render(input,panel,height,s);
+        }
+        std::array<unsigned char,54> header {};
+        header[0]='B'; header[1]='M'; header[10]=54; header[14]=40; header[26]=1; header[28]=24;
+        auto putInt = [&](int offset, unsigned value) {
+            for (int byte = 0; byte < 4; ++byte) header[offset+byte] = static_cast<unsigned char>(value>>(8*byte));
+        };
+        putInt(2,54+rowBytes*height); putInt(18,width); putInt(22,height);
+        std::ofstream file(path,std::ios::binary); require(file.good(),"Cannot write grain-response preview");
+        file.write(reinterpret_cast<const char*>(header.data()),header.size());
+        std::vector<unsigned char> row(rowBytes);
+        for (int y = height-1; y >= 0; --y) {
+            for (int x = 0; x < width; ++x) {
+                const size_t i = (static_cast<size_t>(y)*panel+x%panel)*4;
+                for (int channel = 0; channel < 3; ++channel)
+                    row[x*3+channel] = static_cast<unsigned char>(std::clamp(images[x/panel][i+2-channel],0.0f,1.0f)*255+.5f);
+                if (x%panel < 2 || y == 255) row[x*3] = row[x*3+1] = row[x*3+2] = 32;
+            }
+            file.write(reinterpret_cast<const char*>(row.data()),row.size());
+        }
+        require(file.good(),"Grain-response preview write failed");
+        std::printf("Grain response preview: %s (Post/Negative & Print at low print contrast, then Post/Negative & Print at high print contrast).\n",path);
+    }
+
     void benchmark()
     {
         const int width = 3840, height = 2160;
@@ -1376,6 +1422,12 @@ public:
             s[20] = softness;
             cases.push_back(s);
         }
+        for (int response : {0,1}) for (bool glow : {false,true}) {
+            auto s = filmSettings(); s[0] = 0; s[26] = color::AlexaLogC3; s[27] = 1;
+            s[film::GrainResponse] = static_cast<float>(response);
+            if (glow) { s[13] = 1; s[15] = 0.2f; s[film::BloomAmount] = 0.5f; }
+            cases.push_back(s);
+        }
         for (auto s : cases) {
             s[16] = 0.16f;
             s[17] = 0.45f;
@@ -1387,7 +1439,7 @@ public:
                 require(RunOpenEmulsionOpenCL(queue, width, height, static_cast<float>(frame), s.data(), reinterpret_cast<const float*>(src), reinterpret_cast<float*>(dst)), "Benchmark render failed");
             require(finish(queue) == 0, "Benchmark execution failed");
             const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() / 12.0;
-            std::printf("4K %s, mode %.0f, film %.0f, gauge %s, radius %.1f, aura %.1f/radius %.1f, development %.1f/%.1f/%.1f, bloom %.1f/radius %.1f, grain softness %.2f: %.2f ms/frame (GPU resident, excludes Resolve/transfers).\n", color::spaces()[static_cast<int>(s[26])].label, s[0], s[1], gauge::prepare(s.data()).label, s[14], s[15], s[film::AuraRadius], s[film::PushPull],s[film::ColorRichness],s[film::SplitTone],s[film::BloomAmount],s[film::BloomRadius],s[20],ms);
+            std::printf("4K %s, mode %.0f, film %.0f, gauge %s, radius %.1f, aura %.1f/radius %.1f, development %.1f/%.1f/%.1f, bloom %.1f/radius %.1f, grain softness %.2f/response %.0f: %.2f ms/frame (GPU resident, excludes Resolve/transfers).\n", color::spaces()[static_cast<int>(s[26])].label, s[0], s[1], gauge::prepare(s.data()).label, s[14], s[15], s[film::AuraRadius], s[film::PushPull],s[film::ColorRichness],s[film::SplitTone],s[film::BloomAmount],s[film::BloomRadius],s[20],s[film::GrainResponse],ms);
         }
         releaseMem(src);
         releaseMem(dst);
@@ -1514,6 +1566,83 @@ public:
             require(input == render(input, width, height, s), "Zero-grain managed mode changes image");
         }
         std::puts("OpenCL: all input/output spaces, independent film stages, managed halation/grain, exact bypass/zero-grain, alpha, and texture-only output preservation pass.");
+    }
+
+    void testGrainResponse()
+    {
+        const int width = 65, height = 63;
+        std::vector<float> input(width*height*4);
+        for (int y = 0; y < height; ++y) for (int x = 0; x < width; ++x) {
+            const size_t i = (static_cast<size_t>(y)*width+x)*4;
+            const float ramp = 0.01f + x / 40.0f;
+            input[i] = ramp; input[i+1] = ramp*.8f; input[i+2] = ramp*.6f;
+            input[i+3] = static_cast<float>((x+y)%17)/16;
+        }
+        auto s = filmSettings(); s[26] = color::SRGB; s[27] = 0;
+        s[0] = 0; s[16] = .3f; s[film::GrainResponse] = 1;
+        const auto p = response::prepare(s.data());
+        const auto g = grain::prepare(s.data(),height,0);
+        const auto result = render(input,width,height,s);
+        double different = 0;
+        auto post = s; post[film::GrainResponse] = 0;
+        const auto postResult = render(input,width,height,post);
+        for (int y = 0; y < height; ++y) for (int x = 0; x < width; ++x) {
+            const size_t i = (static_cast<size_t>(y)*width+x)*4;
+            auto negative = response_negative_stage({input[i],input[i+1],input[i+2]},p);
+            const auto delta = grain_delta(x,y,response_luma(negative),g);
+            negative.r += delta.r; negative.g += delta.g; negative.b += delta.b;
+            auto expected = response_print(negative,p);
+            expected.r = std::max(expected.r,0.0f); expected.g = std::max(expected.g,0.0f); expected.b = std::max(expected.b,0.0f);
+            requireNear(result[i],expected.r,3e-5f,"Pre-print grain order R");
+            requireNear(result[i+1],expected.g,3e-5f,"Pre-print grain order G");
+            requireNear(result[i+2],expected.b,3e-5f,"Pre-print grain order B");
+            require(result[i+3] == input[i+3],"Pre-print grain changes alpha");
+            different += std::abs(result[i]-postResult[i]);
+        }
+        require(different > .1,"Grain Response does not change print interaction");
+        // With no print or glow, changing placement must not add grain twice or alter its coordinates.
+        s[film::ModuleIndex] = film::Negative | film::Development | film::Grain;
+        s[film::PushPull] = 1.5f;
+        const auto beforePrint = render(input,width,height,s);
+        s[film::GrainResponse] = 0;
+        require(beforePrint == render(input,width,height,s),"Grain placement changes no-print/no-glow rendering");
+        for (int mode : {1,2,3,4,5,6}) {
+            s = filmSettings(); s[0] = static_cast<float>(mode); s[16] = .3f;
+            s[13] = .4f; s[15] = .1f; s[film::BloomAmount] = .2f;
+            const auto old = render(input,width,height,s);
+            s[film::GrainResponse] = 1;
+            require(old == render(input,width,height,s),"Grain Response leaks into excluded/texture-only mode");
+        }
+        for (int mask : std::array<int,3>{0,film::Grain,film::Halation | film::Aura | film::Bloom | film::Grain}) {
+            s = filmSettings(); s[0] = 0; s[16] = .3f; s[film::ModuleIndex] = static_cast<float>(mask);
+            const auto old = render(input,width,height,s);
+            s[film::GrainResponse] = 1;
+            require(old == render(input,width,height,s),"All-color-disabled Full mode changes grain behavior");
+        }
+        s = filmSettings(); s[0] = 0; s[16] = 0;
+        const auto noGrain = render(input,width,height,s);
+        s[film::GrainResponse] = 1;
+        require(noGrain == render(input,width,height,s),"Zero grain is not exact in pre-print mode");
+        s[16] = .3f; s[film::ModuleIndex] = film::All & ~film::Grain;
+        const auto disabled = render(input,width,height,s);
+        s[film::GrainResponse] = 0;
+        require(disabled == render(input,width,height,s),"Disabled grain is not exact");
+        for (int source = 0; source < color::SpaceCount; ++source) for (int system = 0; system < 6; ++system)
+            for (int style = 0; style < 4; ++style) {
+                s = filmSettings(); s[26] = static_cast<float>(source); s[27] = 5;
+                s[0] = 0;
+                s[1] = static_cast<float>(system); s[3] = static_cast<float>(style);
+                s[film::GrainResponse] = 1; s[16] = .4f; s[20] = 1.5f; s[21] = .8f;
+                s[film::PushPull] = -1; s[film::ColorRichness] = .5f; s[film::SplitTone] = .3f;
+                s[13] = .2f; s[15] = .1f; s[film::BloomAmount] = .3f;
+                s[film::GrainRed] = 1.3f; s[film::GrainBlue] = .8f;
+                s[film::NegativeColorStrength] = style % 2 ? .5f : 1;
+                s[film::PrintToneStrength] = style % 2 ? .6f : 1;
+                require(grain::prepare(s.data(),31,-12.25).prePrint == 1,"Pre-print parity case is not active");
+                test(33,31,s,false,-12.25);
+                if (unordered && source == color::AlexaLogC3) test(17,19,s,true,37);
+            }
+        std::puts("OpenCL: pre-print grain order, print interaction, stable geometry, zero/disabled/bypass/matte/texture isolation, alpha, all sources/families/styles, partial strengths, and glow composition pass.");
     }
 
     void testPrintPresetTransitions()
@@ -2125,6 +2254,7 @@ int main(int argc, char** argv)
         gpu.testMonochromeOutput();
         gpu.testUpgradeControls();
         gpu.testDevelopmentControls();
+        gpu.testGrainResponse();
         gpu.testBloomControls();
         for (int source = 0; source < color::SpaceCount; ++source) for (int system = 0; system < 6; ++system) {
             for (float direction : {-1.0f,1.0f}) {
@@ -2178,6 +2308,7 @@ int main(int argc, char** argv)
         if (argc > 4) gpu.writeTexturePreview(argv[4],true);
         if (argc > 6) gpu.writeBloomPreview(argv[6]);
         if (argc > 7) gpu.writeLookPreview(argv[7]);
+        if (argc > 9) gpu.writeGrainResponsePreview(argv[9]);
         gpu.benchmark();
         return 0;
     } catch (const std::exception& error) {

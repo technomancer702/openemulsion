@@ -17,6 +17,7 @@ enum SettingIndex {
     PushPull, ColorRichness, SplitTone, SplitHue, SplitPivot, SplitWidth,
     SplitShadows, SplitHighlights, GrainStretch, GrainRed, GrainGreen, GrainBlue,
     BloomAmount, BloomRadius, BloomThreshold, BloomSoftness, BloomColor, BloomProtection,
+    GrainResponse,
     SettingsCount
 };
 constexpr int ModuleIndex = 19;
