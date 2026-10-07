@@ -1,6 +1,16 @@
-# OpenEmulsion v0.29
+# OpenEmulsion v0.30
 
-Experimental Windows x64 built-in look update. Creative recipes are more distinct; stock-inspired looks remain restrained artistic approximations, not measured calibrations. Renderer math and default Custom controls are unchanged.
+Experimental Windows x64 categorized preset library. Stock-inspired recipes are artistic approximations, not measured film profiles. Existing recipes, renderer math and default controls are unchanged.
+
+## Changes in v0.30
+
+- Added Preset Category directly below Film Gauge and a filtered Preset menu. Browsing categories never applies a look. All Presets includes every recipe, with Neutral first after Custom.
+- Added Neutral / Clean Slate: zero creative film/print strengths, development, glow and grain. Keeps chosen input/output conversion, camera balance and grain seed. Full mode and module switches remain enabled; Film/Print strengths start at zero.
+- Expanded from 12 to 37 named recipes: five cinema-negative targets, eleven still-negative targets, four color reversal targets, four monochrome looks, two print-inspired looks, ten creative looks, and Neutral.
+- Still/reversal targets include Portra 160/400/800 and pushed variants, Ektar, Gold, Ultramax, PRO 400H, Superia, C200, Kodachrome, Ektachrome, Velvia and Provia. Added VERITA, Tri-X, HP5, 2383/2393-inspired print looks, Desert Chrome, Arctic Dusk, Golden Hour and Faded Instant. Names identify inspiration, not calibration or endorsement; no third-party recipes/profile data are bundled.
+- Stable hidden recipe IDs are separate from transient filtered-menu positions. Old choices keep their IDs, saved controls stay authoritative, user-file format is unchanged, and category/project/undo notifications never reapply recipes.
+- Added exhaustive category mapping, Neutral equivalence, distinct recipe, stock grain hierarchy, reversal/print isolation and creative-separation checks. CPU/OpenCL coverage and full-recipe 4K timing now include all 37 recipes. Near-zero gamma output checks bound linear-light error and displayed code error; exact bypass checks remain unchanged.
+- No extra rendering passes, buffers, readbacks or dependencies. Some new creative looks use existing bloom/development stages. Native menu refresh, undo/reload and final appearance still need Resolve validation.
 
 ## Changes in v0.29
 
@@ -30,7 +40,7 @@ Experimental Windows x64 built-in look update. Creative recipes are more distinc
 
 ## Included
 
-- Twelve editable stock-inspired and creative looks in a top-level Preset dropdown.
+- Thirty-seven categorized editable recipes, including Neutral, stock-inspired and creative looks, plus non-destructive Custom.
 - Portable user preset snapshots with selective context preservation.
 - Six original creative negative families, including monochrome finishing.
 - Independent Film Color, Film Development, Print, Halation, Aura, Bloom, and Grain modules, with mode-driven toggles and disabled-control greying.

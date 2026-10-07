@@ -1,6 +1,14 @@
 # Look Presets
 
-Added in v0.24. The top-level Preset dropdown sits directly below Film Gauge and remains available in every mode, including Bypass. New and existing instances default to Custom without changing the existing look.
+Added in v0.24, categorized and expanded in v0.30. Preset Category and Preset sit directly below Film Gauge and remain available in every mode, including Bypass. New instances default to All Presets / Custom without applying a look. Existing saved values are not reset.
+
+## Categories And Neutral
+
+The browser contains 37 named recipes plus Custom. Categories: All Presets, Starting Points, Cinema Negative, Still Negative, Reversal Film, Monochrome, Print Looks, and Creative Looks. Every filtered list starts with **Custom / Current Settings**, which does nothing to the image. Changing category only filters the menu: it never loads that category's first look. If the active look is outside the selected category, the menu shows Custom / Current Settings; switching back to its category or All Presets shows the stored name again. Silver Noir is under Monochrome.
+
+**Neutral / Clean Slate**, in Starting Points and first after Custom in All Presets, resets creative tuning with film/print color and tone strengths at zero, development at zero, grain at zero, and all glow at zero. It loads Full mode, Custom gauge, Custom print style, and enabled module switches so you can build a look. Raise Film/Print strength sliders when adding their response; their other sliders alone cannot affect the image while those strengths remain zero.
+
+Neutral retains Input/Output Color Space, camera Exposure/Temperature/Tint, and Grain Seed, including their animation, just like every built-in recipe. It is not an external effect bypass, camera-balance reset, manufacturer viewing LUT, gamut mapper, or HDR display rendering transform. With neutral camera balance, the only remaining operation is the plugin's existing input/output conversion. Negative/HDR values are not creatively clamped; same-space conversion can have floating-point round-trip error. Choose Bypass for exact RGBA pass-through.
 
 ## Library
 
@@ -18,6 +26,45 @@ Added in v0.24. The top-level Preset dropdown sits directly below Film Gauge and
 | Bleach Bypass | Bleach-retained family, lower saturation, harder contrast, and mostly monochrome grain. |
 | Super 8 Home Movie | Brighter color-reversal-inspired palette, gently warm print balance, Super 8 gauge, and coarse texture. |
 | Silver Noir | Monochrome, harder contrast, deeper blacks, and pronounced grain. |
+
+## Expanded Library In v0.30
+
+All twelve existing recipes are unchanged. The following original recipes add broader coverage:
+
+| Category / Preset | Creative target |
+| --- | --- |
+| Starting Points / Neutral | Creative reset described above; retains conversion and camera balance. |
+| Cinema Negative / VERITA 200D (Inspired) | Restrained daylight color, softer tone and fine-to-moderate texture. |
+| Still Negative / Portra 160 (Inspired) | Gentle contrast and saturation, smooth highlights and fine grain. |
+| Still Negative / Portra 400 (Inspired) | Related portrait palette with moderate grain and a little more contrast. |
+| Still Negative / Portra 800 (Inspired) | Related faster-negative target with stronger texture and firmer tone. |
+| Still Negative / Portra 800 Push +1 / +2 (Inspired) | Existing Push/Pull development at +1/+2, with grain-strength coupling and restrained saturation. Not calibrated push chemistry or exposure compensation. |
+| Still Negative / Ektar 100 (Inspired) | Cleaner fine texture, stronger saturation and firmer contrast. |
+| Still Negative / Gold 200 (Inspired) | Warm consumer-negative print interpretation and moderate grain. |
+| Still Negative / Ultramax 400 (Inspired) | Punchier color/contrast and coarser texture than Gold. |
+| Still Negative / PRO 400H (Inspired) | Gentle pastel-like rendering, fine-to-moderate grain and a restrained cool/green print balance. |
+| Still Negative / Superia X-TRA 400 (Inspired) | More color/contrast and grain, with a restrained cool print interpretation. |
+| Still Negative / C200 (Inspired) | Gentler related consumer-negative target with less texture than Superia. |
+| Reversal Film / Kodachrome 64 (Inspired) | Firmer reversal contrast, denser color and a small warm viewing balance. |
+| Reversal Film / Ektachrome 100 (Inspired) | Fine texture, moderately vivid color and a restrained cool viewing balance. |
+| Reversal Film / Velvia 100 (Inspired) | Stronger saturation and contrast, enriched muted colors, fine grain. |
+| Reversal Film / Provia 100F (Inspired) | More restrained saturation/contrast than Velvia and fine texture. |
+| Monochrome / Tri-X 400 (Inspired) | Firmer B&W tone and pronounced conventional grain. |
+| Monochrome / HP5 Plus 400 (Inspired) | Gentler B&W contrast, more open shadows and slightly softer texture. |
+| Print Looks / 2383 Print (Inspired) | Film-print-style palette/contrast, with negative response and grain at zero. |
+| Print Looks / 2393 Print (Inspired) | Denser, higher-contrast related print interpretation and stronger color. |
+| Creative Looks / Desert Chrome | Warm desaturated highlights, cool shadows, harder tone and moderate grain. |
+| Creative Looks / Arctic Dusk | Cool, muted color, restrained highlights and fine texture. |
+| Creative Looks / Golden Hour | Warm soft print, warm-highlight split, gentle bloom and fine texture. |
+| Creative Looks / Faded Instant | Softer faded contrast, warm muted color, lifted print blacks and textured diffusion. |
+
+Color-reversal recipes use the Reversal family with Print Color/Tone Strength at zero, avoiding a second creative print response. Their small Print RGB trims are viewing balances and remain effective independently of those strengths. Print-inspired looks are complete replacement recipes, not independent choices layered over a selected negative; they preserve camera balance but reset creative negative response, grain and glow. Combine and save module adjustments yourself for a custom negative/print pairing.
+
+The new stock-name coverage parallels the twenty camera-stock targets in the reviewed SpektraFilm checkout, but uses our own parameter recipes. It does not reproduce their spectral profiles, paper models, or datasets. Manufacturer names are reference identifiers, not endorsements. Historical/discontinued names describe the intended inspiration, not current product availability.
+
+Public [Kodak film technical publications](https://www.kodakprofessional.com/en-gb/node/133), [VERITA information](https://www.kodak.com/en/motion/product/camera-films/verita-200d-5206-7206/), [Fujifilm negative/reversal data sheets](https://www.fujifilm.com/mx/es/consumer/support/films/negative-and-reversal), and [ILFORD HP5 information](https://www.ilfordphoto.com/hp5-plus-sheet-film?___store=ilford_brochure) provide qualitative starting points. Warm/cool viewing interpretations and all numeric recipes are artistic decisions, not measured stock fits. Movie names are deliberately avoided: a movie's grade is not a single stock preset.
+
+Preset labels use a stable persistent ID; filtered menu positions are transient and not rendering inputs. Existing IDs 0-12 retain their meaning, including the hidden original `lookPreset` parameter. A new persistent `presetCategory` stores browsing context; nonpersistent `presetBrowser` is rebuilt from category and stored ID on instantiation and selector restore notifications. User `.oepreset` files still store ordinary render controls only and load as Custom. Their schema remains unchanged.
 
 These are original artistic recipes using existing controls, not calibrated reproductions of manufacturer stocks or particular movie grades. Stock-inspired names describe creative targets only. Tungsten/daylight names do not apply camera white balance: input footage is interpreted using the selected Input Color Space and the user's camera balance. There is no hidden stock transform.
 
@@ -43,7 +90,7 @@ Preset application still adds no image passes, buffers, or readbacks. Glow amoun
 - Selecting Custom does nothing to the settings. It is not a reset/default recipe.
 - Loading a project, undo/redo, host-generated parameter notifications, or moving the playhead never reapplies a recipe. Rendering reads the ordinary module settings, not the preset selector; saved edits remain authoritative.
 
-Preset application only writes parameters. It adds no rendering passes, buffers, per-pixel branching, or external LUT files. Individual looks can enable existing diffusion stages and thus cost more than a color/grain-only recipe.
+Preset application only writes parameters. It adds no rendering passes, buffers, per-pixel branching, or external LUT files. Individual looks can enable existing diffusion/development stages and thus cost more than a color/grain-only recipe. The category browser performs no file I/O in rendering.
 
 ## Source And Validation
 
@@ -52,3 +99,5 @@ Recipes and their parameter ownership are defined in `ofx/src/LookPresetConfig.h
 The stock families are informed by public [Kodak camera-film references](https://www.kodak.com/en/motion/products/camera-films/), but no manufacturer graphs, datasets, proprietary presets, or third-party implementation code are incorporated.
 
 Automated checks cover complete recipe application, valid control ranges, preserved encoding/balance/seed, Custom inheritance, repeated selection, finite/monotonic gray ramps, and edit/restore/recursion policy. v0.29 adds synthetic creative-separation guards, stock-family restraint/texture hierarchy/neutral pivot checks, representative midtone skin channel ordering, Neon cool-shadow/warm-highlight identity, and vintage-shadow softness. The render harness exercises every recipe across all supported input/output spaces, mode overrides, alpha, and all-disabled bypass on CPU/OpenCL, and times every full recipe at 4K. Synthetic appearance checks are not validation against actual film scans. Dropdown placement, grouped undo/redo, project reload, keyframe replacement, and final appearance should also be checked in Resolve on real footage.
+
+v0.30 adds exhaustive filtered-option/stable-ID round trips and invalid-index handling, distinct recipe checks, Neutral equivalence to conversion alone including negative/HDR chips, Portra texture/push hierarchy, reversal/print-stage isolation, B&W neutrality and new-creative color separation. All 37 recipes receive CPU/OpenCL input/output-space coverage and 4K timing. With all four film/print strengths at zero and gamma-2.4 output within 0.01 of zero, the numerical parity comparison also permits less than 1e-6 linear error and less than one 8-bit-equivalent displayed code; this accounts for wide-gamut cancellation amplified by the gamma curve near zero. Other parity tolerances, identity behavior, renderer math and historical math anchors are unchanged. Native dynamic-menu refresh and undo/reload behavior still require host validation; pure mapping tests are not an interactive Resolve session.

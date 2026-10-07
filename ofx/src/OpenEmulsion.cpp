@@ -26,7 +26,7 @@
 #define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, halation, aura, and linear-light bloom, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 29
+#define kPluginVersionMinor 30
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -495,6 +495,8 @@ public:
         printToneStrength_ = fetchDoubleParam("printToneStrength");
         filmGauge_ = fetchChoiceParam("filmGauge");
         lookPreset_ = fetchChoiceParam("lookPreset");
+        presetCategory_ = fetchChoiceParam("presetCategory");
+        presetBrowser_ = fetchChoiceParam("presetBrowser");
         for (size_t i = 0; i < std::size(look::Controls); ++i) {
             const auto& control = look::Controls[i];
             if (control.kind == look::Choice) lookControls_[i].choice = fetchChoiceParam(control.name);
@@ -538,12 +540,28 @@ public:
         for (size_t i = 0; i < std::size(moduleui::Controls); ++i)
             moduleControls_[i] = getParam(moduleui::Controls[i].name);
         printStyle_->getValue(printStyleForUI_);
+        updatePresetBrowser();
         updateControlState();
     }
 
     void changedParam(const OFX::InstanceChangedArgs& args, const std::string& name) override
     {
         if (applyingControls_) return;
+        if (name == "presetCategory") {
+            updatePresetBrowser();
+            return;
+        }
+        if (name == "presetBrowser") {
+            if (args.reason != OFX::eChangeUserEdit) {
+                updatePresetBrowser();
+                return;
+            }
+            int category = 0, option = 0;
+            presetCategory_->getValue(category);
+            presetBrowser_->getValue(option);
+            applyLookPreset(look::presetAt(category,option));
+            return;
+        }
         if (name == "saveUserPreset" || name == "loadUserPreset") {
             if (args.reason != OFX::eChangeUserEdit) return;
             try {
@@ -575,7 +593,9 @@ public:
         if (action == look::MarkCustom) {
             // Only the label changes; the edited recipe remains in the ordinary OFX controls.
             lookPreset_->setValue(look::Custom);
+            updatePresetBrowser();
         }
+        if (name == "lookPreset") updatePresetBrowser();
         const bool affectsControls = name == "mode" || name == "printStyle" || name == "system" ||
             name == "negativeColorStrength" || args.reason == OFX::eChangeTime ||
             std::any_of(moduleui::Toggles.begin(), moduleui::Toggles.end(), [&](const auto& toggle) { return name == toggle.name; });
@@ -664,11 +684,37 @@ public:
     }
 
 private:
+    void updatePresetBrowser()
+    {
+        int category = 0, selected = look::Custom;
+        presetCategory_->getValue(category);
+        lookPreset_->getValue(selected);
+        category = std::clamp(category,0,look::CategoryCount-1);
+        const bool previousGuard = applyingControls_;
+        applyingControls_ = true;
+        try {
+            if (browserCategory_ != category) {
+                presetBrowser_->resetOptions();
+                for (int option = 0; option < look::optionCount(category); ++option) {
+                    const int preset = look::presetAt(category,option);
+                    presetBrowser_->appendOption(preset == look::Custom ? "Custom / Current Settings" : look::Labels[preset]);
+                }
+                browserCategory_ = category;
+            }
+            presetBrowser_->setValue(look::optionFor(category,selected));
+        } catch (...) {
+            applyingControls_ = previousGuard;
+            throw;
+        }
+        applyingControls_ = previousGuard;
+    }
+
     void applyLookPreset(int selected)
     {
         beginEditBlock("Apply look preset");
         applyingControls_ = true;
         try {
+            lookPreset_->setValue(selected);
             look::applyPreset(selected, [&](size_t i, double value) {
                 setControl(lookControls_[i],value);
             }, [&](size_t i, bool enabled) {
@@ -683,6 +729,7 @@ private:
         }
         applyingControls_ = false;
         endEditBlock();
+        updatePresetBrowser();
         updateControlState();
     }
 
@@ -706,6 +753,7 @@ private:
         }
         applyingControls_ = false;
         endEditBlock();
+        updatePresetBrowser();
         updateControlState();
     }
 
@@ -834,6 +882,9 @@ private:
         else { control.number->deleteAllKeys(); control.number->setValue(value); }
     }
     OFX::ChoiceParam* lookPreset_ = nullptr;
+    OFX::ChoiceParam* presetCategory_ = nullptr;
+    OFX::ChoiceParam* presetBrowser_ = nullptr;
+    int browserCategory_ = -1;
     std::array<LookControl, std::size(look::Controls)> lookControls_ {};
     std::array<LookControl, std::size(userpreset::ContextControls)> contextControls_ {};
     OFX::BooleanParam* preserveSpaces_ = nullptr;
@@ -989,11 +1040,33 @@ public:
         page->addChild(*choice);
 
         choice = desc.defineChoiceParam("lookPreset");
-        choice->setLabels("Preset", "Preset", "Preset");
+        choice->setLabels("Stored Preset", "Stored Preset", "Stored Preset");
         for (const auto* label : look::Labels) choice->appendOption(label);
         choice->setDefault(look::Custom);
         choice->setAnimates(false);
-        choice->setHint("Original stock-inspired and creative looks. Loads Full mode, gauge, module switches, and editable settings; replaces their keyframes. Preserves input/output spaces, camera exposure/temperature/tint, and grain seed. Custom retains your current settings.");
+        choice->setIsSecret(true);
+        choice->setEvaluateOnChange(false);
+
+        choice = desc.defineChoiceParam("presetCategory");
+        choice->setLabels("Preset Category", "Preset Category", "Preset Category");
+        for (const auto* label : look::CategoryLabels) choice->appendOption(label);
+        choice->setDefault(look::AllLooks);
+        choice->setAnimates(false);
+        choice->setEvaluateOnChange(false);
+        choice->setHint("Filters the preset menu only; browsing categories never changes the image. A look outside this category appears as Custom / Current Settings.");
+        page->addChild(*choice);
+
+        choice = desc.defineChoiceParam("presetBrowser");
+        choice->setLabels("Preset", "Preset", "Preset");
+        for (int option = 0; option < look::optionCount(look::AllLooks); ++option) {
+            const int preset = look::presetAt(look::AllLooks,option);
+            choice->appendOption(preset == look::Custom ? "Custom / Current Settings" : look::Labels[preset]);
+        }
+        choice->setDefault(0);
+        choice->setAnimates(false);
+        choice->setIsPersistant(false);
+        choice->setEvaluateOnChange(false);
+        choice->setHint("Original stock-inspired and creative recipes, not measured stock profiles. Loads Full mode, gauge, module switches and editable settings; replaces creative keyframes. Preserves input/output spaces, camera balance and grain seed. Neutral removes film, development, glow and grain, but retains color-space conversion/balance. Custom changes nothing. Film/Print strengths are zero after Neutral; raise them to add their response.");
         page->addChild(*choice);
 
         GroupParamDescriptor* presets = addGroup(desc, page, "userPresetControls", "User Presets", false);

@@ -129,7 +129,7 @@ int main()
             require(toJson(parse(serialize(stock))) == toJson(stock),"Built-in recipe does not round-trip");
         }
         const auto valid = toJson(original);
-        for (const char* version : {"0.27","0.28"}) {
+        for (const char* version : {"0.27","0.28","0.29"}) {
             auto older = valid;
             older["createdWith"] = version;
             require(toJson(parse(older.dump())) == valid,"Older preset settings no longer load");

@@ -1,4 +1,4 @@
-# Installing OpenEmulsion v0.29
+# Installing OpenEmulsion v0.30
 
 This ZIP contains a prebuilt Windows x64 OFX plugin. No build tools or DCTL are needed. Development testing uses DaVinci Resolve 21.1.1 on Windows x64; other host versions and GPU vendors still need community testing.
 
@@ -25,7 +25,8 @@ Install only one copy. Developers already using `OFX_PLUGIN_PATH` should update 
 - For your own LUT, use **Grain Only** or **Halation, Bloom & Grain Only**, or disable Film Color, Film Development, and Print in Full mode. Texture-only rendering returns the input encoding regardless of the output dropdown.
 - Mode selection switches module Enable toggles. Returning to Full enables all modules; turn off individual modules as needed. Bloom strength defaults to zero.
 - Print's named presets lock their recipe knobs. Select Custom to edit the inherited recipe.
-- Built-in looks have revised creative recipes in v0.29. Existing nodes and saved user presets keep their stored tuning. Select Custom, then the named look again to load the revision; this replaces creative tuning/keyframes, not camera balance or color-space settings.
+- Preset Category filters the Preset menu without changing the image. All Presets includes every recipe; Custom / Current Settings never resets tuning. Named recipes replace creative tuning/keyframes, not camera balance or color-space settings. Existing saved values remain unchanged.
+- Starting Points > Neutral / Clean Slate removes film color/tone, development, grain and glow, retaining input/output conversion and camera balance. Full mode and module switches stay enabled for editing; raise Film/Print strengths from zero when adding those responses.
 - User Presets > Save/Load captures all current controls before the dialog. Loading restores all saved settings by default and replaces their keyframes. Optional Preserve switches retain destination context; existing v0.27 nodes keep those switches on until unchecked.
 - Grain > Grain Response > Negative & Print optionally lets Print shape the texture. Post Print is the default; texture-only modes keep their original behavior.
 

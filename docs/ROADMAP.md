@@ -1,6 +1,6 @@
 # Upgrade Roadmap
 
-## Completed Through v0.29
+## Completed Through v0.30
 
 - Independent film/print color and tone strengths and in-module Enable toggles.
 - Disabled-module control greying, mode-driven Enable toggles, and mode-aware print-preset locks.
@@ -13,7 +13,7 @@
 - Monochrome finishing that includes print and texture.
 - Independently enabled Film Development: Push/Pull with grain-strength coupling and stable grain geometry, Richness, and Split Tone.
 - Advanced grain: horizontal desqueeze and independent RGB intensity.
-- Top-level Preset dropdown with twelve complete, editable stock-inspired/creative recipes, Custom inheritance, preserved camera balance/encoding/seed, and recipe/edit-policy plus CPU/OpenCL checks.
+- Categorized top-level preset browser with 37 complete editable recipes, including Neutral, stock-inspired and creative looks. Non-destructive category/Custom browsing, stable stored IDs, preserved context and category/recipe/edit-policy plus CPU/OpenCL checks.
 - Revised creative recipes with clearer cinema/neon/vintage/reversal-home-movie separation, restrained modern stock-family refinements, synthetic intent/skin/neutral checks, and per-look 4K timings. Existing saved tuning and Custom defaults remain unchanged. See [Look Presets](LOOK_PRESETS.md).
 - Targeted slider range expansion with unchanged defaults/presets, variance-normalized primary grain smoothing above Softness one, full-strength Mono semantic greying, historical response anchors, and expanded CPU/OpenCL/performance checks.
 - Comparable Filmbox-style control terminology and clearer directional tooltips, without changing parameter identifiers or rendering. See [Control Names](CONTROL_NAMES.md).
@@ -27,6 +27,8 @@ Separate neutral/source-colored linear-light diffusion with an in-module Enable 
 Synthetic checks cover bounded extraction, colored/white sources, continuous conserved spread, HD/4K scaling, edge normalization, every mode/mask/input, exact zero/disabled isolation, bypass/resizing, and CPU/OpenCL parity. Appearance and host workflow still need real-footage validation in Resolve.
 
 ## Further Work
+
+- [SpektraFilm source review](SPEKTRAFILM_REVIEW.md): prioritize independent per-stock palette/response refinement and real-footage comparison over adding expensive spectral processing. Review print-only and reversal workflow with the new library.
 
 - Real-footage refinement of the look library and the new optional Negative & Print grain response. Compare motion, shadow bias, print interaction, and proxy/full-resolution consistency.
 - Community preset sharing and versioned preset-format evolution. Current built-in recipes live in `ofx/src/LookPresetConfig.h`; user files use complete validated snapshots, not animation curves.

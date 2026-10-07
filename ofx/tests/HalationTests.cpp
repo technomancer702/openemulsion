@@ -1201,7 +1201,17 @@ public:
                 for (int channel = 0; channel < 4; ++channel) {
                     const float expected = channel < 3 ? rgb[channel] : input[i + channel];
                     const float tolerance = 3e-5f * std::max(1.0f, std::abs(expected));
-                    if (!std::isfinite(output[i + channel]) || std::abs(output[i + channel] - expected) >= tolerance) {
+                    // Wide-gamut cancellation near zero is amplified by gamma's infinite slope.
+                    // Bound both linear error and displayed code error there, not all dark pixels.
+                    const float actual = output[i + channel];
+                    const bool nearGammaBlack = channel < 3 && !identity && s[0] != 5 && s[0] != 6 &&
+                        responseParameters.colorStrength == 0 && responseParameters.toneStrength == 0 &&
+                        responseParameters.printColorStrength == 0 && responseParameters.printToneStrength == 0 &&
+                        colorParameters.outputCurve == ColorGamma24 &&
+                        std::max(std::abs(actual),std::abs(expected)) < .01f &&
+                        std::abs(actual-expected) < 1.0f/255 &&
+                        std::abs(color_decode(actual,ColorGamma24)-color_decode(expected,ColorGamma24)) < 1e-6f;
+                    if (!std::isfinite(actual) || (std::abs(actual - expected) >= tolerance && !nearGammaBlack)) {
                         std::fprintf(stderr, "Mismatch at (%d,%d), channel %d, source %.0f, mode %.0f, mask %.0f, style %.0f, time %.2f, strengths %.2f/%.2f/%.2f/%.2f: GPU %.8f, CPU %.8f\n",
                                      x, y, channel, s[26], s[0], s[19], s[3], time, s[41], s[42], s[43], s[44], output[i + channel], expected);
                         require(false, "CPU/GPU mismatch or broken mode/alpha");
@@ -1271,7 +1281,8 @@ public:
 
     void writeLookPreview(const char* path)
     {
-        const int panel=320, columns=4, width=panel*columns, height=panel*3, rowBytes=width*3;
+        const int panel=320, columns=4, width=panel*columns,
+            height=panel*((look::Count-1+columns-1)/columns), rowBytes=width*3;
         std::vector<float> input(panel*panel*4,1);
         const std::array<ColorRgb,8> chips {{{.65f,.44f,.33f},{.45f,.28f,.20f},
             {.7f,.05f,.02f},{.02f,.7f,.07f},{.03f,.12f,.75f},
@@ -1310,7 +1321,12 @@ public:
         std::vector<unsigned char> row(rowBytes);
         for (int y=height-1; y>=0; --y) {
             for (int x=0; x<width; ++x) {
-                const auto& image=rendered[(y/panel)*columns+x/panel];
+                const int index=(y/panel)*columns+x/panel;
+                if (index >= static_cast<int>(rendered.size())) {
+                    row[x*3]=row[x*3+1]=row[x*3+2]=32;
+                    continue;
+                }
+                const auto& image=rendered[index];
                 const size_t i=(static_cast<size_t>(y%panel)*panel+x%panel)*4;
                 for (int channel=0; channel<3; ++channel)
                     row[x*3+channel]=static_cast<unsigned char>(std::clamp(image[i+2-channel],0.0f,1.0f)*255+.5f);
@@ -1319,7 +1335,7 @@ public:
             file.write(reinterpret_cast<const char*>(row.data()),row.size());
         }
         require(file.good(),"Look preview write failed");
-        std::printf("Look preview: %s (row-major, twelve recipes in dropdown order).\n",path);
+        std::printf("Look preview: %s (row-major, %d recipes in stored-ID order).\n",path,look::Count-1);
     }
 
     void writeGrainResponsePreview(const char* path)
@@ -2318,7 +2334,7 @@ int main(int argc, char** argv)
             s[0]=0; s[film::ModuleIndex]=0;
             gpu.test(17,19,s,false);
         }
-        std::puts("OpenCL: all twelve look recipes match CPU across input/output spaces, mode overrides, alpha, and all-disabled bypass.");
+        std::printf("OpenCL: all %d look recipes match CPU across input/output spaces, mode overrides, alpha, and all-disabled bypass.\n",look::Count-1);
         if (argc > 3) gpu.writeTexturePreview(argv[3]);
         if (argc > 4) gpu.writeTexturePreview(argv[4],true);
         if (argc > 6) gpu.writeBloomPreview(argv[6]);

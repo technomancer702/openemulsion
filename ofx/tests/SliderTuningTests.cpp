@@ -41,7 +41,7 @@ static ColorRgb colorStage(ColorRgb c, const grain::PackedSettings& s)
 static void testAnchors()
 {
     // Captured from committed v0.24 math: two color chips and one grain sample per recipe.
-    const std::array<std::array<float,9>,look::Count> anchors {{
+    const std::array<std::array<float,9>,13> anchors {{
         { .619741440f,.452860475f,.359768122f,.848246515f,.103808984f,.0846692473f,-.00756785041f,-.00681879232f,-.00770107191f },
         { .635291100f,.451151282f,.350920796f,.899802089f,.105129004f,.0831860453f,-.000962815946f,.0000508178746f,-.000907741312f },
         { .627854705f,.451949358f,.353923231f,.879237413f,.103384629f,.0830402225f,-.00702754362f,-.00934132095f,-.0065630828f },
@@ -56,7 +56,7 @@ static void testAnchors()
         { .607475638f,.461386412f,.385042965f,.820365489f,.138846785f,.129965976f,-.00100113801f,-.000395533105f,.00337315700f },
         { .514006555f,.514006555f,.514006555f,.335305929f,.335305929f,.335305929f,-.00973842479f,-.00973842479f,-.00973842479f }
     }};
-    for (int preset=0; preset<look::Count; ++preset) {
+    for (int preset=0; preset<static_cast<int>(anchors.size()); ++preset) {
         auto s=settings(preset);
         // v0.29 changes recipes, not math. Freeze the revised looks' original inputs.
         if (preset == look::Daylight250 || preset == look::Tungsten200 || preset == look::Tungsten500 ||

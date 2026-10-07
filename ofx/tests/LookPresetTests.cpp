@@ -98,10 +98,82 @@ static void testLookIntent()
         colorDistance(look::Tungsten200,look::Tungsten500));
 }
 
+static void testCategoriesAndNeutral()
+{
+    require(look::Count == 38,"Expected 37 named recipes plus Custom");
+    const std::set<int> order(look::MenuOrder.begin(),look::MenuOrder.end());
+    require(order.size() == look::Count && *order.begin() == 0 && *order.rbegin() == look::Count-1,
+        "Menu order duplicates or omits a stable preset ID");
+    require(look::presetAt(look::AllLooks,1) == look::Neutral,"Neutral is not first in All Presets");
+    for (int category = 0; category < look::CategoryCount; ++category) {
+        require(look::optionCount(category) > 1,"Empty preset category");
+        require(look::presetAt(category,0) == look::Custom,"Category has no non-destructive Custom choice");
+        for (int option = 0; option < look::optionCount(category); ++option) {
+            const int preset = look::presetAt(category,option);
+            require(look::contains(category,preset),"Filtered menu leaks another category");
+            require(look::optionFor(category,preset) == option,"Filtered option/stable-ID mapping fails");
+        }
+        for (int selected = 0; selected < look::Count; ++selected) {
+            const int displayed = look::presetAt(category,look::optionFor(category,selected));
+            require(displayed == (look::contains(category,selected) ? selected : look::Custom),
+                "Category browsing misidentifies the stored recipe");
+            require(look::editAction("presetCategory",true,false,selected) == look::None,
+                "Category browsing edits the current recipe");
+        }
+        require(look::presetAt(category,-1) == look::Custom &&
+            look::presetAt(category,look::optionCount(category)) == look::Custom,"Invalid menu position applies a look");
+    }
+    for (int category : std::array<int,2> {-1,look::CategoryCount}) {
+        require(look::optionCount(category) == 0 && look::presetAt(category,1) == look::Custom,
+            "Invalid category applies a look");
+    }
+    const auto neutral = packedRecipe(look::Neutral);
+    for (int index : std::array<int,11> {film::NegativeColorStrength,film::NegativeToneStrength,film::PrintColorStrength,
+        film::PrintToneStrength,film::PushPull,film::ColorRichness,film::SplitTone,13,15,16,film::BloomAmount})
+        require(neutral[index] == 0,"Neutral retains a creative effect");
+    require(neutral[film::FilmGauge] == gauge::Custom,"Neutral retains a format override");
+    const auto cp = color::prepare(neutral.data());
+    for (const auto input : std::array<ColorRgb,5> {{{0,0,0},{.18f,.18f,.18f},{.38f,.2f,.12f},
+        {-.01f,.02f,.3f},{4,.01f,1.2f}}}) {
+        const auto actual = renderColorOnly(input,look::Neutral);
+        const auto expected = color_from_work(color_to_work(input,cp),cp);
+        require(std::abs(actual.r-expected.r) < 1e-6f && std::abs(actual.g-expected.g) < 1e-6f &&
+            std::abs(actual.b-expected.b) < 1e-6f,"Neutral changes color beyond input/output conversion");
+    }
+    for (int a = 1; a < look::Count; ++a) for (int b = a+1; b < look::Count; ++b)
+        require(look::recipe(a) != look::recipe(b),"Two library entries contain identical recipes");
+    const auto p160=packedRecipe(look::Portra160), p400=packedRecipe(look::Portra400), p800=packedRecipe(look::Portra800);
+    require(p160[16] < p400[16] && p400[16] < p800[16] &&
+        p160[17] < p400[17] && p400[17] < p800[17],"Still-negative grain hierarchy is inconsistent");
+    for (int pushed : {look::Portra800Push1,look::Portra800Push2}) {
+        const auto p=packedRecipe(pushed);
+        require(p[17] == p800[17] && p[film::PushPull] == pushed-look::Portra800,
+            "Pushed recipe changes grain pitch or misses development amount");
+    }
+    for (int preset : {look::Kodachrome64,look::Ektachrome100,look::Velvia100,look::Provia100}) {
+        const auto s=packedRecipe(preset);
+        require(s[1] == 5 && s[film::PrintColorStrength] == 0 && s[film::PrintToneStrength] == 0,
+            "Reversal stock look includes a second print response");
+    }
+    for (int preset : {look::Print2383,look::Print2393}) {
+        const auto s=packedRecipe(preset);
+        require(s[film::NegativeColorStrength] == 0 && s[film::NegativeToneStrength] == 0 && s[16] == 0,
+            "Print-inspired look includes negative shaping or camera grain");
+    }
+    for (int preset : {look::TriX400,look::Hp5Plus400}) {
+        const auto c=renderColorOnly({.38f,.2f,.12f},preset);
+        require(std::abs(c.r-c.g) < 1e-6f && std::abs(c.g-c.b) < 1e-6f,"B&W stock look is colored");
+    }
+    const std::array<int,4> creative {look::DesertChrome,look::ArcticDusk,look::GoldenHour,look::FadedInstant};
+    for (size_t a=0; a<creative.size(); ++a) for (size_t b=a+1; b<creative.size(); ++b)
+        require(colorDistance(creative[a],creative[b]) > 3,"New creative looks have insufficient color/tone separation");
+}
+
 int main()
 {
     try {
         testLookIntent();
+        testCategoriesAndNeutral();
         std::set<std::string> names, labels;
         std::set<int> settings;
         for (const auto* label : look::Labels)
@@ -123,7 +195,6 @@ int main()
         }
         for (const auto& control : printstyle::Parameters)
             require(look::ownsControl(control.name), "Preset leaves stale print tuning");
-        require(look::Count == 13, "Expected twelve named presets plus Custom");
         for (int preset = -1; preset <= look::Count; ++preset) {
             std::array<float, film::SettingsCount> packed;
             packed.fill(.123f);
