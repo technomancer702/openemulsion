@@ -26,7 +26,7 @@
 #define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, halation, aura, linear-light bloom, and selective color, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 33
+#define kPluginVersionMinor 34
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -42,6 +42,7 @@ struct Settings {
     int grainResponse = 0;
     int sourceSpace = color::Rec709Gamma24;
     int outputSpace = 0;
+    int outputRendering = color::Automatic;
     bool enableNegative = true;
     bool enableDevelopment = true;
     bool enablePrint = true;
@@ -298,8 +299,9 @@ public:
                     if (colorEnabled(settings_)) {
                         c = cameraStage(c, settings_);
                         selectionSource = c;
-                        c = response_negative_stage(c, responseParameters_);
                     }
+                    c = color_render_work(c, colorParameters_);
+                    if (colorEnabled(settings_)) c = response_negative_stage(c, responseParameters_);
                     if (modules & film::Development) c = response_development(c, responseParameters_);
                     if (grainParameters_.prePrint && grainEnabled(settings_)) {
                         const OfxRectI& b = src_->getBounds();
@@ -386,6 +388,7 @@ private:
         out[25] = static_cast<float>(s.grainSeed);
         out[26] = static_cast<float>(s.sourceSpace);
         out[27] = static_cast<float>(s.outputSpace);
+        out[film::OutputRendering] = static_cast<float>(s.outputRendering);
         out[28] = static_cast<float>(s.negativeShoulder);
         out[29] = static_cast<float>(s.negativeCrosstalk);
         out[30] = static_cast<float>(s.gamutCompression);
@@ -457,6 +460,7 @@ public:
         mode_ = fetchChoiceParam("mode");
         sourceSpace_ = fetchChoiceParam("sourceSpace");
         outputSpace_ = fetchChoiceParam("outputSpace");
+        outputRendering_ = fetchChoiceParam("outputRendering");
         system_ = fetchChoiceParam("system");
         printStyle_ = fetchChoiceParam("printStyle");
         grainStyle_ = fetchChoiceParam("grainStyle");
@@ -803,6 +807,7 @@ private:
         mode_->getValueAtTime(time, s.mode);
         sourceSpace_->getValueAtTime(time, s.sourceSpace);
         outputSpace_->getValueAtTime(time, s.outputSpace);
+        outputRendering_->getValueAtTime(time, s.outputRendering);
         system_->getValueAtTime(time, s.system);
         printStyle_->getValueAtTime(time, s.printStyle);
         grainStyle_->getValueAtTime(time, s.grainStyle);
@@ -892,6 +897,7 @@ private:
     OFX::ChoiceParam* mode_ = nullptr;
     OFX::ChoiceParam* sourceSpace_ = nullptr;
     OFX::ChoiceParam* outputSpace_ = nullptr;
+    OFX::ChoiceParam* outputRendering_ = nullptr;
     OFX::ChoiceParam* system_ = nullptr;
     OFX::ChoiceParam* printStyle_ = nullptr;
     std::array<OFX::DoubleParam*, printstyle::ControlCount> printRecipeControls_ {};
@@ -1067,6 +1073,13 @@ public:
         choice->setDefault(0);
         page->addChild(*choice);
 
+        choice = desc.defineChoiceParam("outputRendering");
+        choice->setLabels("Output Rendering", "Output Rendering", "Output Rendering");
+        for (const auto* label : color::RenderingLabels) choice->appendOption(label);
+        choice->setDefault(color::Automatic);
+        choice->setHint("Auto adds an SDR viewing response when scene-log/linear input is sent to Rec.709 or sRGB. Runs after camera balance, before the creative film response. Display-ready input and log/linear output remain unchanged. Conversion Only keeps the original gamut/gamma conversion for an external viewing transform. Standard SDR explicitly enables rendering for display output. Texture-only modes, bypass and diagnostic mattes never apply it.");
+        page->addChild(*choice);
+
         choice = desc.defineChoiceParam("filmGauge");
         choice->setLabels("Film Gauge", "Film Gauge", "Film Gauge");
         for (const auto& profile : gauge::Profiles) choice->appendOption(profile.label);
@@ -1101,7 +1114,7 @@ public:
         choice->setAnimates(false);
         choice->setIsPersistant(false);
         choice->setEvaluateOnChange(false);
-        choice->setHint("Original stock and creative interpretations, not measured stock profiles or exact movie grades. Loads Full mode, gauge, module switches and editable settings; replaces creative keyframes. Preserves input/output spaces, camera balance and grain seed. Neutral removes film, development, glow and grain, but retains color-space conversion/balance. Custom changes nothing. Film/Print strengths are zero after Neutral; raise them to add their response.");
+        choice->setHint("Original stock and creative interpretations, not measured stock profiles or exact movie grades. Loads Full mode, gauge, module switches and editable settings; replaces creative keyframes. Preserves color spaces/output rendering, camera balance and grain seed. Neutral removes creative film, development, glow and grain, but retains conversion/balance and the selected output rendering. Custom changes nothing. Film/Print strengths are zero after Neutral; raise them to add their response.");
         page->addChild(*choice);
 
         GroupParamDescriptor* presets = addGroup(desc, page, "userPresetControls", "User Presets", false);

@@ -24,6 +24,8 @@ static std::array<float,film::SettingsCount> packedRecipe(int preset)
     s[film::ModuleIndex] = static_cast<float>(recipe[film::ModuleIndex]);
     s[4] = s[5] = s[6] = 1;
     s[26] = color::LinearRec709; s[27] = 1;
+    // Isolate historical creative recipes; the SDR foundation has separate coverage.
+    s[film::OutputRendering] = color::ConversionOnly;
     return s;
 }
 
@@ -34,6 +36,7 @@ static ColorRgb renderColorOnly(ColorRgb linear, int preset)
     const auto rp = response::prepare(s.data());
     const int modules = film::modulesForSettings(s.data());
     auto c = color_to_work(linear,cp);
+    c = color_render_work(c,cp);
     if (modules & film::Negative) c = response_negative_stage(c,rp);
     if (modules & film::Development) c = response_development(c,rp);
     if (modules & film::Print) c = response_print(c,rp);

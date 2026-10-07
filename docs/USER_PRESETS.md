@@ -1,4 +1,4 @@
-# User Presets (v0.32)
+# User Presets (v0.34)
 
 The User Presets group sits below the built-in Preset dropdown. Save Preset and Load Preset open native Windows dialogs for portable `.oepreset` files. The files contain UTF-8 JSON, not executable code or external LUT references. They are separate from Filmbox/Dehancer preset formats.
 
@@ -10,7 +10,7 @@ Load validates the complete document before modifying parameters. Successful imp
 
 Loading restores every saved rendering setting by default, including color spaces, camera balance, and grain seed. Three optional non-animated preservation switches default to off:
 
-- Preserve Color Spaces: keep this node's Input and Output Color Space settings and keys.
+- Preserve Color Spaces: keep this node's Input/Output Color Space and Output Rendering settings and keys.
 - Preserve Camera Balance: keep Film Color Exposure, Temperature, and Tint settings and keys. Print Exposure/Red/Green/Blue remain part of the imported creative look.
 - Preserve Grain Seed: keep this node's grain seed and keys.
 
@@ -24,7 +24,7 @@ Canceling a dialog changes nothing. Filesystem failures are reported through the
 
 ## File Format and Validation
 
-Format version 2 stores `plugin`, `createdWith`, `name`, `controls`, `modules`, and `context`, alongside `formatVersion`. It adds six Selective Color controls and an eighth module switch. Creative settings use stable parameter identifiers, not display labels; choices are numeric indices. Complete format-version-1 files remain readable: all their values are retained, selective controls take neutral defaults and Selective Color is disabled. Mixed/incomplete schemas are rejected. New files require v0.32 or later; older builds cannot read format version 2.
+Format version 3 stores `plugin`, `createdWith`, `name`, `controls`, `modules`, and `context`, alongside `formatVersion`. It adds Output Rendering to the color-space context. Creative settings use stable parameter identifiers, not display labels; choices are numeric indices. Complete format-version-1/2 files remain readable with their prior values retained and Output Rendering set to Conversion Only, preserving their original conversion behavior. Version 1 also receives neutral Selective Color defaults and a disabled switch. Mixed/incomplete schemas are rejected. New files require v0.34 or later; older builds cannot read format version 3. New plugin instances default to Auto; this differs deliberately from legacy file migration. Set Auto after importing an old preset to use the new SDR foundation.
 
 All known controls and switches are required. Parsing rejects unsupported versions/plugins, missing or unknown controls, wrong types, fractional choices, nonfinite/out-of-range numbers, duplicate fields, excessive nesting, trailing data, and files over 64 KiB. Names are limited to 256 UTF-8 bytes; paths use the native Unicode Windows APIs. JSON parsing/serialization use vendored MIT-licensed nlohmann/json v3.12.0, whose release checksum was verified upstream.
 

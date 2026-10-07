@@ -1,10 +1,10 @@
-# OFX Color Spaces (v0.12)
+# OFX Color Spaces (v0.34)
 
 ## Resolve Workflow
 
 `Input Color Space` describes the RGB entering this node. It is not inferred from camera metadata or project settings.
 
-- Unconverted Alexa LogC3 in a manually managed project: select `ARRI Alexa LogC3 / Wide Gamut 3 (EI 800)`. With Film Color/Print enabled, select output `Rec.709 / Gamma 2.4` for an SDR look. Do not apply another LogC3-to-709 conversion afterward.
+- Unconverted Alexa LogC3 in a manually managed project: select `ARRI Alexa LogC3 / Wide Gamut 3 (EI 800)`. With Film Color/Print enabled, select output `Rec.709 / Gamma 2.4` and `Output Rendering: Auto` for an SDR look. Do not apply another LogC3-to-709 viewing transform afterward.
 - Alexa already converted to DaVinci Wide Gamut/Intermediate by a CST or Resolve Color Management: select `DaVinci Wide Gamut / Intermediate` and output `Same as Input`. Keep the project's normal output transform.
 - ACEScct timeline: select `ACEScct / AP1` with output `Same as Input`. This effect is a look, not an ACES Input/Output Transform.
 - Your own camera LUT after this node: choose its camera input and `Halation, Bloom & Grain Only` or `Grain Only`. Those modes retain the camera encoding for the LUT.
@@ -40,13 +40,31 @@ Outputs: Same as Input, Rec.709/Gamma 2.4, DaVinci Wide Gamut/Intermediate, ACES
 
 ## Math and Limits
 
+### SDR Viewing Response
+
+`Output Rendering` sits below Output Color Space and is preserved when switching built-in recipes. It is independent of the Film/Print strength sliders:
+
+- **Auto** (default): apply an original SDR viewing response for camera-log, DaVinci Intermediate, ACEScct or scene-linear input going to Rec.709/Gamma 2.4 or sRGB. Do not apply it to display-ready Rec.709/Gamma 2.4 or sRGB input, or to log/linear output. Same as Input therefore does not add rendering automatically.
+- **Conversion Only**: retain the pre-v0.34 encoding/gamut conversion. Use when another stage supplies the viewing transform. This does not make an enabled creative film/print response an identity.
+- **Standard SDR**: explicitly enable the viewing response for display output, including display-ready input if deliberately desired. It still does nothing for log/linear output, texture-only processing, bypass, or diagnostic mattes.
+
+The viewing response runs after enabled Film Color camera balance and before the creative negative, development and print stages. It does not replace or scale the creative recipe sliders. Clean Slate removes those creative effects but retains the selected viewing response. Auto thus provides a finished neutral SDR starting point for log input, not just a mathematical conversion.
+
+The independent rational luminance curve maps scene-linear 18% gray to display-linear 0.12 (approximately 0.4134 in Gamma 2.4). Scene white 1 maps to approximately 0.69136 (0.85745 encoded); the shoulder starts at scene-linear 0.6, and brighter values approach display white continuously. Shadows remain monotonic down to zero, with no added pedestal or positive-shadow clipping. The old conversion mapped gray to 0.4894 and did not provide a display shoulder. This difference addresses washed-out direct log-to-display rendering; it is not automatic dehazing or exposure correction.
+
+Chroma is rescaled with linear luminance, then compressed radially toward the neutral axis at the display-gamut boundary. In-gamut colors below the compression knee retain their chroma direction; overbright colored emitters smoothly approach neutral white rather than relying on display channel clipping. No global saturation boost, stock-data import, ARRI LUT reproduction, or ACES rendering-transform equivalence is claimed. Creative print lift/casts and texture can still intentionally change the final black/white values.
+
+Source highlight extraction and selective-color keys still use the original converted scene signal (camera-balanced for selection when Film Color is enabled). Rendering does not change glow extraction thresholds, source hue selection or procedural grain coordinates. Grain tonal weighting follows the image at its selected insertion point, so its amplitude can legitimately change with the improved tone response.
+
+The C++/OpenCL operation is in the existing composite pass with no new image buffers, passes, transfers or dependencies. It adds transfer-function and rational arithmetic when active. The original conversions below remain separately testable and retain their signed/HDR round trips in Conversion Only.
+
 Managed processing decodes the source, converts linear primaries to Rec.709, and applies the original artistic effects in a common perceptual sRGB domain. Its linear toe avoids amplifying floating-point cancellation at black. Halation extraction and grain weighting use that same domain across managed inputs. Exposure and temperature/tint balance operate in linear light before Film Color; Exposure +1 doubles linear RGB. Results are converted to the destination space.
 
 Matrices are derived from published chromaticities in double precision once. Bradford adaptation aligns ACES D60 and Blackmagic's published D65 variant with Rec.709 D65. Small float matrices are passed to OpenCL kernels; there are no frame downloads or extra host transfers. C++ and OpenCL share transfer/balance math, including equivalent base-2 expressions for base-10 logs/powers.
 
 Negative/HDR values survive texture processing. Gamma 2.4 and sRGB use symmetric negative extensions; camera curves use linear/signed extensions. Rec.709/Gamma 2.4 is a zero-black display power function, not the scene Rec.709 OETF. ACEScct decoding follows its specified 65504 upper limit. Other ordinary photographic values are not clamped to 0..1 by conversions. Film Color/Print still intentionally reshape tone and clamp negative effect-domain values.
 
-These are encoding/gamut conversions plus our original look, not manufacturer viewing LUTs, an ACES rendering transform, measured film spectral response, or a complete HDR rendering pipeline. PQ/HLG, non-800 LogC3 EI curves, alternate Canon gamuts, and sensor-specific IDTs are not included. LogC3 uses the SUP 3.x exposure-value EI-800 curve, not the sensor-value curve.
+These are encoding/gamut conversions plus an optional original SDR viewing response and artistic look, not manufacturer viewing LUTs, an ACES rendering transform, measured film spectral response, or a complete HDR rendering pipeline. PQ/HLG, non-800 LogC3 EI curves, alternate Canon gamuts, and sensor-specific IDTs are not included. LogC3 uses the SUP 3.x exposure-value EI-800 curve, not the sensor-value curve. ARRI's VFX document explicitly distinguishes direct colorimetric conversion from its tone-mapped viewing LUTs; neither a correct LogC inverse nor matching input/output labels implies a matching display rendering.
 
 Resolve must supply float RGB in the selected encoding. The plugin does not apply video/full-range remapping; Resolve handles media data levels before OFX. Incorrect clip levels cannot be corrected by changing this dropdown.
 
@@ -68,5 +86,7 @@ Original implementation based on numerical specifications; no Filmbox binaries o
 ## Verification
 
 `ctest --test-dir build/ofx --output-on-failure` covers manufacturer gray anchors, monotonic curves, negative/HDR round trips, reference matrices, adapted neutrals, CPU/OpenCL textures, every managed input/output with individual/combined film stages, linear exposure, alpha, exact bypass/zero texture, and texture-only output preservation. Existing grain/halation/module regressions remain enabled.
+
+SDR checks additionally cover independent gray/white/black anchors, continuous slopes, shadow and HDR gradation, skin ordering, neutral axes, linear-luminance/chroma preservation in gamut mapping, overbright red emitters, all rendering/input/output policies, all-recipe module masks, camera-exposure ordering, Auto/Conversion Only equality for display input, CPU/OpenCL parity and exact disabled/bypass/texture/matte isolation. Synthetic checks cannot establish a match to a footage screenshot or another plugin's undocumented preset.
 
 The harness reports 4K GPU-resident timings for Rec.709/Gamma 2.4, Alexa LogC3, DaVinci Intermediate, and ACEScct. They exclude Resolve, transfers, warmup, and other timeline effects, and are not guaranteed playback rates. UI layout and footage appearance still require testing in Resolve.

@@ -140,18 +140,27 @@ int main()
         auto invalid = valid;
         auto legacy = valid;
         legacy["formatVersion"] = 1;
+        legacy["context"].erase("outputRendering");
         for (const auto& c : look::Controls) if (c.setting >= film::SelectiveAmount) legacy["controls"].erase(c.name);
         legacy["modules"].erase("enableSelectiveColor");
         const auto migrated = parse(legacy.dump());
         for (size_t i=0; i<migrated.controls.size(); ++i)
             require(migrated.controls[i] == (look::Controls[i].setting >= film::SelectiveAmount ?
                 look::Controls[i].initial : original.controls[i]),"Legacy migration changes existing settings");
-        require(!migrated.modules.back() && migrated.context == original.context,"Legacy import enables selective color or changes context");
+        auto legacyContext=original.context;
+        legacyContext.back()=color::ConversionOnly;
+        require(!migrated.modules.back() && migrated.context == legacyContext,"Legacy import enables selective color or changes context");
+        auto v2=valid; v2["formatVersion"]=2; v2["context"].erase("outputRendering");
+        const auto migratedV2=parse(v2.dump());
+        require(migratedV2.controls == original.controls && migratedV2.modules == original.modules &&
+            migratedV2.context == legacyContext,"v2 preset gains an unrequested display rendering");
+        auto brokenV2=v2; brokenV2["context"]["outputRendering"]=0;
+        rejects([&] { parse(brokenV2.dump()); },"Mixed rendering schema accepted");
         auto brokenLegacy=legacy; brokenLegacy["controls"].erase("grain");
         rejects([&] { parse(brokenLegacy.dump()); },"Incomplete legacy preset accepted");
         brokenLegacy=legacy; brokenLegacy["controls"]["selectiveAmount"]=1;
         rejects([&] { parse(brokenLegacy.dump()); },"Mixed-schema preset accepted");
-        invalid["formatVersion"] = 3;
+        invalid["formatVersion"] = 4;
         rejects([&] { parse(invalid.dump()); },"Future schema silently accepted");
         invalid = valid; invalid["formatVersion"] = 1.0;
         rejects([&] { parse(invalid.dump()); },"Non-integer schema accepted");

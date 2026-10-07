@@ -221,11 +221,15 @@ __kernel void OpenEmulsionKernel(
     float3 c = work;
     ColorRgb selectionSource = {work.x,work.y,work.z};
 
-    if (modules & 1) {
-        ColorRgb rgb = {c.x, c.y, c.z}, gain = {gainR, gainG, gainB};
-        rgb = color_balance(rgb, gain);
-        selectionSource = rgb;
-        rgb = response_negative_stage(rgb, response);
+    {
+        ColorRgb rgb = {c.x, c.y, c.z};
+        if (modules & 1) {
+            ColorRgb gain = {gainR, gainG, gainB};
+            rgb = color_balance(rgb, gain);
+            selectionSource = rgb;
+        }
+        rgb = color_render_work(rgb, color);
+        if (modules & 1) rgb = response_negative_stage(rgb, response);
         c = (float3)(rgb.r, rgb.g, rgb.b);
     }
     if (modules & 32) {
@@ -428,7 +432,7 @@ bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, c
     static_assert(sizeof(bloom::Pixel) == 16, "OpenCL bloom float4 layout mismatch");
     const int identity = film::isIdentity(mode, modules, halation, aura, settings[16], bloomConfig.parameters.amount,
                                           responseParameters.selectiveAmount, responseParameters.selectiveView);
-    static_assert(sizeof(ColorParameters) == 88, "OpenCL color structure layout mismatch");
+    static_assert(sizeof(ColorParameters) == 92, "OpenCL color structure layout mismatch");
     static_assert(sizeof(GrainParameters) == 64, "OpenCL grain structure layout mismatch");
     cl_mem blurMem = inputMem;
     if (halation > 0.0f || aura > 0.0f) {

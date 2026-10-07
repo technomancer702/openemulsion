@@ -13,6 +13,8 @@
 #define COLOR_EXP2 std::exp2
 #define COLOR_ABS std::abs
 #define COLOR_SIGN std::copysign
+#define COLOR_MAX std::fmax
+#define COLOR_MIN std::fmin
 #else
 #pragma OPENCL FP_CONTRACT OFF
 #define COLOR_POW pow
@@ -22,6 +24,8 @@
 #define COLOR_EXP2 exp2
 #define COLOR_ABS fabs
 #define COLOR_SIGN copysign
+#define COLOR_MAX fmax
+#define COLOR_MIN fmin
 #endif
 
 enum ColorCurve {
@@ -31,7 +35,7 @@ enum ColorCurve {
 };
 typedef struct ColorRgb { float r, g, b; } ColorRgb;
 typedef struct ColorParameters {
-    int sourceCurve, outputCurve, sourceIsWork, outputIsWork;
+    int sourceCurve, outputCurve, sourceIsWork, outputIsWork, renderSDR;
     float to709[9];
     float from709[9];
 } ColorParameters;
@@ -168,6 +172,44 @@ static inline ColorRgb color_to_work(ColorRgb v, ColorParameters p)
 {
     if (p.sourceIsWork) return v;
     return color_curve_rgb(color_matrix(color_curve_rgb(v, p.sourceCurve, 0), p.to709), ColorSRGB, 1);
+}
+
+// Original SDR viewing curve: scene gray 0.18 -> display-linear 0.12,
+// continuous slopes at gray and the shoulder, with no artificial black offset.
+static inline float color_sdr_tone(float x)
+{
+    if (x <= 0.0f) return 0.0f;
+    if (x <= 0.18f) return 0.12f * x / (0.234f - 0.30f * x);
+    const float slope = 0.8666666667f;
+    if (x <= 0.60f) return 0.12f + slope * (x - 0.18f);
+    const float knee = 0.484f, headroom = 1.0f - knee;
+    return 1.0f - headroom * headroom / (headroom + slope * (x - 0.60f));
+}
+
+// Keep conversion math separate: textures and selection keys still see scene data.
+static inline ColorRgb color_render_work(ColorRgb work, ColorParameters p)
+{
+    if (!p.renderSDR) return work;
+    const ColorRgb linear = color_curve_rgb(work, ColorSRGB, 0);
+    const float y = linear.r * 0.2126f + linear.g * 0.7152f + linear.b * 0.0722f;
+    if (y <= 0.0f) { ColorRgb black = {0,0,0}; return black; }
+    const float mapped = color_sdr_tone(y), gain = mapped / y;
+    ColorRgb c = {linear.r * gain, linear.g * gain, linear.b * gain};
+    const float hi = COLOR_MAX(c.r, COLOR_MAX(c.g,c.b)) - mapped;
+    const float lo = mapped - COLOR_MIN(c.r, COLOR_MIN(c.g,c.b));
+    const float distance = COLOR_MAX(hi / COLOR_MAX(1.0f-mapped,1e-7f), lo / COLOR_MAX(mapped,1e-7f));
+    if (distance > 0.8f) {
+        const float excess = distance - 0.8f;
+        const float scale = (0.8f + 0.2f * excess / (0.2f + excess)) / distance;
+        c.r = mapped + (c.r-mapped) * scale;
+        c.g = mapped + (c.g-mapped) * scale;
+        c.b = mapped + (c.b-mapped) * scale;
+    }
+    // Only guard rounding at the display boundary; radial mapping does the compression.
+    c.r = COLOR_MAX(0.0f,COLOR_MIN(1.0f,c.r));
+    c.g = COLOR_MAX(0.0f,COLOR_MIN(1.0f,c.g));
+    c.b = COLOR_MAX(0.0f,COLOR_MIN(1.0f,c.b));
+    return color_curve_rgb(c, ColorSRGB, 1);
 }
 
 static inline ColorRgb color_from_work(ColorRgb v, ColorParameters p)

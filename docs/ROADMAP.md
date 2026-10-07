@@ -1,6 +1,8 @@
 # Upgrade Roadmap
 
-## Completed Through v0.33
+## Completed Through v0.34
+
+- Automatic SDR viewing response for scene-log/linear input going to display output, before creative film/print processing. Denser shadows without an added pedestal, smooth highlight shoulder and linear-light radial gamut compression. Explicit Conversion Only and Standard SDR policies, exact texture/bypass isolation and portable format-3 capture with legacy conversion-only migration. See [Color Spaces](COLOR_SPACES.md).
 
 - Independent film/print color and tone strengths and in-module Enable toggles.
 - Disabled-module control greying, mode-driven Enable toggles, and mode-aware print-preset locks.

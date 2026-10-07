@@ -21,6 +21,7 @@ enum SettingIndex {
     BloomAmount, BloomRadius, BloomThreshold, BloomSoftness, BloomColor, BloomProtection,
     GrainResponse,
     SelectiveAmount, SelectiveHue, SelectiveRange, SelectiveSoftness, SelectiveSaturation, SelectiveView,
+    OutputRendering,
     SettingsCount
 };
 constexpr int ModuleIndex = 19;

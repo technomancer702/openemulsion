@@ -1,4 +1,4 @@
-# Installing OpenEmulsion v0.33
+# Installing OpenEmulsion v0.34
 
 This ZIP contains a prebuilt Windows x64 OFX plugin. No build tools or DCTL are needed. Development testing uses DaVinci Resolve 21.1.1 on Windows x64; other host versions and GPU vendors still need community testing.
 
@@ -20,14 +20,15 @@ Install only one copy. Developers already using `OFX_PLUGIN_PATH` should update 
 
 ## Quick Start
 
-- For an unconverted Alexa LogC3 clip in a manually managed project, select **ARRI Alexa LogC3 / Wide Gamut 3 (EI 800)** input and **Rec.709 / Gamma 2.4** output. Do not add a second LogC3-to-709 conversion afterward.
+- For an unconverted Alexa LogC3 clip in a manually managed project, select **ARRI Alexa LogC3 / Wide Gamut 3 (EI 800)** input, **Rec.709 / Gamma 2.4** output and **Output Rendering: Auto**. Auto adds a neutral SDR viewing response before the creative film stages. Do not add a second LogC3-to-709 viewing transform afterward.
+- **Output Rendering: Conversion Only** retains pre-v0.34 gamut/gamma conversion when another stage provides display rendering. Auto leaves display-ready Rec.709/sRGB input and managed log/linear output alone. Standard SDR is an explicit override for display output; avoid it on already-rendered footage unless deliberate.
 - For a color-managed timeline, select the color space actually entering the effect, not necessarily the camera's recording space. For DaVinci Wide Gamut/Intermediate processing, choose that input and **Same as Input** output, leaving the project's output transform in place.
 - For your own LUT, use **Grain Only** or **Halation, Bloom & Grain Only**, or disable Film Color, Film Development, and Print in Full mode. Texture-only rendering returns the input encoding regardless of the output dropdown.
 - Mode selection switches ordinary module Enable toggles. Selective Color defaults to disabled; Full/Color Only retain its explicit choice, while excluded modes disable it without automatically restoring it later. Only Graphic Noir presets enable it automatically. Bloom strength defaults to zero.
 - Print's named presets lock their recipe knobs. Select Custom to edit the inherited recipe.
 - Preset Category filters the Preset menu without changing the image. All Presets includes every recipe; Custom / Current Settings never resets tuning. Named recipes replace creative tuning/keyframes, not camera balance or color-space settings. Existing saved values remain unchanged.
-- Starting Points > Neutral / Clean Slate removes film color/tone, development, grain and glow, retaining input/output conversion and camera balance. Full mode and ordinary module switches stay enabled for editing; Selective Color stays disabled. Raise Film/Print strengths from zero when adding those responses.
-- User Presets > Save/Load captures all current controls before the dialog. Loading restores all saved settings by default and replaces their keyframes. Optional Preserve switches retain destination context; existing v0.27 nodes keep those switches on until unchecked.
+- Starting Points > Neutral / Clean Slate removes creative film color/tone, development, grain and glow, retaining conversion, camera balance and the selected Output Rendering. Auto thus remains active for log-to-display output. Full mode and ordinary module switches stay enabled for editing; Selective Color stays disabled. Raise Film/Print strengths from zero when adding those responses.
+- User Presets > Save/Load captures all current controls, including Output Rendering, before the dialog. Loading restores all saved settings by default and replaces their keyframes. Optional Preserve switches retain destination context; existing v0.27 nodes keep those switches on until unchecked. Old format-1/2 presets load with Conversion Only to preserve their prior rendering; select Auto afterward to adopt the new SDR foundation.
 - Grain > Grain Response > Negative & Print optionally lets Print shape the texture. Post Print is the default; texture-only modes keep their original behavior.
 
 Detailed controls and color-space limitations are in the included `docs` folder. Input color space is not auto-detected. This is not a standalone color-space converter, manufacturer viewing LUT, measured-stock simulator, or complete HDR display transform.

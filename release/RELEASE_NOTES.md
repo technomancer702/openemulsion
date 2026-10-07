@@ -1,6 +1,16 @@
-# OpenEmulsion v0.33
+# OpenEmulsion v0.34
 
-Experimental Windows x64 genre presets and Selective Color. Stock and movie references are artistic interpretations, not measured film profiles or exact movie grades. Existing response math and recipe values are unchanged; the new finishing operation is neutral by default.
+Experimental Windows x64 film emulation with an improved direct log-to-SDR foundation. Stock and movie references remain artistic interpretations, not measured film profiles or exact movie grades.
+
+## Changes in v0.34
+
+- Added Output Rendering below Output Color Space: Auto (default), Conversion Only, and Standard SDR. Auto supplies an original scene-to-display response for log/linear input sent to Rec.709/Gamma 2.4 or sRGB. Applies to every creative recipe and Neutral, not only Clean Slate.
+- Deeper shadow placement without a black pedestal, continuous highlight rolloff, and smooth linear-light gamut compression for saturated/overbright emitters. No blanket saturation boost or imported stock/profile/LUT data.
+- Viewing response runs after enabled Film Color camera balance, before the creative negative/development/print stages. Creative recipe numbers and film/print algorithms are unchanged. Auto does not double-render display-ready input or managed log/linear output; texture-only, disabled, bypass and matte workflows stay isolated.
+- Source glow extraction and selective-color keys remain unchanged; grain coordinates remain stable. Grain weighting follows the newly rendered tonal values at its chosen insertion point. New operation is in the existing CPU/OpenCL composite pass, with no extra image passes, buffers or readbacks.
+- Portable preset format 3 includes Output Rendering in the color-space context. Complete format-1/2 files retain all prior tuning and migrate to Conversion Only; choose Auto to use the improved foundation. Built-in presets preserve the selected rendering policy.
+- Added a seventh test suite with viewing-curve anchors, continuity/gradation, gamut/skin/LED behavior, all-space policy and all-recipe module isolation. Extended GPU tests cover all three options, exposure ordering, alpha and exact display-ready/texture/bypass preservation. Existing all-recipe CPU/OpenCL checks remain active. Includes comparative 4K GPU-resident timings.
+- Native Resolve appearance and performance still need footage evaluation. This is not an ARRI/ACES transform match, dehazing tool, automatic exposure correction, or full HDR renderer. See `docs/COLOR_SPACES.md`.
 
 ## Changes in v0.33
 

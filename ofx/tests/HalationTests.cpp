@@ -1215,9 +1215,9 @@ public:
                 const bool spatial = effective[13] > 0.0f || effective[15] > 0.0f;
                 if (spatial)
                     h = halation::signal(blur.sample(x, y), halation_key(work.r, work.g, work.b, halo.key), effective[13], effective[15]);
-                ColorRgb processed = work;
                 const auto selectionSource = modules & film::Negative ? color_balance(work,{s[4],s[5],s[6]}) : work;
-                if (modules & film::Negative) processed = response_negative_stage(selectionSource, responseParameters);
+                ColorRgb processed = color_render_work(selectionSource,colorParameters);
+                if (modules & film::Negative) processed = response_negative_stage(processed, responseParameters);
                 if (modules & film::Development) processed = response_development(processed, responseParameters);
                 if (grainParameters.prePrint && s[16] > 0) {
                     const auto delta = grain_delta(x,y,response_luma(processed),grainParameters);
@@ -1452,6 +1452,11 @@ public:
         Handle dst = createBuffer(context, 1, bytes, nullptr, &error);
         require(error == 0, "Cannot allocate benchmark output");
         std::vector<grain::PackedSettings> cases;
+        for (int mode : {0,1}) for (int rendering : {color::ConversionOnly,color::Automatic}) {
+            auto s=filmSettings(); s[0]=static_cast<float>(mode); s[26]=color::AlexaLogC3; s[27]=1;
+            s[film::OutputRendering]=static_cast<float>(rendering);
+            cases.push_back(s);
+        }
         for (int source : {color::Rec709Gamma24, color::AlexaLogC3, color::DaVinciIntermediate, color::ACEScct}) {
             for (int mode : {1, 3, 2, 0}) {
                 auto s = filmSettings();
@@ -1516,7 +1521,7 @@ public:
                 require(RunOpenEmulsionOpenCL(queue, width, height, static_cast<float>(frame), s.data(), reinterpret_cast<const float*>(src), reinterpret_cast<float*>(dst)), "Benchmark render failed");
             require(finish(queue) == 0, "Benchmark execution failed");
             const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() / 12.0;
-            std::printf("4K %s, mode %.0f, film %.0f, gauge %s, radius %.1f, aura %.1f/radius %.1f, development %.1f/%.1f/%.1f, bloom %.1f/radius %.1f, grain softness %.2f/response %.0f: %.2f ms/frame (GPU resident, excludes Resolve/transfers).\n", color::spaces()[static_cast<int>(s[26])].label, s[0], s[1], gauge::prepare(s.data()).label, s[14], s[15], s[film::AuraRadius], s[film::PushPull],s[film::ColorRichness],s[film::SplitTone],s[film::BloomAmount],s[film::BloomRadius],s[20],s[film::GrainResponse],ms);
+            std::printf("4K %s, mode %.0f, rendering %.0f, film %.0f, gauge %s, radius %.1f, aura %.1f/radius %.1f, development %.1f/%.1f/%.1f, bloom %.1f/radius %.1f, grain softness %.2f/response %.0f: %.2f ms/frame (GPU resident, excludes Resolve/transfers).\n", color::spaces()[static_cast<int>(s[26])].label, s[0], s[film::OutputRendering], s[1], gauge::prepare(s.data()).label, s[14], s[15], s[film::AuraRadius], s[film::PushPull],s[film::ColorRichness],s[film::SplitTone],s[film::BloomAmount],s[film::BloomRadius],s[20],s[film::GrainResponse],ms);
         }
         for (int preset = 1; preset < look::Count; ++preset) {
             auto s = filmSettings();
@@ -1613,6 +1618,7 @@ public:
                 s[9] = 0.16f; s[10] = 1.08f; s[7] = 0.18f; s[8] = 0.95f;
                 if (balance) { s[4] = 2.0f; s[5] = 1.9f; s[6] = 2.1f; }
                 // Compare managed rendering with the common film response in its work domain.
+                s[film::OutputRendering] = color::ConversionOnly;
                 auto normalized = input;
                 for (size_t i = 0; i < input.size(); i += 4) {
                     auto rgb = color_to_work({input[i], input[i+1], input[i+2]}, sourceParameters);
@@ -2077,6 +2083,51 @@ public:
         std::puts("OpenCL: development and advanced grain parity in every space/mode, all masks, visible controls, exact neutral/disabled isolation, and Mono preservation pass.");
     }
 
+    void testDisplayRendering()
+    {
+        for (int source=0; source<color::SpaceCount; ++source) for (int output=0; output<6; ++output)
+            for (int rendering=0; rendering<3; ++rendering) {
+                auto s=filmSettings(); s[26]=static_cast<float>(source); s[27]=static_cast<float>(output);
+                s[film::OutputRendering]=static_cast<float>(rendering);
+                s[4]=1.2f; s[5]=1.1f; s[6]=.9f;
+                test(17,19,s,false);
+                s[film::NegativeColorStrength]=s[film::NegativeToneStrength]=0;
+                s[film::PrintColorStrength]=s[film::PrintToneStrength]=0;
+                test(17,19,s,false);
+            }
+        auto s=filmSettings(); s[26]=color::LinearRec709; s[27]=1; s[19]=film::Negative;
+        s[film::NegativeColorStrength]=s[film::NegativeToneStrength]=0;
+        std::vector<float> input;
+        for (float y : {0.0f,.001f,.01f,.018f,.09f,.18f,1.0f,4.0f,64.0f}) input.insert(input.end(),{y,y,y,.37f});
+        const auto automatic=render(input,9,1,s);
+        s[film::OutputRendering]=color::ConversionOnly;
+        const auto conversion=render(input,9,1,s);
+        requireNear(automatic[5*4],std::pow(.12f,1/2.4f),2e-6f,"SDR GPU gray anchor");
+        requireNear(conversion[5*4],std::pow(.18f,1/2.4f),2e-6f,"Conversion-only GPU gray anchor");
+        for (int x=0; x<9; ++x) {
+            require(automatic[x*4+3]==.37f,"SDR changes alpha");
+            if (x>0) require(automatic[x*4]>automatic[(x-1)*4],"SDR GPU clips shadow/highlight gradation");
+            if (x>0 && x<5) require(automatic[x*4]<conversion[x*4],"SDR GPU does not lower shadows");
+        }
+        s[4]=s[5]=s[6]=2; s[film::OutputRendering]=color::Automatic;
+        const auto exposed=render({.09f,.09f,.09f,.37f},1,1,s);
+        requireNear(exposed[0],automatic[5*4],2e-6f,"Camera exposure must precede display rendering");
+        for (int source : {color::SRGB,color::Rec709Gamma24}) {
+            s=filmSettings(); s[26]=static_cast<float>(source); s[27]=1;
+            const auto autoDisplay=render(input,9,1,s);
+            s[film::OutputRendering]=color::ConversionOnly;
+            require(autoDisplay==render(input,9,1,s),"Auto double-renders display-ready input");
+        }
+        for (int mode : {2,3,4,5,6}) {
+            s=filmSettings(); s[0]=static_cast<float>(mode); s[26]=color::LinearRec709; s[27]=1;
+            s[13]=.4f; s[15]=.2f; s[16]=.2f; s[film::BloomAmount]=.2f;
+            const auto off=render(input,9,1,s);
+            s[film::OutputRendering]=color::StandardSDR;
+            require(off==render(input,9,1,s),"Rendering changes texture/bypass/glow matte");
+        }
+        std::puts("OpenCL SDR: all spaces/options, neutral and creative response, gray/gradation, exposure order, alpha, unchanged display-ready input, and texture/bypass/matte isolation match CPU.");
+    }
+
     void testUpgradeControls()
     {
         for (int source = 0; source < color::SpaceCount; ++source) {
@@ -2183,7 +2234,7 @@ public:
                 s[30] = amount;
                 const auto output = render(input,static_cast<int>(chips.size()),1,s);
                 for (size_t i = 0; i < chips.size(); ++i) {
-                    const auto work = color_to_work({input[i*4],input[i*4+1],input[i*4+2]},conversion);
+                    const auto work = color_render_work(color_to_work({input[i*4],input[i*4+1],input[i*4+2]},conversion),conversion);
                     const auto a = response_negative(work,off), b = response_negative(work,full);
                     ColorRgb expected {std::fmax(0.0f,a.r+(b.r-a.r)*amount),std::fmax(0.0f,a.g+(b.g-a.g)*amount),
                                        std::fmax(0.0f,a.b+(b.b-a.b)*amount)};
@@ -2417,6 +2468,7 @@ int main(int argc, char** argv)
             if (gpu.unordered) gpu.test(33,31,s,true);
         }
         std::puts("OpenCL: selective image/matte, partial amount, wrap, camera balance, every encoding, independent/disabled modules, mode overrides and queue ordering match CPU.");
+        gpu.testDisplayRendering();
         {
             auto s=filmSettings(); s[0]=0; s[26]=color::SRGB;
             s[film::ModuleIndex]=film::SelectiveColor; s[film::SelectiveView]=1;

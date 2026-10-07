@@ -24,6 +24,11 @@ enum SpaceId {
     PanasonicVLog, ACEScct, ACEScg, LinearRec709, SpaceCount
 };
 
+enum Rendering { Automatic, ConversionOnly, StandardSDR };
+inline constexpr std::array<const char*,3> RenderingLabels {
+    "Auto", "Conversion Only", "Standard SDR"
+};
+
 struct Space {
     const char* label;
     int curve;
@@ -124,7 +129,7 @@ inline const std::array<Matrix, SpaceCount>& to709Matrices()
     return matrices;
 }
 
-inline ColorParameters prepare(int source, int output, bool textureOnly)
+inline ColorParameters prepare(int source, int output, bool textureOnly, int rendering = ConversionOnly)
 {
     source = std::clamp(source, 0, static_cast<int>(spaces().size()) - 1);
     output = std::clamp(output, 0, static_cast<int>(OutputSpaces.size()) - 1);
@@ -134,6 +139,10 @@ inline ColorParameters prepare(int source, int output, bool textureOnly)
     p.outputCurve = spaces()[destination].curve;
     p.sourceIsWork = source == SRGB;
     p.outputIsWork = destination == SRGB;
+    const bool displayOutput = destination == Rec709Gamma24 || destination == SRGB;
+    const bool sceneInput = source != Rec709Gamma24 && source != SRGB;
+    p.renderSDR = !textureOnly && displayOutput &&
+        (rendering == StandardSDR || (rendering == Automatic && sceneInput));
     const Matrix& a = to709Matrices()[source];
     const Matrix b = inverse(to709Matrices()[destination]);
     for (int i = 0; i < 9; ++i) { p.to709[i] = static_cast<float>(a[i]); p.from709[i] = static_cast<float>(b[i]); }
@@ -143,7 +152,9 @@ inline ColorParameters prepare(int source, int output, bool textureOnly)
 inline ColorParameters prepare(const float* settings)
 {
     const int modules = film::modulesForSettings(settings);
-    return prepare(static_cast<int>(settings[26]), static_cast<int>(settings[27]), !(modules & (film::Negative | film::Development | film::Print | film::SelectiveColor)));
+    return prepare(static_cast<int>(settings[26]), static_cast<int>(settings[27]),
+        !(modules & (film::Negative | film::Development | film::Print | film::SelectiveColor)),
+        static_cast<int>(settings[film::OutputRendering]));
 }
 
 } // namespace color
