@@ -1,4 +1,4 @@
-OpenEmulsion v0.36 - Windows x64
+OpenEmulsion v0.37 - Windows x64
 Experimental development release
 
 INSTALL
@@ -45,7 +45,7 @@ The film profiles are original creative approximations, not measured stocks.
 SOURCE AND LICENSE
 Free and open source, MPL-2.0. See LICENSE and THIRD_PARTY_NOTICES.md.
 Compiler runtime notices travel with the plugin in Contents/Licenses.
-Source/OpenEmulsion-v0.36-source.zip contains the matching project source;
+Source/OpenEmulsion-v0.37-source.zip contains the matching project source;
 external OpenFX SDK files are not included. See manifest.json for the exact
 source revision and SHA-256 hashes.
 
