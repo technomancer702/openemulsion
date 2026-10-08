@@ -32,6 +32,11 @@ EXAMPLES = {
     "folk-dread": ("forest", "Folk Dread (The Witch)"),
     "archive-thriller": ("investigation", "Archive Thriller (Zodiac)"),
 }
+EXAMPLE_IMAGES = {
+    "halation": "halation.jpg",
+    "folk-dread": "folk-dread.jpg",
+    "archive-thriller": "archive-thriller-investigation.jpg",
+}
 REC709_GAMMA24, CONVERSION_ONLY = 5, 1
 HALATION, AURA, GRAIN, BLOOM = 4, 8, 16, 64
 # Shot-specific controls, without modifying the shipping preset recipe.
@@ -163,13 +168,14 @@ def examples(renderer: FullRenderer, destination: Path, only: list[str] | None =
         if difference < .001:
             raise ValueError(f"Indistinguishable comparison: {slug}")
         image = comparison(before, after, left_label, right_label)
-        image.save(destination / f"{slug}.jpg", quality=94, subsampling=0, icc_profile=bench.ICC)
-        records.append({"image": f"{slug}.jpg", "clip": filename, "seconds": timestamp,
+        image_name = EXAMPLE_IMAGES[slug]
+        image.save(destination / image_name, quality=94, subsampling=0, icc_profile=bench.ICC)
+        records.append({"image": image_name, "clip": filename, "seconds": timestamp,
                         "source_url": source_url, "credit": credit, "preset": preset,
                         "source_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
                         "mean_preview_difference": difference, "settings": settings.tolist(),
                         "metadata": bench.probe(path)})
-        print(f"Saved {slug}.jpg: {filename} @ {timestamp:.3f}s / {difference:.4f}", flush=True)
+        print(f"Saved {image_name}: {filename} @ {timestamp:.3f}s / {difference:.4f}", flush=True)
     report = ROOT / "analysis/readme-examples"
     report.mkdir(parents=True, exist_ok=True)
     manifest = {"pipeline": "Production OpenCL; source treated as display-ready Rec.709 / Gamma 2.4; Conversion Only viewing; sRGB browser previews; no extra grade or crop",

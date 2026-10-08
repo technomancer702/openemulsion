@@ -63,6 +63,14 @@ class StockExamplesTests(unittest.TestCase):
             self.assertTrue(url.startswith("https://"))
             self.assertTrue(credit)
 
+    def test_published_image_names_match_readme(self):
+        self.assertEqual(set(stock.EXAMPLE_IMAGES), set(stock.EXAMPLES))
+        readme = (stock.ROOT / "README.md").read_text(encoding="utf-8")
+        for filename in stock.EXAMPLE_IMAGES.values():
+            self.assertIn(f"(docs/media/{filename})", readme)
+            self.assertTrue((stock.ROOT / "docs/media" / filename).is_file())
+        self.assertNotIn("(docs/media/archive-thriller.jpg)", readme)
+
     def test_comparison_layout_and_labels(self):
         image = Image.new("RGB", (1920, 1080), "white")
         pair = stock.comparison(image, image, "Original", "Preset")

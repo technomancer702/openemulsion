@@ -48,7 +48,7 @@ These additional examples start with display-ready Rec.709 footage, not log. The
 
 Footage: [Mixkit](https://mixkit.co/free-stock-video/a-spooky-looking-forest-surrounded-by-the-morning-fog-50861/).
 
-![Original Rec.709 investigation scene compared with OpenEmulsion Archive Thriller, Zodiac look](docs/media/archive-thriller.jpg)
+![Original Rec.709 investigation scene compared with OpenEmulsion Archive Thriller, Zodiac look](docs/media/archive-thriller-investigation.jpg)
 
 Footage: [cottonbro studio / Pexels](https://www.pexels.com/video/man-looking-at-documents-8371026/).
 
