@@ -26,6 +26,8 @@ EXAMPLES = [
     ("portrait", "Skin Colour.mov", 1, "Portra 400"),
     ("street", "Skin Colour.mov", 9, "Kodachrome 64"),
     ("night", "Nigh Shot car tail lights.mov", 5.9, "Classic Cinema"),
+    ("print-2383", "interior hallway with window.mov", 2.5, "2383 Print"),
+    ("daylight-50d", "Skin Colour.mov", 7, "50D Daylight"),
     ("selective-color", "Nigh Shot car tail lights.mov", 5.9, "Graphic Noir / Red (Sin City)"),
 ]
 SELECTIVE_HUE = 70
@@ -83,10 +85,12 @@ def contact_sheet(renderer: bench.Renderer, footage: Path, destination: Path) ->
     sheet.save(destination / "contact-sheet.jpg", quality=94, subsampling=0, icc_profile=bench.ICC)
 
 
-def examples(renderer: bench.Renderer, footage: Path, destination: Path) -> None:
+def examples(renderer: bench.Renderer, footage: Path, destination: Path, only: list[str] | None = None) -> None:
     destination.mkdir(parents=True, exist_ok=True)
     records = []
     for slug, name, seconds, preset in EXAMPLES:
+        if only and slug not in only:
+            continue
         frame, timestamp = bench.decode(footage / name, seconds, "ITU709", "auto")
         after_settings = settings_for_example(renderer, slug, preset)
         if not np.array_equal(after_settings[[4, 5, 6]], [1, 1, 1]):
@@ -128,13 +132,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--contact-only", action="store_true")
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--only", nargs="+", choices=[example[0] for example in EXAMPLES])
     args = parser.parse_args()
     renderer = bench.Renderer(ROOT / "build/ofx/bench/ColorBench.dll")
     footage = ROOT / "test footage"
     if args.contact_only:
         contact_sheet(renderer, footage, args.output or ROOT / "analysis/readme-examples")
     else:
-        examples(renderer, footage, args.output or ROOT / "docs/media")
+        examples(renderer, footage, args.output or ROOT / "docs/media", args.only)
 
 
 if __name__ == "__main__":

@@ -35,6 +35,15 @@ Left: untreated LogC3 footage. Right: OpenEmulsion with the named preset and SDR
 ![Ungraded LogC3 compared with OpenEmulsion Classic Cinema on a night scene](docs/media/night.jpg)
 
 <details>
+<summary>More Film Looks: 2383 Print and 50D Daylight</summary>
+
+![Ungraded LogC3 compared with OpenEmulsion 2383 Print in a window-lit hallway](docs/media/print-2383.jpg)
+
+![Ungraded LogC3 compared with OpenEmulsion 50D Daylight on an outdoor portrait scene](docs/media/daylight-50d.jpg)
+
+</details>
+
+<details>
 <summary>Selective Color: Graphic Noir / Red</summary>
 
 The red key is tuned for this shot: Keep Hue 355 degrees, Hue Range 8 degrees, Hue Feather 3 degrees, and Minimum Saturation 0.80.
