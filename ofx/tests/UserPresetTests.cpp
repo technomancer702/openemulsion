@@ -108,6 +108,7 @@ int main()
         for (size_t i = 0; i < original.context.size(); ++i) original.context[i] = ContextControls[i].maximum;
         const auto encoded = serialize(original);
         const auto decoded = parse(encoded);
+        require(toJson(decoded).at("createdWith")==pluginversion::Label,"Preset semantic version metadata");
         require(toJson(decoded) == toJson(original),"Preset serialization loses settings or metadata");
         for (int mask = 0; mask < 8; ++mask) {
             const ImportOptions options {bool(mask&1),bool(mask&2),bool(mask&4)};

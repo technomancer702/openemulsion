@@ -1,4 +1,4 @@
-# Installing OpenEmulsion v0.43
+# Installing OpenEmulsion v0.44.0
 
 This ZIP contains a prebuilt Windows x64 OFX plugin. No build tools or DCTL are needed. Development testing uses DaVinci Resolve 21.1.1 on Windows x64; other host versions and GPU vendors still need community testing.
 

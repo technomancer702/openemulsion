@@ -20,13 +20,12 @@
 #include "ModuleControlState.h"
 #include "LookPresetConfig.h"
 #include "UserPresetIO.h"
+#include "PluginVersion.h"
 
 #define kPluginName "OpenEmulsion"
 #define kPluginGrouping "OpenEmulsion"
 #define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, halation, aura, linear-light bloom, and selective color, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
-#define kPluginVersionMajor 0
-#define kPluginVersionMinor 43
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -1087,7 +1086,7 @@ private:
 class OpenEmulsionFactory : public OFX::PluginFactoryHelper<OpenEmulsionFactory> {
 public:
     OpenEmulsionFactory()
-        : OFX::PluginFactoryHelper<OpenEmulsionFactory>(kPluginIdentifier, kPluginVersionMajor, kPluginVersionMinor)
+        : OFX::PluginFactoryHelper<OpenEmulsionFactory>(kPluginIdentifier, pluginversion::Major, pluginversion::OfxMinor)
     {}
 
     void load() override {}
@@ -1096,6 +1095,7 @@ public:
     void describe(OFX::ImageEffectDescriptor& desc) override
     {
         desc.setLabels(kPluginName, kPluginName, kPluginName);
+        desc.setVersion(pluginversion::Major, pluginversion::Minor, pluginversion::Patch, 0, pluginversion::Label);
         desc.setPluginGrouping(kPluginGrouping);
         desc.setPluginDescription(kPluginDescription);
         desc.addSupportedContext(OFX::eContextFilter);

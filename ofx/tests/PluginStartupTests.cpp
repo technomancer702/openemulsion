@@ -8,6 +8,7 @@
 #include <ofxParam.h>
 #include <ofxProperty.h>
 #include "ColorSpaceConfig.h"
+#include "PluginVersion.h"
 
 #include <cstdarg>
 #include <iostream>
@@ -271,9 +272,9 @@ void require(bool condition, const std::string& message)
 }
 
 template<class T>
-T value(Properties& p, const char* name)
+T value(Properties& p, const char* name, size_t index = 0)
 {
-    return std::get<T>(p.at(name).at(0));
+    return std::get<T>(p.at(name).at(index));
 }
 
 void testContext(OfxPlugin& plugin, const char* context)
@@ -288,6 +289,11 @@ void testContext(OfxPlugin& plugin, const char* context)
                 std::string(name)+" failed: "+std::to_string(status));
     };
     action(kOfxActionDescribe, descriptor);
+    require(value<std::string>(descriptor.properties,kOfxPropVersionLabel)==pluginversion::Label,"Descriptor version label");
+    require(value<int>(descriptor.properties,kOfxPropVersion,0)==static_cast<int>(pluginversion::Major) &&
+            value<int>(descriptor.properties,kOfxPropVersion,1)==static_cast<int>(pluginversion::Minor),"Descriptor version components");
+    if (pluginversion::Patch != 0)
+        require(value<int>(descriptor.properties,kOfxPropVersion,2)==static_cast<int>(pluginversion::Patch),"Descriptor patch version");
     action(kOfxImageEffectActionDescribeInContext, descriptor, handle(args));
 
     require(value<int>(descriptor.parameters.at("hdrViewing").properties,kOfxParamPropGroupOpen)==0,"HDR group starts expanded");
@@ -444,6 +450,9 @@ int main(int argc, char** argv)
         auto getPlugin = reinterpret_cast<OfxPlugin*(*)(int)>(GetProcAddress(module, "OfxGetPlugin"));
         require(count && getPlugin && count() == 1, "OFX exports");
         auto* plugin = getPlugin(0);
+        require(plugin->pluginVersionMajor==pluginversion::Major && plugin->pluginVersionMinor==pluginversion::OfxMinor,"OFX exported version");
+        require(pluginversion::ofxMinor(44,1)>pluginversion::ofxMinor(44,0) &&
+                pluginversion::ofxMinor(45,0)>pluginversion::ofxMinor(44,999),"OFX patch/minor ordering");
         plugin->setHost(&host);
         require(plugin->mainEntry(kOfxActionLoad, nullptr, nullptr, nullptr) == kOfxStatOK, "Load action");
         testContext(*plugin, kOfxImageEffectContextFilter);

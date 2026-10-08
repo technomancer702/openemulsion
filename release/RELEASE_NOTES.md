@@ -1,6 +1,12 @@
-# OpenEmulsion v0.43
+# OpenEmulsion v0.44.0
 
 Experimental Windows x64 film emulation with SDR and direct HDR PQ output. Stock and movie references remain artistic interpretations, not measured film profiles or exact movie grades. HDR monitor/host validation is still outstanding.
+
+## Changes in v0.44.0
+
+- Switched to major.minor.patch release tracking, continuing from v0.43. Features use minor increments and fixes use patch increments; historical versions and tags remain unchanged.
+- Centralized the version for OFX descriptor metadata, portable preset exports, release filenames and manifests. Encoded minor/patch fields keep OFX host version ordering increasing; archive validation supports both the new encoding and old releases.
+- Added version consistency, binary metadata and patch-ordering checks. Rendering, controls, preset format 7 and existing preset compatibility are unchanged. This remains an experimental release.
 
 ## Changes in v0.43
 

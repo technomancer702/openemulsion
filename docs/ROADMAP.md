@@ -1,6 +1,8 @@
 # Upgrade Roadmap
 
-## Completed Through v0.43
+## Completed Through v0.44.0
+
+- Three-part release tracking, with shared version metadata, OFX patch ordering and release archive verification. See [Versioning](VERSIONING.md).
 
 - Selecting Standard HDR directly now selects Rec.2100 PQ output and refreshes the viewing controls. Existing output-space animation is preserved outside the edit time; preset/undo/timeline notifications and non-HDR choices do not rewrite output context. Shipping-binary transition tests cover all output choices, animation and inactive callbacks. Rendering math and preset format are unchanged.
 

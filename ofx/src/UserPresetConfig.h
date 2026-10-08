@@ -11,6 +11,7 @@
 #include "../third_party/nlohmann/json.hpp"
 #include "ColorSpaceConfig.h"
 #include "LookPresetConfig.h"
+#include "PluginVersion.h"
 
 namespace userpreset {
 
@@ -106,7 +107,7 @@ inline Json toJson(const Snapshot& preset)
         const auto& c = ContextControls[i];
         context[c.name] = validateNumber(preset.context[i], c.minimum, c.maximum, c.kind != Number, c.name);
     }
-    return {{"formatVersion",FormatVersion}, {"plugin",Plugin}, {"createdWith","0.43"},
+    return {{"formatVersion",FormatVersion}, {"plugin",Plugin}, {"createdWith",pluginversion::Label},
             {"name",preset.name}, {"controls",controls}, {"modules",modules}, {"context",context}};
 }
 

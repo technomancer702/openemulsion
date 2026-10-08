@@ -88,7 +88,17 @@ public static class OpenEmulsionReleaseProbe {
 '@
     }
     $version = [OpenEmulsionReleaseProbe]::Inspect((Join-Path $root 'OpenEmulsion.ofx.bundle/Contents/Win64/OpenEmulsion.ofx'))
-    if ($version -ne $manifest.version) { throw 'Binary version differs from the release manifest.' }
+    if ($manifest.version -match '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
+        $major = [uint32]$Matches[1]; $minor = [uint32]$Matches[2]; $patch = [uint32]$Matches[3]
+        if ($patch -ge 1000 -or $minor -gt 4294966) { throw 'Invalid OFX version encoding.' }
+        $encodedMinor = [uint32]($minor * 1000 + $patch)
+        if ($null -eq $manifest.ofxVersionMajor -or $null -eq $manifest.ofxVersionMinor -or
+            $manifest.ofxVersionMajor -ne $major -or $manifest.ofxVersionMinor -ne $encodedMinor -or
+            $version -ne "$major.$encodedMinor") { throw 'Binary version differs from the release manifest.' }
+    } elseif ($manifest.version -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' -or $version -ne $manifest.version) {
+        throw 'Binary version differs from the release manifest.'
+    }
+    $version = $manifest.version
     $checksumPath = "$archivePath.sha256"
     if (!(Test-Path -LiteralPath $checksumPath) -or ((Get-Content -LiteralPath $checksumPath -Raw) -split '\s+')[0] -ne (Get-FileHash -LiteralPath $archivePath).Hash) {
         throw 'ZIP checksum is missing or incorrect.'

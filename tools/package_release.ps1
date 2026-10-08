@@ -10,11 +10,8 @@ try {
     if ($LASTEXITCODE -ne 0 -or $dirty) { throw 'Commit source and release files before packaging so the source archive matches the binary.' }
     $revision = (& git rev-parse HEAD).Trim()
     if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve source revision.' }
-    $source = Get-Content -LiteralPath 'ofx/src/OpenEmulsion.cpp' -Raw
-    $major = [regex]::Match($source, '#define kPluginVersionMajor (\d+)').Groups[1].Value
-    $minor = [regex]::Match($source, '#define kPluginVersionMinor (\d+)').Groups[1].Value
-    if (!$major -or !$minor) { throw 'Cannot determine plugin version.' }
-    $version = "$major.$minor"
+    $pluginVersion = & (Join-Path $PSScriptRoot 'get_plugin_version.ps1')
+    $version = $pluginVersion.Version
     if ((Get-Content -LiteralPath 'release/README.txt' -Raw) -notmatch "OpenEmulsion v$([regex]::Escape($version)) - Windows x64") {
         throw 'Update release instructions and notes for the current plugin version before packaging.'
     }
@@ -77,6 +74,7 @@ try {
         })
         $manifest = [ordered]@{
             product='OpenEmulsion'; version=$version; platform='Windows x64'; status='experimental'; unsigned=$true
+            ofxVersionMajor=$pluginVersion.OfxMajor; ofxVersionMinor=$pluginVersion.OfxMinor
             sourceRevision=$revision; sourceUrl="https://github.com/technomancer702/openemulsion/tree/$revision"
             buildToolchain='WinLibs GCC 16.1.0 / MinGW-w64 14.0.0 / UCRT / POSIX threads'
             testedHost='DaVinci Resolve 21.1.1 on Windows x64'; testedGPU='AMD OpenCL gfx1200'

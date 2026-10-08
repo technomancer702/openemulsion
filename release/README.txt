@@ -1,4 +1,4 @@
-OpenEmulsion v0.43 - Windows x64
+OpenEmulsion v0.44.0 - Windows x64
 Experimental development release
 
 INSTALL
