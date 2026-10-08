@@ -2,8 +2,6 @@
 
 Experimental Windows x64 film emulation with SDR and direct HDR PQ output. HDR monitor/host validation is still outstanding.
 
-For the second public release's user-facing overview, see [v0.44.0 Release Highlights](https://github.com/technomancer702/openemulsion/blob/main/release/GITHUB_RELEASE_v0.44.0.md), covering all changes since v0.22. The entries below retain the detailed development history.
-
 ## Changes in v0.44.0
 
 - Switched to major.minor.patch release tracking, continuing from v0.43. Features use minor increments and fixes use patch increments; historical versions and tags remain unchanged.
