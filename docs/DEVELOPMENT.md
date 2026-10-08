@@ -48,6 +48,24 @@ The contact sheet samples multiple scenes in `Skin Colour.mov` and the three oth
 
 The Graphic Noir example uses a shot-specific Selective Color key: Keep Hue 355 degrees, Hue Range 8, Hue Feather 3, Minimum Saturation 0.80. This rejects the amber edge haze while retaining the taillights; the built-in preset is unchanged. The README discloses this adjustment. Hue selection cannot distinguish two objects with identical colors.
 
+### Stock Footage Examples
+
+`tools/render_stock_examples.py` renders the additional forest, interior, and halation comparisons. The selected source pages and credits are in its `CLIPS` mapping and the README; download the clips into the ignored `test footage` directory using the listed filenames. Pexels sources use the [Pexels license](https://www.pexels.com/license/); the forest uses the [Mixkit Stock Video Free License](https://mixkit.co/license/modal/videoFree/). Only the comparison JPEGs are committed, not the source clips.
+
+These clips are tagged limited-range BT.709 SDR and treated as display-ready Rec.709 / Gamma 2.4, not camera log. PyAV/libswscale reconstructs subsampled chroma at native image dimensions into 16-bit YUV444; the existing float decoder then applies BT.709 packing coefficients and levels. No transfer/primary conversion or resizing is done before the effect. Both panels use the same Gamma 2.4-to-sRGB browser presentation.
+
+With `BUILD_COLOR_BENCH=ON`, the optional `FullFrameBench` executable calls the same `RunOpenEmulsionOpenCL` implementation used by Resolve, including spatial effects. It requires a working OpenCL GPU; failure is explicit, with no simulated glow fallback. It runs out of process so OpenCL cleanup does not occur under the Windows DLL loader lock. This helper is not included in the installed plugin bundle.
+
+```powershell
+cmake --build build/ofx --target ColorBench FullFrameBench
+python tools/render_stock_examples.py --contact-only
+python tools/render_stock_examples.py
+python tools/test_stock_examples.py
+python tools/test_stock_examples.py --gpu
+```
+
+The creative looks use Color Only and Conversion Only viewing. The halation pair disables all other modules and verifies that the off state is exact input pass-through; its disclosed settings are independent of the built-in presets. Full-resolution float processing precedes resizing for the README. Contact sheets, hashes, decoder metadata, timestamps, and settings remain in `analysis/readme-examples`. Use `--only halation`, `--only folk-dread`, or `--only archive-thriller` to regenerate selected comparisons without touching other assets.
+
 ## Plugin Icon
 
 The editable SVG and 256x256 RGBA PNG live in `ofx/resources`. Builds copy both into `Contents/Resources` even without a binary relink. Filenames match the plugin identifier, following the [OpenFX icon convention](https://openfx.readthedocs.io/en/main/Reference/ofxPackaging.html#plug-in-icons). Resolve controls icon display and sizing; restart it after installation.

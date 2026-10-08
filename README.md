@@ -26,7 +26,7 @@ Each module has an Enable toggle. Modes include Full, Color Only, Halation/Bloom
 
 ## Before and After
 
-Left: untreated LogC3 footage. Right: OpenEmulsion with the named preset and SDR output. Each pair uses the same frame, with no extra grading. These color-only examples show both log-to-SDR rendering and the preset look, without grain, halation, or bloom. Sample footage: AFDA Film School; source credits are retained in the frames.
+The LogC3 examples show untreated footage on the left and OpenEmulsion with the named preset and SDR output on the right. Each pair uses the same frame, with no extra grading. These color-only comparisons show both log-to-SDR rendering and the preset look, without grain, halation, or bloom. Sample footage: AFDA Film School; source credits are retained in the frames.
 
 ![Ungraded LogC3 compared with OpenEmulsion Portra 400 on an indoor portrait](docs/media/portrait.jpg)
 
@@ -41,6 +41,20 @@ Left: untreated LogC3 footage. Right: OpenEmulsion with the named preset and SDR
 ![Ungraded LogC3 compared with OpenEmulsion Graphic Noir Red, retaining red taillights in a monochrome night scene](docs/media/selective-color.jpg)
 
 The Graphic Noir red key is tuned for this shot: Keep Hue 355 degrees, Hue Range 8 degrees, Hue Feather 3 degrees, and Minimum Saturation 0.80.
+
+These additional examples start with display-ready Rec.709 footage, not log. The creative looks use Color Only with Conversion Only viewing, so no second scene-to-display curve is applied. The halation pair isolates Halation with film color, print, grain, aura, and bloom disabled. All three are rendered through the production OpenCL pipeline.
+
+![Original Rec.709 forest compared with OpenEmulsion Folk Dread, The Witch look](docs/media/folk-dread.jpg)
+
+Footage: [Mixkit](https://mixkit.co/free-stock-video/a-spooky-looking-forest-surrounded-by-the-morning-fog-50861/).
+
+![Original Rec.709 window-lit interior compared with OpenEmulsion Archive Thriller, Zodiac look](docs/media/archive-thriller.jpg)
+
+Footage: [cottonbro studio / Pexels](https://www.pexels.com/video/a-man-sitting-at-a-desk-in-a-room-with-windows-5095957/).
+
+![Car headlights with OpenEmulsion Halation off and on, without bloom or aura](docs/media/halation.jpg)
+
+Footage: [Erik Mclean / Pexels](https://www.pexels.com/video/close-up-view-of-a-car-with-lights-on-in-the-pouring-rain-16815342/). Halation 0.45, Radius 1.0, Highlight Threshold 0.65, Highlight Transition 0.25, Red / Amber 0.20; Custom Film Gauge.
 
 ## Install
 
