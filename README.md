@@ -24,6 +24,25 @@ Test on copies of important projects.
 
 Each module has an Enable toggle. Modes include Full, Color Only, Halation/Bloom/Grain Only, Grain Only, Bypass, and diagnostic mattes. Disabled modules retain their settings and grey out their controls.
 
+## Before and After
+
+Left: untreated LogC3 footage. Right: OpenEmulsion with the named preset and SDR output. Each pair uses the same frame, with no extra grading. These color-only examples show both log-to-SDR rendering and the preset look, without grain, halation, or bloom. Sample footage: AFDA Film School; source credits are retained in the frames.
+
+![Ungraded LogC3 compared with OpenEmulsion Portra 400 on an indoor portrait](docs/media/portrait.jpg)
+
+![Ungraded LogC3 compared with OpenEmulsion Kodachrome 64 on a daylight street scene](docs/media/street.jpg)
+
+![Ungraded LogC3 compared with OpenEmulsion Classic Cinema on a night scene](docs/media/night.jpg)
+
+<details>
+<summary>Selective Color: Graphic Noir / Red</summary>
+
+The red key is tuned for this shot: Keep Hue 355 degrees, Hue Range 8 degrees, Hue Feather 3 degrees, and Minimum Saturation 0.80.
+
+![Ungraded LogC3 compared with OpenEmulsion Graphic Noir Red, retaining red taillights in a monochrome night scene](docs/media/selective-color.jpg)
+
+</details>
+
 ## Install
 
 1. Download the Windows x64 ZIP from [Releases](https://github.com/technomancer702/openemulsion/releases).

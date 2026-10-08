@@ -32,6 +32,22 @@ python tools/generate_test_charts.py
 
 The [Offline Color Bench](COLOR_BENCH.md) renders float comparisons through production color math with scopes, region statistics, and highlight experiments. It is separate from the installed plugin. Media and results stay in ignored local directories.
 
+## README Comparisons
+
+`tools/render_readme_examples.py` uses the native ColorBench bridge and the local LogC3 sample clips to reproduce the color-only examples in `docs/media`. Each pair uses the same decoded frame and preserves the full image. The left displays untreated LogC3 code values directly, without a viewing transform. The right applies the named preset with neutral camera exposure/balance and SDR rendering, then converts Gamma 2.4 output to tagged sRGB for browsers. Grain and diffusion are not included. The comparison shows both scene-to-display rendering and creative styling.
+
+With the [Color Bench dependencies](COLOR_BENCH.md#setup) installed and `BUILD_COLOR_BENCH=ON`:
+
+```powershell
+cmake --build build/ofx --target ColorBench
+python tools/render_readme_examples.py --contact-only
+python tools/render_readme_examples.py
+```
+
+The contact sheet samples multiple scenes in `Skin Colour.mov` and the three other professional clips. It stays local in `analysis/readme-examples`; the gas-station clip is excluded. The script's `EXAMPLES` list selects the published frames and presets. Rendering settings, timestamps and the bridge hash stay in an ignored local manifest. Only approved comparison JPEGs belong in `docs/media`; original clips remain ignored.
+
+The Graphic Noir example uses a shot-specific Selective Color key: Keep Hue 355 degrees, Hue Range 8, Hue Feather 3, Minimum Saturation 0.80. This rejects the amber edge haze while retaining the taillights; the built-in preset is unchanged. The README discloses this adjustment. Hue selection cannot distinguish two objects with identical colors.
+
 ## Plugin Icon
 
 The editable SVG and 256x256 RGBA PNG live in `ofx/resources`. Builds copy both into `Contents/Resources` even without a binary relink. Filenames match the plugin identifier, following the [OpenFX icon convention](https://openfx.readthedocs.io/en/main/Reference/ofxPackaging.html#plug-in-icons). Resolve controls icon display and sizing; restart it after installation.
