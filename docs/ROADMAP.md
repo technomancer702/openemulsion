@@ -1,6 +1,8 @@
 # Upgrade Roadmap
 
-## Completed Through v0.42
+## Completed Through v0.43
+
+- Selecting Standard HDR directly now selects Rec.2100 PQ output and refreshes the viewing controls. Existing output-space animation is preserved outside the edit time; preset/undo/timeline notifications and non-HDR choices do not rewrite output context. Shipping-binary transition tests cover all output choices, animation and inactive callbacks. Rendering math and preset format are unchanged.
 
 - Added a collapsed HDR Viewing group below SDR Viewing, including existing peak/white settings and new post-look Exposure Trim / Highlight Rolloff. Zero controls preserve v0.41; fixed gray/white anchors, C1 joins, bounded monotonic shoulders and shared CPU/OpenCL math. Format-7 capture and strict neutral legacy migration, output-context preservation, inactive-path greying/isolation, HDR emitter checks and local footage diagnostics. See [Color Spaces](COLOR_SPACES.md), [Color Bench](COLOR_BENCH.md) and the [upstream HDR review](SPEKTRAFILM_REVIEW.md#hdr-follow-up-2026-10-07).
 

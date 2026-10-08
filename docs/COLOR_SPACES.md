@@ -1,4 +1,4 @@
-# OFX Color Spaces (v0.42)
+# OFX Color Spaces (v0.43)
 
 ## Resolve Workflow
 
@@ -182,6 +182,16 @@ For manually managed direct HDR output, choose the actual input space, output
 for log/linear input to PQ; display-ready Rec.709/sRGB input requires explicit
 Standard HDR to reinterpret its decoded values with our HDR tone scale.
 This is not inverse tone mapping or recovery of already clipped SDR highlights.
+
+Selecting **Standard HDR (PQ)** directly in the UI also selects **Rec.2100 / PQ
+(Rec.2020)** output, then refreshes the HDR/SDR control states. It leaves input
+space, presets and HDR viewing values alone. With an animated output-space
+choice, it sets PQ at the edit time without removing other keys; an unanimated
+choice stays unanimated. Already-PQ output needs no write. Auto, Conversion
+Only and Standard SDR do not rewrite the output menu, nor do preset/project
+restoration, undo or timeline notifications. An explicit subsequent output-space
+edit is respected; HDR rendering still requires a PQ destination. Choosing HDR
+does not override texture-only/bypass/matte policies or configure Resolve itself.
 
 **HDR Peak Luminance** ranges from 400 to 10000 nits (default 1000).
 **HDR Reference White** ranges from 80 to 300 nits (default 203). Their ranges

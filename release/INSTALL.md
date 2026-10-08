@@ -1,4 +1,4 @@
-# Installing OpenEmulsion v0.42
+# Installing OpenEmulsion v0.43
 
 This ZIP contains a prebuilt Windows x64 OFX plugin. No build tools or DCTL are needed. Development testing uses DaVinci Resolve 21.1.1 on Windows x64; other host versions and GPU vendors still need community testing.
 
@@ -19,6 +19,8 @@ Close Resolve first. To update, replace only the installed `OpenEmulsion.ofx.bun
 Install only one copy. Developers already using `OFX_PLUGIN_PATH` should update that installation rather than also copying the release into the system folder. Duplicate copies with the same plugin identifier can lead to ambiguous loading.
 
 ## Quick Start
+
+- Selecting **Standard HDR (PQ)** directly also selects **Rec.2100 / PQ (Rec.2020)** output and refreshes HDR control availability. This does not change input space or viewing tuning. Preset loading, undo/timeline notifications and other rendering choices retain their stored output context; HDR remains inactive if you later explicitly choose a non-PQ output.
 
 - **HDR Viewing**, below SDR Viewing, contains Peak Luminance, Reference White, Exposure Trim (EV) and Highlight Rolloff. Leave the new controls at zero for unchanged v0.41 HDR output. Positive trim brightens post-look light before tone mapping; positive rolloff compresses above-white highlights more, while negative keeps them brighter. They grey out outside HDR rendering. Reference White remains available for PQ Conversion Only. User files save all four controls; Preserve Color Spaces retains the destination values on import.
 

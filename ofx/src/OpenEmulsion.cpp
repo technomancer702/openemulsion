@@ -26,7 +26,7 @@
 #define kPluginDescription "Original film-emulation plugin with adjustable tone, print, grain, halation, aura, linear-light bloom, and selective color, with OpenCL acceleration."
 #define kPluginIdentifier "org.openemulsion.film"
 #define kPluginVersionMajor 0
-#define kPluginVersionMinor 42
+#define kPluginVersionMinor 43
 
 extern bool RunOpenEmulsionOpenCL(void* cmdQueue, int width, int height, double time, const float* settings, const float* input, float* output);
 
@@ -646,6 +646,25 @@ public:
             name == "pushPull" || name == "colorRichness" || name == "splitTone" || args.reason == OFX::eChangeTime ||
             std::any_of(moduleui::Toggles.begin(), moduleui::Toggles.end(), [&](const auto& toggle) { return name == toggle.name; });
         if (!affectsControls) return;
+        if (name == "outputRendering" && args.reason == OFX::eChangeUserEdit) {
+            int rendering = color::Automatic, output = 0;
+            outputRendering_->getValueAtTime(args.time,rendering);
+            outputSpace_->getValueAtTime(args.time,output);
+            if (rendering == color::StandardHDR && output != color::HDRPQOutput) {
+                beginEditBlock("Select HDR output");
+                applyingControls_ = true;
+                try {
+                    if (outputSpace_->getNumKeys() != 0) outputSpace_->setValueAtTime(args.time,color::HDRPQOutput);
+                    else outputSpace_->setValue(color::HDRPQOutput);
+                } catch (...) {
+                    applyingControls_ = false;
+                    endEditBlock();
+                    throw;
+                }
+                applyingControls_ = false;
+                endEditBlock();
+            }
+        }
         if (name == "mode" && args.reason == OFX::eChangeUserEdit) {
             int mode = 0;
             mode_->getValueAtTime(args.time, mode);
@@ -1138,7 +1157,7 @@ public:
         choice->setLabels("Output Rendering", "Output Rendering", "Output Rendering");
         for (const auto* label : color::RenderingLabels) choice->appendOption(label);
         choice->setDefault(color::Automatic);
-        choice->setHint("Auto renders scene-log/linear input for the selected display output: SDR for Rec.709/sRGB, HDR for Rec.2100 PQ. SDR runs before creative film; HDR runs after creative and texture stages. Conversion Only leaves rendering to another stage (PQ still encodes absolute luminance using HDR Reference White). Standard SDR and Standard HDR explicitly render only their matching output targets. Managed log/linear output, texture-only, bypass and mattes do not apply display rendering.");
+        choice->setHint("Auto renders scene-log/linear input for the selected display output: SDR for Rec.709/sRGB, HDR for Rec.2100 PQ. Selecting Standard HDR also selects Rec.2100 PQ output, retaining other settings. SDR runs before creative film; HDR runs after creative and texture stages. Conversion Only leaves rendering to another stage (PQ still encodes absolute luminance using HDR Reference White). Standard SDR and Standard HDR render only their matching output targets. Managed log/linear output, texture-only, bypass and mattes do not apply display rendering.");
         page->addChild(*choice);
 
         choice = desc.defineChoiceParam("filmGauge");

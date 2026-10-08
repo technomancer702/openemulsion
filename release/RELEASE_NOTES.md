@@ -1,6 +1,12 @@
-# OpenEmulsion v0.42
+# OpenEmulsion v0.43
 
 Experimental Windows x64 film emulation with SDR and direct HDR PQ output. Stock and movie references remain artistic interpretations, not measured film profiles or exact movie grades. HDR monitor/host validation is still outstanding.
+
+## Changes in v0.43
+
+- Selecting Standard HDR (PQ) directly now also selects Rec.2100 / PQ (Rec.2020) output, so a previous Rec.709 destination no longer leaves HDR inactive. The control state refreshes immediately; texture-only, bypass and mattes still ignore HDR.
+- Only direct user edits trigger the pairing. Input space, looks and viewing tuning stay unchanged; animated output choices receive PQ at the edit time without deleting other keys. Already-PQ output, preset loading, undo/timeline notifications, other rendering choices and explicit output-space edits are not rewritten.
+- Added shipping-binary OFX change-action tests for all output choices and animation, alongside existing startup/CPU/OpenCL regressions. Rendering math, defaults and preset format 7 are unchanged.
 
 ## Changes in v0.42
 

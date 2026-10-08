@@ -1,4 +1,4 @@
-OpenEmulsion v0.42 - Windows x64
+OpenEmulsion v0.43 - Windows x64
 Experimental development release
 
 INSTALL
@@ -29,6 +29,8 @@ HDR Viewing sits below SDR Viewing and groups peak/reference white with post-loo
 Exposure Trim and Highlight Rolloff. Both adjustments default to zero, retaining
 v0.41 HDR output; they are inactive outside HDR rendering. Format-7 user presets
 capture them and complete older files load neutral adjustments.
+Selecting Standard HDR directly also selects Rec.2100 PQ output. Other rendering
+choices and preset/project restoration do not change the output-space menu.
 The SDR foundation now preserves more color/gradation in bright saturated
 emitters automatically. Highlight Color Retention adds to this response with a
 brightness tradeoff. Zero uses the updated default, not the pre-v0.38 look.

@@ -23,7 +23,10 @@ namespace {
 // shipping binary so failures in OFX support wrappers are covered as well.
 using Value = std::variant<int, double, std::string, void*>;
 using Properties = std::map<std::string, std::vector<Value>>;
-struct Parameter { Properties properties; };
+struct Parameter {
+    Properties properties;
+    std::map<double, Value> keys;
+};
 struct Effect {
     Properties properties;
     std::map<std::string, Parameter> parameters;
@@ -149,6 +152,37 @@ OfxStatus setParameterValue(OfxParamHandle h, ...)
     return status;
 }
 
+OfxStatus getParameterValueAtTime(OfxParamHandle h, double time, ...)
+{
+    va_list args;
+    va_start(args, time);
+    auto& param=*reinterpret_cast<Parameter*>(h);
+    OfxStatus status=kOfxStatOK;
+    if (param.keys.empty()) status=parameterValue(h,args,false);
+    else {
+        auto key=param.keys.upper_bound(time);
+        if (key!=param.keys.begin()) --key;
+        if (std::get<std::string>(param.properties.at(kOfxParamPropType)[0])==kOfxParamTypeDouble)
+            *va_arg(args,double*)=std::get<double>(key->second);
+        else *va_arg(args,int*)=std::get<int>(key->second);
+    }
+    va_end(args);
+    return status;
+}
+
+OfxStatus setParameterValueAtTime(OfxParamHandle h, double time, ...)
+{
+    va_list args;
+    va_start(args, time);
+    const auto status=parameterValue(h,args,true);
+    va_end(args);
+    if (status==kOfxStatOK) {
+        auto& param=*reinterpret_cast<Parameter*>(h);
+        param.keys[time]=param.properties.at(kOfxParamPropDefault)[0];
+    }
+    return status;
+}
+
 OfxImageEffectSuiteV1 effectSuite{};
 OfxParameterSuiteV1 parameterSuite{};
 OfxMemorySuiteV1 memorySuite{};
@@ -209,6 +243,12 @@ void initializeSuites()
     };
     parameterSuite.paramGetValue = getParameterValue;
     parameterSuite.paramSetValue = setParameterValue;
+    parameterSuite.paramGetValueAtTime = getParameterValueAtTime;
+    parameterSuite.paramSetValueAtTime = setParameterValueAtTime;
+    parameterSuite.paramGetNumKeys = [](OfxParamHandle h, unsigned int* count) -> OfxStatus {
+        *count=static_cast<unsigned int>(reinterpret_cast<Parameter*>(h)->keys.size());
+        return kOfxStatOK;
+    };
     parameterSuite.paramEditBegin = [](OfxParamSetHandle, const char*) -> OfxStatus { return kOfxStatOK; };
     parameterSuite.paramEditEnd = [](OfxParamSetHandle) -> OfxStatus { return kOfxStatOK; };
 }
@@ -243,7 +283,9 @@ void testContext(OfxPlugin& plugin, const char* context)
     setString(handle(args), kOfxImageEffectPropContext, 0, context);
     auto action = [&](const char* name, Effect& effect, OfxPropertySetHandle in = nullptr) {
         std::cout << context << ": " << name << std::endl;
-        require(plugin.mainEntry(name, &effect, in, nullptr) == kOfxStatOK, std::string(name) + " failed");
+        const auto status=plugin.mainEntry(name,&effect,in,nullptr);
+        require(status==kOfxStatOK || (std::string(name)==kOfxActionInstanceChanged && status==kOfxStatReplyDefault),
+                std::string(name)+" failed: "+std::to_string(status));
     };
     action(kOfxActionDescribe, descriptor);
     action(kOfxImageEffectActionDescribeInContext, descriptor, handle(args));
@@ -317,6 +359,55 @@ void testContext(OfxPlugin& plugin, const char* context)
             require(value<int>(instance.parameters.at(name).properties,kOfxParamPropEnabled)==int(sdr),"SDR enable state");
         action(kOfxActionDestroyInstance, instance);
         require(value<void*>(instance.properties, kOfxPropInstanceData) == nullptr, "Instance not destroyed");
+    }
+
+    for (int output=0; output<static_cast<int>(color::OutputSpaces.size()); ++output) for (bool animated : {false,true}) {
+        Effect instance=descriptor;
+        setString(handle(instance.properties),kOfxImageEffectPropContext,0,context);
+        auto& space=instance.parameters.at("outputSpace");
+        auto& rendering=instance.parameters.at("outputRendering");
+        set(handle(space.properties),kOfxParamPropDefault,0,output);
+        set(handle(rendering.properties),kOfxParamPropDefault,0,int(color::StandardSDR));
+        set(handle(instance.parameters.at("hdrExposure").properties),kOfxParamPropDefault,0,.75);
+        if (animated) { space.keys[0]=output; space.keys[10]=1; }
+        action(kOfxActionCreateInstance,instance);
+        auto notify=[&](const char* name, const char* reason) {
+            Properties changed;
+            setString(handle(changed),kOfxPropType,0,kOfxTypeParameter);
+            setString(handle(changed),kOfxPropName,0,name);
+            setString(handle(changed),kOfxPropChangeReason,0,reason);
+            set(handle(changed),kOfxPropTime,0,5.0);
+            set(handle(changed),kOfxImageEffectPropRenderScale,0,1.0);
+            set(handle(changed),kOfxImageEffectPropRenderScale,1,1.0);
+            action(kOfxActionInstanceChanged,instance,handle(changed));
+        };
+        set(handle(rendering.properties),kOfxParamPropDefault,0,int(color::StandardHDR));
+        notify("outputRendering",kOfxChangeUserEdited);
+        require(value<int>(space.properties,kOfxParamPropDefault)==color::HDRPQOutput,"Selecting HDR did not select PQ output");
+        for (const char* name : {"hdrPeak","hdrWhite","hdrExposure","hdrRolloff"})
+            require(value<int>(instance.parameters.at(name).properties,kOfxParamPropEnabled)==1,"Selecting HDR did not unlock HDR controls");
+        for (const char* name : {"sdrContrast","sdrRolloff","sdrGamut"})
+            require(value<int>(instance.parameters.at(name).properties,kOfxParamPropEnabled)==0,"Selecting HDR leaves SDR controls active");
+        require(value<double>(instance.parameters.at("hdrExposure").properties,kOfxParamPropDefault)==.75,"Selecting HDR resets viewing tuning");
+        if (animated) {
+            require(std::get<int>(space.keys.at(0))==output && std::get<int>(space.keys.at(10))==1,"Selecting HDR destroys existing output keys");
+            require(space.keys.size()==(output==color::HDRPQOutput ? 2u : 3u),"HDR output key policy");
+            if (output!=color::HDRPQOutput) require(std::get<int>(space.keys.at(5))==color::HDRPQOutput,"HDR output not keyed at edit time");
+        } else require(space.keys.empty(),"Selecting HDR adds unwanted animation");
+        for (const char* reason : {kOfxChangePluginEdited,kOfxChangeTime}) {
+            set(handle(space.properties),kOfxParamPropDefault,0,1);
+            const auto keys=space.keys;
+            notify("outputRendering",reason);
+            require(value<int>(space.properties,kOfxParamPropDefault)==1 && space.keys==keys,"Non-user HDR notification rewrites output context");
+        }
+        notify("outputSpace",kOfxChangeUserEdited);
+        require(value<int>(space.properties,kOfxParamPropDefault)==1,"Explicit output-space edit overridden");
+        for (int policy : {color::Automatic,color::ConversionOnly,color::StandardSDR}) {
+            set(handle(rendering.properties),kOfxParamPropDefault,0,policy);
+            notify("outputRendering",kOfxChangeUserEdited);
+            require(value<int>(space.properties,kOfxParamPropDefault)==1,"Non-HDR rendering choice rewrites output space");
+        }
+        action(kOfxActionDestroyInstance,instance);
     }
 }
 
