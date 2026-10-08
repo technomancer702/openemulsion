@@ -50,7 +50,7 @@ The Graphic Noir example uses a shot-specific Selective Color key: Keep Hue 355 
 
 ### Stock Footage Examples
 
-`tools/render_stock_examples.py` renders the additional forest, interior, and halation comparisons. The selected source pages and credits are in its `CLIPS` mapping and the README; download the clips into the ignored `test footage` directory using the listed filenames. Pexels sources use the [Pexels license](https://www.pexels.com/license/); the forest uses the [Mixkit Stock Video Free License](https://mixkit.co/license/modal/videoFree/). Only the comparison JPEGs are committed, not the source clips.
+`tools/render_stock_examples.py` renders the additional forest, investigation, and halation comparisons. The selected source pages and credits are in its `CLIPS` mapping and the README; download the clips into the ignored `test footage` directory using the listed filenames. Pexels sources use the [Pexels license](https://www.pexels.com/license/); the forest uses the [Mixkit Stock Video Free License](https://mixkit.co/license/modal/videoFree/). Only the comparison JPEGs are committed, not the source clips.
 
 These clips are tagged limited-range BT.709 SDR and treated as display-ready Rec.709 / Gamma 2.4, not camera log. PyAV/libswscale reconstructs subsampled chroma at native image dimensions into 16-bit YUV444; the existing float decoder then applies BT.709 packing coefficients and levels. No transfer/primary conversion or resizing is done before the effect. Both panels use the same Gamma 2.4-to-sRGB browser presentation.
 

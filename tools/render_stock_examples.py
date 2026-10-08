@@ -23,17 +23,22 @@ CLIPS = {
     "forest": ("mixkit-forest-50861.mp4", 4.0,
                "https://mixkit.co/free-stock-video/a-spooky-looking-forest-surrounded-by-the-morning-fog-50861/",
                "Mixkit"),
-    "desk": ("pexels-desk-5095957.mp4", 6.0,
-             "https://www.pexels.com/video/a-man-sitting-at-a-desk-in-a-room-with-windows-5095957/",
-             "cottonbro studio / Pexels"),
+    "investigation": ("pexels-investigation-8371026.mp4", 7.88,
+                      "https://www.pexels.com/video/man-looking-at-documents-8371026/",
+                      "cottonbro studio / Pexels"),
 }
 EXAMPLES = {
     "halation": ("headlights", "Neutral / Clean Slate"),
     "folk-dread": ("forest", "Folk Dread (The Witch)"),
-    "archive-thriller": ("desk", "Archive Thriller (Zodiac)"),
+    "archive-thriller": ("investigation", "Archive Thriller (Zodiac)"),
 }
 REC709_GAMMA24, CONVERSION_ONLY = 5, 1
 HALATION, AURA, GRAIN, BLOOM = 4, 8, 16, 64
+# Shot-specific controls, without modifying the shipping preset recipe.
+ARCHIVE_ADJUSTMENTS = {
+    8: .58, 9: .12, 32: -.35, 33: 1.12, 12: .10, 37: .70,
+    38: .12, 39: .08, 40: -.30, 52: 1.0,
+}
 
 
 class FullRenderer(bench.Renderer):
@@ -95,6 +100,9 @@ def settings_for_example(renderer: bench.Renderer, slug: str) -> np.ndarray:
         settings[0], settings[bench.MASK] = 2, HALATION
         settings[13], settings[14], settings[15], settings[16] = .45, 1.0, 0, 0
         settings[46], settings[47], settings[48] = .65, .25, .2
+    elif slug == "archive-thriller":
+        for index, value in ARCHIVE_ADJUSTMENTS.items():
+            settings[index] = value
     return settings
 
 

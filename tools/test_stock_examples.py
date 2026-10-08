@@ -42,6 +42,20 @@ class StockExamplesTests(unittest.TestCase):
         np.testing.assert_allclose(settings[[13, 14, 15, 16, 45, 46, 47, 48]],
                                    [.45, 1, 0, 0, 0, .65, .25, .2])
 
+    def test_shot_adjustments_are_isolated_to_archive_example(self):
+        for slug in ("folk-dread", "archive-thriller"):
+            baseline = self.renderer.settings(stock.EXAMPLES[slug][1], stock.REC709_GAMMA24,
+                                              stock.CONVERSION_ONLY)
+            expected = baseline.copy()
+            if slug == "archive-thriller":
+                for index, value in stock.ARCHIVE_ADJUSTMENTS.items():
+                    expected[index] = value
+                self.assertFalse(np.array_equal(expected, baseline))
+                self.assertEqual(expected[2], 3)
+            np.testing.assert_array_equal(stock.settings_for_example(self.renderer, slug), expected)
+            np.testing.assert_array_equal(self.renderer.settings(stock.EXAMPLES[slug][1],
+                                          stock.REC709_GAMMA24, stock.CONVERSION_ONLY), baseline)
+
     def test_sources_are_explicit_and_exclude_gas_station(self):
         for filename, _, url, credit in stock.CLIPS.values():
             self.assertTrue(filename.endswith(".mp4"))

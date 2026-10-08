@@ -48,9 +48,9 @@ These additional examples start with display-ready Rec.709 footage, not log. The
 
 Footage: [Mixkit](https://mixkit.co/free-stock-video/a-spooky-looking-forest-surrounded-by-the-morning-fog-50861/).
 
-![Original Rec.709 window-lit interior compared with OpenEmulsion Archive Thriller, Zodiac look](docs/media/archive-thriller.jpg)
+![Original Rec.709 investigation scene compared with OpenEmulsion Archive Thriller, Zodiac look](docs/media/archive-thriller.jpg)
 
-Footage: [cottonbro studio / Pexels](https://www.pexels.com/video/a-man-sitting-at-a-desk-in-a-room-with-windows-5095957/).
+Footage: [cottonbro studio / Pexels](https://www.pexels.com/video/man-looking-at-documents-8371026/).
 
 ![Car headlights with OpenEmulsion Halation off and on, without bloom or aura](docs/media/halation.jpg)
 
