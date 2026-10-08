@@ -22,9 +22,7 @@ Push/Pull scales enabled grain strength by `2^(0.22 * amount)` in Full mode. Pos
 
 Grain Only, Halation, Bloom & Grain Only, Halation Matte, Bloom Matte, and Bypass ignore all Development controls, including grain coupling. For your own LUT in Full mode, disable Film Color, Film Development, and Print. Texture-only output preserves the input encoding. Non-neutral Development on its own counts as a color stage and honors the Output Color Space selector.
 
-## Original Math and Limits
-
-No proprietary stock measurements, LUTs, shaders, or equations are used. This is an artistic model, not a physically calibrated emulsion or reconstruction of another plugin.
+## Math and Limits
 
 Push/Pull uses a monotonic rational shadow curve and linear upper-range contrast around a fixed pivot. Contrast is prepared once as `2^(0.18 * amount)`. Positive shadow fog and negative shadow suppression use a squared distance below the pivot. RGB chroma scales with luminance away from black; near black the added fog is predominantly neutral. Negative-luminance inputs are not forced through the development tone curve.
 
@@ -48,4 +46,4 @@ Development columns are Pull -2, Neutral, Push +2, and Split Tone + Richness + 2
 
 ## Public Workflow References
 
-[Filmbox's lab guide](https://videovillage.com/learn/filmbox/full-guide/lab-module) documents development, richness, and opposing split-tone controls. [Dehancer's developer guide](https://www.dehancer.com/learn/articles/dehancer-film-developer) discusses creative control of contrast, gamma, and color development. Their public workflow descriptions inform the control surface, not our mathematical implementation.
+[Filmbox's lab guide](https://videovillage.com/learn/filmbox/full-guide/lab-module) documents development, richness, and opposing split-tone controls. [Dehancer's developer guide](https://www.dehancer.com/learn/articles/dehancer-film-developer) discusses creative control of contrast, gamma, and color development.

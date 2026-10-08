@@ -23,7 +23,7 @@ For bloom alone with your own grade/LUT, choose Halation, Bloom & Grain Only and
 
 Bloom selection uses the original source, before camera balance, negative response, development, print, halo, or grain. Those adjustments do not change which source pixels are extracted. Destination highlight protection does depend on the processed image, so changes to the grade can change where added bloom is attenuated. Composite order is Film Color, Development, Print, Halation/Aura, Bloom, Grain, then Mono finishing and output encoding.
 
-## Original Model and Limits
+## Model and Limits
 
 The source is decoded and converted to linear Rec.709 RGB. Negative source components are excluded from extraction. A smoothstep of the largest positive linear channel selects highlights. Extracted RGB is scaled by `key / (1 + peak)`, bounding extreme source energy while preserving its chromatic direction. Source Color blends toward linear luminance before filtering.
 
@@ -31,7 +31,7 @@ Area-averaged extraction preserves small lights on a resolution-scaled work grid
 
 The diffused RGB is added in linear light with gain `0.35 * Bloom`, then returned to the perceptual working domain. Highlight protection modulates that gain by `1 - ProtectHighlights * smoothstep(0.25, 1, destinationLinearPeak)`. Zero contribution bypasses this decode/encode exactly.
 
-This is an original artistic approximation, not measured optical scattering or a reconstruction of Dehancer's private model. It is a bounded source-colored diffusion layer, not an energy-conserving lens simulation: the original image is retained and additional light is added. It has no object tracking, calibrated lens model, or temporal accumulation. Film Gauge deliberately does not scale it. Proxy resizing and work-grid alignment can slightly change very small lights.
+Bloom is a bounded source-colored diffusion layer: the source image is retained and additional light is added. It has no object tracking or temporal accumulation. Film Gauge does not scale it. Proxy resizing and work-grid alignment can slightly change very small lights.
 
 Bloom may raise values above one and cannot restore clipped source detail. Highlight protection reduces added light but does not guarantee an output gamut or SDR white limit. Existing enabled film/print finishing and downstream output management remain responsible for the final range. Bloom-only operation preserves negative/HDR source values away from its contribution.
 
@@ -51,4 +51,4 @@ Optional synthetic preview (sixth path argument):
 
 Bloom columns are Original, Tight, Broad, Neutral, and Matte; rows contain white, red, and blue sources. These deliberately strong settings are diagnostics, not recommended grading presets.
 
-[Dehancer's public bloom guide](https://www.dehancer.com/learn/articles/bloom-how-it-works) discusses local light diffusion, source selection, spread, and highlight protection. Those workflow ideas inform our controls; our extraction, blur, and composition equations are original.
+[Dehancer's bloom guide](https://www.dehancer.com/learn/articles/bloom-how-it-works) discusses local light diffusion, source selection, spread, and highlight protection.

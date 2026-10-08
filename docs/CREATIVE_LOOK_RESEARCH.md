@@ -1,10 +1,7 @@
 # Creative Look Research
 
-Research and original recipe design for v0.31-v0.32. The goal is a useful range of
-editable looks, not a film-frame matching claim. Sources are interviews with the
-cinematographers and production collaborators, rather than commercial look-pack
-descriptions. No third-party LUT, preset, image, profile dataset or source code
-was incorporated.
+Research and recipe design for v0.31-v0.32, covering editable movie and genre
+looks. Sources are interviews with cinematographers and production collaborators.
 
 ## Selection Principles
 

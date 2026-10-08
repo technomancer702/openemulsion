@@ -37,7 +37,7 @@ Install only one copy. Developers already using `OFX_PLUGIN_PATH` should update 
 - User Presets > Save/Load captures all current controls, including Output Rendering, before the dialog. Loading restores all saved settings by default and replaces their keyframes. Optional Preserve switches retain destination context; existing v0.27 nodes keep those switches on until unchecked. Old format-1/2 presets load with Conversion Only to preserve their prior rendering; select Auto afterward to adopt the new SDR foundation.
 - Grain > Grain Response > Negative & Print optionally lets Print shape the texture. Post Print is the default; texture-only modes keep their original behavior.
 
-Detailed controls and color-space limitations are in the included `docs` folder. Input color space is not auto-detected. This is not a standalone color-space converter, manufacturer viewing LUT, measured-stock simulator, certified HDR mastering system, or ACES output transform.
+Detailed controls and color-space limitations are in the included `docs` folder. Input color space is not auto-detected. Configure RCM/ACES output transforms and HDR monitoring/export in Resolve; OpenEmulsion does not configure them for you.
 
 ## Performance and Troubleshooting
 

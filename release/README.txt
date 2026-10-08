@@ -47,12 +47,11 @@ macOS, Linux, and native Windows ARM builds are not included.
 
 This is an unsigned experimental build, not a stable production release.
 Test on copies of projects before using it for important work.
-The film profiles are original creative approximations, not measured stocks.
 
 SOURCE AND LICENSE
 Free and open source, MPL-2.0. See LICENSE and THIRD_PARTY_NOTICES.md.
 Compiler runtime notices travel with the plugin in Contents/Licenses.
-Source/OpenEmulsion-v0.38-source.zip contains the matching project source;
+The versioned ZIP in Source contains the matching project source;
 external OpenFX SDK files are not included. See manifest.json for the exact
 source revision and SHA-256 hashes.
 

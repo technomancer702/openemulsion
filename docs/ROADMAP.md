@@ -58,7 +58,7 @@ Synthetic checks cover bounded extraction, colored/white sources, continuous con
 
 - Real-footage refinement of the look library and the new optional Negative & Print grain response. Compare motion, shadow bias, print interaction, and proxy/full-resolution consistency.
 - Community preset sharing and versioned preset-format evolution. Current built-in recipes live in `ofx/src/LookPresetConfig.h`; user files use complete validated snapshots, not animation curves.
-- Reference-based profiles using properly licensed original scans and measured charts. Current film families remain original creative approximations; do not claim measured stock calibration without measurements.
+- Reference-based profiles using film scans and measured charts to refine stock-specific response.
 - Clean-machine Resolve installation checks, other-GPU/host testing, and signed release binaries. Current ZIP checks validate extracted payloads and native OFX loading, not a second-machine Resolve session.
 - CUDA backend for NVIDIA hosts after suitable hardware/testing becomes available. GPU ownership/event handling and existing CPU/OpenCL parity must remain intact.
 

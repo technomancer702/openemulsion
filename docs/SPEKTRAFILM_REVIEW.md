@@ -1,11 +1,11 @@
 # SpektraFilm Source Review
 
-Reviewed the existing ignored local checkout after `fetch` and `pull --ff-only` on 2026-10-06. Upstream `main` was already current at `86476af` (`simplify readme`). This is a review of that source revision, not a claim about an installed commercial/website binary or other branches. The checkout remains under ignored `analysis/spektrafilm-ofx`; none of its implementation or profile data is included in OpenEmulsion.
+Reviewed the local checkout after `fetch` and `pull --ff-only` on 2026-10-06. Upstream `main` was current at `86476af` (`simplify readme`). This review covers that source revision rather than other branches or installed binaries. The checkout is under ignored `analysis/spektrafilm-ofx`.
 
 ## What It Does Differently
 
 - [Profile interface](https://github.com/chaert-s/spektrafilm-ofx/blob/86476af/src/SpektraProfileCurves.h): film/paper entries contain wavelength-dependent sensitivity, exposure/density curves, base/layer densities, illumination/scanning transforms, halation defaults and stock-calibration fields. This is profile-backed spectral simulation, not a collection of artistic slider recipes. Its presence alone does not establish accuracy against every actual stock/scan.
-- [OFX controls and file workflow](https://github.com/chaert-s/spektrafilm-ofx/blob/86476af/src/SpektraFilmPlugin.cpp): independent film Stock and print Paper selectors, process/output roles, optional stock-calibrated development, HDR controls, film formats, diffusion, user preset snapshots and LUT export. In this revision, user presets are file-backed and the stock menu is separate; there is no top-level creative preset-category control named in this source. OpenEmulsion's category browser is our own UX design, not a port of theirs.
+- [OFX controls and file workflow](https://github.com/chaert-s/spektrafilm-ofx/blob/86476af/src/SpektraFilmPlugin.cpp): independent film Stock and print Paper selectors, process/output roles, optional stock-calibrated development, HDR controls, film formats, diffusion, user preset snapshots and LUT export. In this revision, user presets are file-backed and the stock menu is separate; there is no top-level creative preset-category control named in this source.
 - [Build-time table generator](https://github.com/chaert-s/spektrafilm-ofx/blob/86476af/tools/generate_profile_curves.py): transforms profile data into compiled tables. It avoids requiring Python or loose JSON profiles for normal rendering, though its scientific build pipeline adds dependencies.
 - [Parity/performance approach](https://github.com/chaert-s/spektrafilm-ofx/tree/86476af/PnP): structured images, stage outputs and timing comparisons against the reference Python implementation. This is a useful validation model. We should not infer relative speed from unmatched published/harness timings.
 - [Platform architecture](https://github.com/chaert-s/spektrafilm-ofx/blob/86476af/README.md): Metal/Vulkan rather than our OpenCL/CPU implementation, with macOS/Windows and a Linux developer build. This is broader platform coverage, not automatically a better fit for our current tested Windows workflow.
@@ -15,7 +15,7 @@ Their stock inventory includes twenty camera-film targets (modern cinema negativ
 ## What To Improve Next
 
 1. **Organized discovery and a clean start:** implemented in v0.30, with a non-destructive category browser, Neutral and a broader original recipe library. Native host workflow and real footage remain the next validation step.
-2. **Independent stock character:** the main remaining limitation. Our six negative-family matrices are shared by many looks; new names mostly vary tone, saturation, density, viewing balance and texture. Independently authored per-stock palette/curve refinements could improve separation without a spectral pipeline. Establish rights-cleared reference scans/charts before claiming calibration.
+2. **Distinct stock character:** the main remaining limitation. Our six negative-family matrices are shared by many looks; new names mostly vary tone, saturation, density, viewing balance and texture. Per-stock palette/curve refinements could improve separation without a spectral pipeline. Reference scans and charts would support quantitative calibration.
 3. **Negative/print pairing:** our new print-inspired looks are whole recipes, not independently selectable stock profiles. A separate future print-profile choice could make combinations easier, but should preserve editable Custom print behavior and avoid stacking two viewing transforms.
 4. **Better appearance validation:** use a repeatable real-footage set with skins, foliage, mixed lighting, saturated emitters, gray ramps and motion; compare proxy/full-resolution grain, stage isolation and highlight rolloff. Existing synthetic CPU/OpenCL tests are valuable but cannot establish stock fidelity or pleasing motion.
 5. **Keep performance boundaries explicit:** preserve GPU residency, skip inactive stages, reuse scratch buffers and benchmark complete looks. Do not add spectral reconstruction, HDR roles, multiple scattering models, or platform backends merely to match feature count. LUT export is useful eventually but cannot represent spatial or time-varying grain/glow.
@@ -60,7 +60,7 @@ Sources: [OFX defaults](https://github.com/chaert-s/spektrafilm-ofx/blob/86476af
 
 ### Recommendation
 
-Keep the user-validated v0.39 default during further evaluation. Use stage-isolated gray/exposure ramps, colored-emitter ramps and the five local clips to assess the combined SDR/negative/print response. Consider a small advanced SDR section for rolloff and gamut strength rather than more unrelated fixed patches. A perceptual gamut alternative merits independent implementation and benchmarking, not a direct port of upstream GPL shaders or a spectral rewrite.
+Keep the user-validated v0.39 default during further evaluation. Use stage-isolated gray/exposure ramps, colored-emitter ramps and the five local clips to assess the combined SDR/negative/print response. Consider a small advanced SDR section for rolloff and gamut strength. A perceptual gamut alternative would need implementation and benchmarking against the current pipeline.
 
 A matched appearance comparison needs SpektraFilm's actual process, film, paper, exposure/gamma, Color Adaptation and scanner settings, not just matching LogC3 and Rec.709 menus. Moving our SDR transform after the film stages is not a drop-in fix: those stages currently expect the existing perceptual working domain and would require redesign and regression checks. No rendering change was made during this audit.
 
@@ -150,15 +150,15 @@ implementations use system gamma 1.0 at 1000 nits and apply the inverse gamma
 separately to RGB channels. BT.2100's reference HLG path uses gamma 1.2 at
 1000 nits and a luminance-based OOTF. Surround adjustments can change gamma,
 but no matching surround-control intent was found in this path. This merits
-an independent standards audit, not copying their HLG implementation or judging
-their installed binary from an SDR screenshot.
+a standards audit and HDR-monitor testing rather than comparison through an
+SDR screenshot.
 
 Sources: [HLG helper](https://github.com/chaert-s/spektrafilm-ofx/blob/86476afc5b077de77e2278e3658d1ba9309892a1/shaders/vulkan/SpektraScannerPost.comp#L351),
 [ITU-R BT.2100-3, Table 5 and notes](https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.2100-3-202502-I!!PDF-E.pdf).
 
 ### Recommendation
 
-Keep the current PQ defaults while adding independently authored HDR viewing
+Keep the current PQ defaults while adding HDR viewing
 adjustments in a future version: post-look exposure trim and highlight rolloff,
 with neutral positions retaining the current output. Evaluate a more linear
 viewing option only against isolated ramps and matched footage, not to imitate
@@ -182,20 +182,18 @@ less output headroom, not that either look must reach peak or that local lens
 detail is preserved. These are Color Only numeric checks with burn-ins included,
 not GPU-performance checks, calibrated HDR previews or SpektraFilm A/B renders.
 
-## Source Boundary
+## Follow-Up Implementation
 
 The subsequent v0.42 HDR Viewing implementation adds post-look exposure trim
-and independently authored rational-shoulder reshaping to our existing HDR path.
-Zero retains v0.41 and no upstream HDR/HLG shader code was reused. Native
+and rational-shoulder reshaping to our existing HDR path.
+Zero retains v0.41. Native
 zero-default, inactive-path and source-keyed highlight diagnostics are recorded
 in [Color Bench](COLOR_BENCH.md#hdr-viewing-audit-v042).
 
 The subsequent v0.40 implementation exposes centered SDR Viewing Contrast,
-Highlight Rolloff and Gamut Compression using independently authored shared
-CPU/OpenCL math. Zero retains v0.39; no SpektraFilm shader/profile data was reused.
+Highlight Rolloff and Gamut Compression using shared
+CPU/OpenCL math. Zero retains v0.39.
 The stage-isolated ramp and local-footage audit is documented in
 [Color Bench](COLOR_BENCH.md#sdr-viewing-audit-v040).
 
-The upstream checkout declares [GPL-3.0](https://github.com/chaert-s/spektrafilm-ofx/blob/86476af/LICENSE.txt); OpenEmulsion uses MPL-2.0. This change only studies public architecture and independently implements presets using our existing controls. No upstream code, profile arrays, JSON datasets, numeric recipes, shader formulas or generated tables were imported. Any future reuse needs an explicit license/provenance review rather than treating public availability as permission to copy into the current project.
-
-OpenEmulsion's strengths remain a smaller adjustable pipeline, independent module use, our tested OpenCL/CPU paths, predictable zero/bypass behavior and original creative response. These are workflow/engineering strengths, not evidence that our stock simulation is more accurate or that ours is faster on comparable hardware. The projects pursue different balances between scientific simulation, flexibility and implementation cost.
+OpenEmulsion's strengths remain a smaller adjustable pipeline, independent module use, tested OpenCL/CPU paths and predictable zero/bypass behavior. Relative accuracy and performance need matched comparisons. The projects pursue different balances between scientific simulation, flexibility and implementation cost.

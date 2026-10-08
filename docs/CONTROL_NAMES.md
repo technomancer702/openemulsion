@@ -1,6 +1,6 @@
 # Control Names (v0.26)
 
-Use familiar Filmbox terminology where a comparable control exists, while documenting OpenEmulsion's independent creative math and limits. Matching a label does not claim identical processing or measured film calibration.
+Use familiar Filmbox terminology where a comparable control exists. The table below maps display labels to their unchanged parameter identifiers.
 
 ## Label Changes
 

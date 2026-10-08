@@ -21,7 +21,7 @@ GPU tests need an OpenCL device and driver. The harness reports skipped GPU and 
 - Preserve exact bypass and alpha, negative/HDR texture values, independent modules, and texture-only output encoding.
 - Avoid GPU readbacks, per-frame program compilation, and unnecessary image passes.
 - Report performance with resolution, mode, color space, device, and timing method. Harness timings exclude Resolve and transfers.
-- Use original code, procedural assets, public numerical specifications, or references with clear permission. Do not contribute extracted proprietary LUTs, shaders, stock profiles, or assets.
+- Include appropriate attribution and compatible licenses for any new dependencies or assets.
 - Do not include private footage, credentials, build outputs, or local installation files.
 
 For visual bugs, include Resolve version, operating system, GPU/driver, project color management, input/output choices, relevant parameters, and a minimal reproduction. Only share media you have permission to publish.

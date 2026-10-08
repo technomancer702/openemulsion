@@ -1,6 +1,6 @@
 # OpenEmulsion v0.44.0
 
-Experimental Windows x64 film emulation with SDR and direct HDR PQ output. Stock and movie references remain artistic interpretations, not measured film profiles or exact movie grades. HDR monitor/host validation is still outstanding.
+Experimental Windows x64 film emulation with SDR and direct HDR PQ output. HDR monitor/host validation is still outstanding.
 
 ## Changes in v0.44.0
 
@@ -18,7 +18,7 @@ Experimental Windows x64 film emulation with SDR and direct HDR PQ output. Stock
 
 - Added a collapsed HDR Viewing group below SDR Viewing, grouping Peak Luminance, Reference White, Exposure Trim (EV) and Highlight Rolloff. Trim runs after film/texture finishing, before HDR tone mapping; rolloff reshapes above-white highlights while preserving the gray/white anchors, white slope and peak limit. Both default to zero, retaining v0.41 rendering.
 - New adjustments grey out and have no effect outside active HDR rendering. Reference White still applies to PQ Conversion Only. Built-in looks preserve HDR Viewing settings; format-7 user presets capture them. Complete older files receive zero adjustments; Preserve Color Spaces retains the destination HDR settings.
-- Independently authored shared CPU/OpenCL math adds no passes, buffers or readbacks. Expanded checks cover neutral/exposure/colored-emitter ramps, curve continuity, peak bounds, startup/group order, inactive-path isolation, all-recipe parity and preset migration. Local full-precision footage diagnostics measure HDR output and source-keyed taillight contrast; they are not calibrated HDR-monitor validation or recovery of clipped source detail. No SpektraFilm code/profile data was reused.
+- Shared CPU/OpenCL math adds no passes, buffers or readbacks. Expanded checks cover neutral/exposure/colored-emitter ramps, curve continuity, peak bounds, startup/group order, inactive-path isolation, all-recipe parity and preset migration. Local full-precision footage diagnostics measure HDR output and source-keyed taillight contrast; they are not calibrated HDR-monitor validation or recovery of clipped source detail.
 
 ## Changes in v0.41
 
@@ -75,7 +75,7 @@ Experimental Windows x64 film emulation with SDR and direct HDR PQ output. Stock
 ## Changes in v0.34
 
 - Added Output Rendering below Output Color Space: Auto (default), Conversion Only, and Standard SDR. Auto supplies an original scene-to-display response for log/linear input sent to Rec.709/Gamma 2.4 or sRGB. Applies to every creative recipe and Neutral, not only Clean Slate.
-- Deeper shadow placement without a black pedestal, continuous highlight rolloff, and smooth linear-light gamut compression for saturated/overbright emitters. No blanket saturation boost or imported stock/profile/LUT data.
+- Deeper shadow placement without a black pedestal, continuous highlight rolloff, and smooth linear-light gamut compression for saturated/overbright emitters, without a blanket saturation boost.
 - Viewing response runs after enabled Film Color camera balance, before the creative negative/development/print stages. Creative recipe numbers and film/print algorithms are unchanged. Auto does not double-render display-ready input or managed log/linear output; texture-only, disabled, bypass and matte workflows stay isolated.
 - Source glow extraction and selective-color keys remain unchanged; grain coordinates remain stable. Grain weighting follows the newly rendered tonal values at its chosen insertion point. New operation is in the existing CPU/OpenCL composite pass, with no extra image passes, buffers or readbacks.
 - Portable preset format 3 includes Output Rendering in the color-space context. Complete format-1/2 files retain all prior tuning and migrate to Conversion Only; choose Auto to use the improved foundation. Built-in presets preserve the selected rendering policy.
