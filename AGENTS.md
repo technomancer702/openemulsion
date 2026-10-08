@@ -1,3 +1,3 @@
 # Repository Workflow
 
-The user has authorized automatic commits and pushes after plugin version changes. After a version bump, build and run the regression tests, then commit the version's source, tests, and documentation changes and push the current branch to its configured remote. Keep unrelated changes and generated/local files out of the commit. Do not force-push.
+The user has authorized automatic commits and pushes for completed changes, including documentation and README updates. Do not wait for a separate commit/push request. Run checks appropriate to the change, then commit the task's changes and push the current branch to its configured remote. After a plugin version bump, build and run the regression tests before committing. Documentation-only changes do not require a version bump. Keep unrelated changes and generated/local files out of the commit; approved README comparison images are documentation assets. Do not force-push.
